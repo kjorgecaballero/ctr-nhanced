@@ -253,27 +253,29 @@ internal void NativeInput_WriteInstalledSnapshots(void)
 
 internal void NativeInput_DefaultMappings(void)
 {
-	s_keyboardMapping.kc_square = SDL_SCANCODE_X;
-	s_keyboardMapping.kc_circle = SDL_SCANCODE_V;
-	s_keyboardMapping.kc_triangle = SDL_SCANCODE_Z;
-	s_keyboardMapping.kc_cross = SDL_SCANCODE_C;
+	// Keyboard mappings updated to match DuckStation [Pad1] settings
+	s_keyboardMapping.kc_square = SDL_SCANCODE_W;
+	s_keyboardMapping.kc_circle = SDL_SCANCODE_A;
+	s_keyboardMapping.kc_triangle = SDL_SCANCODE_D;
+	s_keyboardMapping.kc_cross = SDL_SCANCODE_S;
 
-	s_keyboardMapping.kc_l1 = SDL_SCANCODE_LSHIFT;
-	s_keyboardMapping.kc_l2 = SDL_SCANCODE_LCTRL;
-	s_keyboardMapping.kc_l3 = SDL_SCANCODE_LEFTBRACKET;
+	s_keyboardMapping.kc_l1 = SDL_SCANCODE_E;
+	s_keyboardMapping.kc_l2 = SDL_SCANCODE_R;
+	s_keyboardMapping.kc_l3 = SDL_SCANCODE_6;
 
-	s_keyboardMapping.kc_r1 = SDL_SCANCODE_RSHIFT;
-	s_keyboardMapping.kc_r2 = SDL_SCANCODE_RCTRL;
-	s_keyboardMapping.kc_r3 = SDL_SCANCODE_RIGHTBRACKET;
+	s_keyboardMapping.kc_r1 = SDL_SCANCODE_F;
+	s_keyboardMapping.kc_r2 = SDL_SCANCODE_G;
+	s_keyboardMapping.kc_r3 = SDL_SCANCODE_7;
 
-	s_keyboardMapping.kc_dpad_up = SDL_SCANCODE_UP;
-	s_keyboardMapping.kc_dpad_down = SDL_SCANCODE_DOWN;
-	s_keyboardMapping.kc_dpad_left = SDL_SCANCODE_LEFT;
-	s_keyboardMapping.kc_dpad_right = SDL_SCANCODE_RIGHT;
+	s_keyboardMapping.kc_dpad_up = SDL_SCANCODE_I;
+	s_keyboardMapping.kc_dpad_down = SDL_SCANCODE_K;
+	s_keyboardMapping.kc_dpad_left = SDL_SCANCODE_J;
+	s_keyboardMapping.kc_dpad_right = SDL_SCANCODE_L;
 
-	s_keyboardMapping.kc_select = SDL_SCANCODE_SPACE;
-	s_keyboardMapping.kc_start = SDL_SCANCODE_RETURN;
+	s_keyboardMapping.kc_select = SDL_SCANCODE_N;
+	s_keyboardMapping.kc_start = SDL_SCANCODE_8;
 
+	// Default gamepad/controller mappings (unchanged)
 	s_controllerMapping.gc_square = SDL_GAMEPAD_BUTTON_WEST;
 	s_controllerMapping.gc_circle = SDL_GAMEPAD_BUTTON_EAST;
 	s_controllerMapping.gc_triangle = SDL_GAMEPAD_BUTTON_NORTH;
