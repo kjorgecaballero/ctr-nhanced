@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook};
 
@@ -709,6 +710,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		gGT->msInThisLEV = 0;
 
 		ElimBG_Deactivate(gGT);
+
+		/* === Custom Racer === */
+		NativeCustomRacer_ApplySlot(data.characterIDs[0]);
+		/* === End Custom Racer === */
 
 		// signify end of load
 		return -2;
