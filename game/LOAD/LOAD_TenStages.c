@@ -713,6 +713,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		/* === Custom Racer === */
 		NativeCustomRacer_ApplySlot(data.characterIDs[0]);
+		NativeCustomRacer_DumpVRAMIfRequested();
 		/* === End Custom Racer === */
 
 		// signify end of load

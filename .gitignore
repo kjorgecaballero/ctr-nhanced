@@ -38,3 +38,5 @@ __pycache__/
 .idea/
 *.swp
 *~
+vram_*.bin
+*.bin

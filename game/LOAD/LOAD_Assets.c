@@ -176,8 +176,16 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
-		// Load boss or ghost [1]
-		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
+		// Load boss or ghost [1]. If the ghost is a custom racer, skip its MPK
+		// entirely to free the VRAM for the custom texture atlas.
+		if (NativeCustomRacer_HasSlot(data.characterIDs[1]))
+		{
+			lastFileIndexMPK = 0;
+		}
+		else
+		{
+			lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
+		}
 	}
 
 	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
@@ -195,7 +203,22 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	}
 
 QueueLastPack:
-	LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
+	if (lastFileIndexMPK != 0)
+	{
+		LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
+	}
+	else
+	{
+		// No MPK to load (custom racer). Invoke the callback manually with a
+		// null destination so the load gate resets and the queue does not stall.
+		if (callback != NULL)
+		{
+			struct LoadQueueSlot lqs;
+			lqs.ptrDestination = 0;
+			lqs.flags = 0;
+			callback(&lqs);
+		}
+	}
 	return sdata->ptrMPK;
 }
 

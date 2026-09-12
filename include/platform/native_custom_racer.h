@@ -19,12 +19,17 @@ int NativeCustomRacer_HasSlot(int characterID);
 /* Returns the folder name for the given character ID, or NULL. */
 const char *NativeCustomRacer_GetFolder(int characterID);
 
-/* Loads model.ctr for the given character into a malloc'ed buffer.
- * Returns NULL on failure. The caller owns the buffer. */
+/* Loads model.ctr for the given character into a malloc'ed buffer with
+ * internal pointers already relocated. Returns NULL on failure.
+ * The caller owns the buffer. */
 void *NativeCustomRacer_LoadModel(int characterID);
 
 /* Applies the textures.vrm for the given character to VRAM. */
 void NativeCustomRacer_ApplySlot(int characterID);
+
+/* Dumps the current VRAM to a file if the environment variable
+ * CTR_DUMP_VRAM is set to a non-empty path. No-op otherwise. */
+void NativeCustomRacer_DumpVRAMIfRequested(void);
 
 #ifdef __cplusplus
 }

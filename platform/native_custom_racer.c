@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include <platform/native_custom_racer.h>
+#include <platform/native_renderer.h>
 
 #define NATIVE_ROSTER_MAX 64
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
@@ -153,9 +154,9 @@ static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *out
  *     u32 num_patches * 4
  *     u32 patches[num_patches]
  *
- * Each patch is a byte offset into data. The value at data[offset]
- * is an internal pointer that must be added to the base address of data.
- * This mirrors what LOAD_DramFileCallback does in the bigfile path.
+ * Each patch is a byte offset into data. The value at data[offset] is an
+ * internal pointer that must be added to the base address of data. This
+ * mirrors what LOAD_DramFileCallback does in the bigfile path.
  * ------------------------------------------------------------------------- */
 
 static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
@@ -190,12 +191,6 @@ static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 
 /* -------------------------------------------------------------------------
  * Model loader
- *
- * Returns a malloc'ed buffer shaped exactly like the bigfile path expects
- * from LOAD_ReadFile_ex + LOAD_DramFileCallback:
- *     [u32 container_size][data with relocated pointers][patches...]
- * The engine then treats the returned pointer as `fileBase`. After
- * `fileBase + LOAD_MODEL_FILE_HEADER_BYTES` it lands on the struct Model.
  * ------------------------------------------------------------------------- */
 
 void *NativeCustomRacer_LoadModel(int characterID)
@@ -223,7 +218,16 @@ void *NativeCustomRacer_LoadModel(int characterID)
 }
 
 /* -------------------------------------------------------------------------
- * VRM loader
+ * VRM (texture upload) loader
+ * VRM format:
+ *     u32 header = 0x20
+ *     For each block:
+ *         u32 size_a   = (w * h * 2) | 0x14
+ *         u32 magic    = 0x10
+ *         u32 unk      = 0x02
+ *         u32 size_b   = (w * h * 2) | 0x0c
+ *         u16 x, y, w, h
+ *         u8  pixels[w * h * 2]   (RGB555 little-endian)
  * ------------------------------------------------------------------------- */
 
 static int VRM_ApplyBuffer(const unsigned char *buf, int size)
@@ -295,4 +299,32 @@ void NativeCustomRacer_ApplySlot(int characterID)
         printf("[CustomRacer] Slot %d (%s): %d blocks applied\n",
                characterID, folder, blocks);
     }
+}
+
+/* -------------------------------------------------------------------------
+ * VRAM dump (debug)
+ * ------------------------------------------------------------------------- */
+
+void NativeCustomRacer_DumpVRAMIfRequested(void)
+{
+    const char *path = getenv("CTR_DUMP_VRAM");
+    if (path == NULL || path[0] == '\0')
+        return;
+
+    const int vramBytes = 1024 * 512 * 2;
+    u16 *buf = (u16 *)malloc(vramBytes);
+    if (buf == NULL)
+        return;
+
+    NativeRenderer_ReadVRAM(buf, 0, 0, 1024, 512);
+
+    FILE *f = fopen(path, "wb");
+    if (f != NULL)
+    {
+        fwrite(buf, 1, vramBytes, f);
+        fclose(f);
+        printf("[CustomRacer] VRAM dumped to %s (%d bytes)\n", path, vramBytes);
+    }
+
+    free(buf);
 }
