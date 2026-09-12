@@ -91,7 +91,14 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	// 3P/4P
 	if ((u32)(levelLOD - LOAD_LEVEL_LOD_3P) < LOAD_LEVEL_LOD_3P4P_COUNT)
 	{
-		for (i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
+		// In 3P and 4P, one LOW LOD model per active player. The original
+		// loop bound was LOAD_DRIVER_MODEL_EXTRA_COUNT (3), which left the
+		// 4th player without a custom model. Use the actual player count.
+		int playerCount = gGT->numPlyrCurrGame;
+		if (playerCount < 3) playerCount = 3;
+		if (playerCount > 4) playerCount = 4;
+
+		for (i = 0; i < playerCount; i++)
 		{
 			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
 			{
@@ -105,7 +112,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			}
 		}
 
-		// Always load the 4P arcade MPK: bots rely on its data.
+		// The 4P arcade MPK always loads; bots and game logic depend on its data.
 		lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[3];
 	}
 
@@ -203,14 +210,15 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
-		// Load boss or ghost [1]. Always load the ghost MPK: same reason as
-		// arcade, the game relies on its data during the race.
+		// Load boss or ghost [1]. Always load the ghost MPK: the game relies
+		// on its data during the race.
 		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
 	}
 
 	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
 	else
 	{
+		// med models
 		for (i = 0; i < LOAD_MED_LOD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))

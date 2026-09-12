@@ -1,15 +1,8 @@
 #!/bin/bash
-# build_racer.sh <source_mesh.json> <internal_name> <folder_name>
-#
-# Examples:
-#   ./build_racer.sh source_mesh_rusty.json tiny rusty
-#   ./build_racer.sh source_mesh_bignorm.json cortex big_norm
-
 set -e
 
 if [ $# -lt 3 ]; then
     echo "Usage: $0 <source_mesh.json> <internal_name> <folder_name>"
-    echo "Example: $0 source_mesh_rusty.json tiny rusty"
     exit 1
 fi
 
@@ -19,29 +12,31 @@ FOLDER_NAME="$3"
 
 WORKSPACE="/d/Users/Kevin/Downloads/ZIGGYEXAMPLE/rusty_export"
 NHANCED_RACERS="/c/Users/Kevin/Desktop/Kevin/CTR/native_fork/nhanced/assets/mods/racers"
+DEST="$NHANCED_RACERS/$FOLDER_NAME"
 
 cd "$WORKSPACE"
 
 echo "==============================================="
 echo "Building: $FOLDER_NAME (internal: $INTERNAL_NAME)"
-echo "Source:   $SOURCE_MESH"
 echo "==============================================="
 
-# Step 1 - Build the .ctr
-echo "[1/4] Building model.ctr..."
-python build_character.py "$SOURCE_MESH" "$INTERNAL_NAME" "model.ctr"
+mkdir -p "$DEST"
 
-# Step 2 - Build the VRM
-echo "[2/4] Building textures.vrm..."
+for SLOT in 0 1 2 3; do
+    echo "[$((SLOT + 1))/6] Building model_p${SLOT}.ctr..."
+    python build_character.py "$SOURCE_MESH" "$INTERNAL_NAME" \
+        "model_p${SLOT}.ctr" --player_slot "$SLOT"
+    cp "model_p${SLOT}.ctr" "$DEST/model_p${SLOT}.ctr"
+done
+
+echo "[5/6] Resetting texture_uploads.json to slot 0 base coordinates..."
+python build_character.py "$SOURCE_MESH" "$INTERNAL_NAME" \
+    "model_p0.ctr" --player_slot 0 > /dev/null
+
+echo "[6/6] Building textures.vrm from base coordinates..."
 python make_racer_vrm.py texture_uploads.json textures.vrm
+cp textures.vrm "$DEST/textures.vrm"
 
-# Step 3 - Copy to nhanced assets
-echo "[3/4] Copying to nhanced..."
-mkdir -p "$NHANCED_RACERS/$FOLDER_NAME"
-cp model.ctr "$NHANCED_RACERS/$FOLDER_NAME/model.ctr"
-cp textures.vrm "$NHANCED_RACERS/$FOLDER_NAME/textures.vrm"
-
-# Step 4 - Show result
-echo "[4/4] Done."
-ls -la "$NHANCED_RACERS/$FOLDER_NAME/"
+echo "Done."
+ls -la "$DEST/"
 echo ""

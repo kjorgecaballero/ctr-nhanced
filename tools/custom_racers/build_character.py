@@ -2,9 +2,11 @@
 
 Usage:
     python build_character.py <source_mesh.json> <internal_name> <output.ctr>
+                              [--player_slot N]
 
-The atlas uses the base slot coordinates (0, 264). At runtime, the C code
-adds a per-player offset so each player gets their own VRAM region.
+The --player_slot argument (0-3) shifts the atlas to the VRAM region that
+the runtime assigns to that player index. The runtime writes the VRM at
+the same offset, so both match.
 """
 import json, math, struct, hashlib, sys
 from pathlib import Path
@@ -18,18 +20,26 @@ SOURCE = Path(argv[0]) if len(argv) > 0 else ROOT / 'source_mesh.json'
 SLOT_NAME = argv[1] if len(argv) > 1 else 'tiny'
 OUT_FILE = argv[2] if len(argv) > 2 else 'tiny.ctr'
 
+PLAYER_SLOT = 0
+for i, a in enumerate(argv):
+    if a == '--player_slot':
+        PLAYER_SLOT = int(argv[i + 1])
+
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
 SLOT_NAMES       = ['turn', 'reverse', 'bump', 'jump']
 
-# Base slot coordinates. The C code adds player_index * 128 to ATLAS_X at runtime.
-ATLAS_X, ATLAS_Y = 0, 264
-PAGE_W = 128              # total atlas width in words (2 sub-pages of 64)
-SUBPAGE_W = 64            # PSX texture page width in words
+# Each player slot occupies 128 words of VRAM.
+NATIVE_SLOT_WIDTH = 128
+ATLAS_X = 0 + PLAYER_SLOT * NATIVE_SLOT_WIDTH
+ATLAS_Y = 264
+
+PAGE_W = 128
+SUBPAGE_W = 64
 NUM_SUBPAGES = PAGE_W // SUBPAGE_W  # = 2
-TEXTURE_ROWS = 17         # rows available for textures (264..280)
-CLUT_ROWS = 5             # rows available for CLUTs (281..285), 8 per row = 40 max
+TEXTURE_ROWS = 17
+CLUT_ROWS = 5
 
 SCALE = 2
 
@@ -60,12 +70,7 @@ def apply_matrix_world(mesh):
 
 
 def quantize_palette_to_16(rgb555):
-    """Reduce a list of RGB555 colors to at most 16 unique entries.
-
-    If already <= 16, returns as-is. Otherwise, drops bits per channel
-    (5 -> 4 -> 3 -> 2 -> 1) until <= 16 unique colors remain.
-    Transparent (0x0000) and marker (0x8000) are preserved.
-    """
+    """Reduce a list of RGB555 colors to at most 16 unique entries."""
     palette = sorted(set(rgb555))
     if len(palette) <= 16:
         return rgb555
@@ -111,8 +116,6 @@ def prepare_textures(mesh):
                 rgba.append(tuple(pix[idx+j] for j in range(4)))
         images.append((name, w2, h2, rgba))
 
-    # Two sub-pages of 64 words each. A texture must fit entirely inside
-    # one sub-page (its local word offset + words <= 64).
     cells = [[[False] * SUBPAGE_W for _ in range(TEXTURE_ROWS)]
              for _ in range(NUM_SUBPAGES)]
     uploads, textures = [], {}
@@ -331,7 +334,7 @@ def build():
 
     blob = pack_container(data, patches)
     (ROOT / OUT_FILE).write_bytes(blob)
-    print(f"Written: {OUT_FILE} ({len(blob)} bytes)")
+    print(f"Written: {OUT_FILE} ({len(blob)} bytes, player slot {PLAYER_SLOT})")
 
 
 if __name__ == '__main__':

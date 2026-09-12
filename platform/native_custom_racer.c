@@ -14,17 +14,6 @@
 /* Width in VRAM words assigned to each player slot. */
 #define NATIVE_SLOT_WIDTH 128
 
-/* Texture pages per slot (128 words / 64 words per page = 2 pages). */
-#define NATIVE_SLOT_PAGES 2
-
-/* CLUT index units per slot (128 words / 16 words per CLUT = 8 units). */
-#define NATIVE_SLOT_CLUTS 8
-
-/* -------------------------------------------------------------------------
- * Diagnostic logger. Writes to stderr with immediate flush so messages
- * are not lost when a crash occurs.
- * ------------------------------------------------------------------------- */
-
 static void Log(const char *fmt, ...)
 {
     va_list args;
@@ -46,8 +35,6 @@ static int s_rosterLoaded = 0;
 
 /* -------------------------------------------------------------------------
  * Roster parsing
- * Format (one entry per line, "#" starts a comment):
- *     <slot_id> <folder_name>
  * ------------------------------------------------------------------------- */
 
 static int Roster_ParseLine(char *line, RosterEntry *out)
@@ -204,114 +191,10 @@ static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 }
 
 /* -------------------------------------------------------------------------
- * Player slot offset for layouts
- *
- * The .ctr layouts store per-face texture coordinates and VRAM references:
- *     [0]    u0 (u8)
- *     [1]    v0 (u8)
- *     [2:4]  clut (u16 LE)
- *     [4]    u1 (u8)
- *     [5]    v1 (u8)
- *     [6:8]  page (u16 LE)
- *     [8]    u2 (u8)
- *     [9]    v2 (u8)
- *     [10]   u2 (u8)
- *     [11]   v2 (u8)
- *
- * To relocate a character to player slot N, shift the texture page and
- * CLUT reference. This lets the same .ctr file be used by any player.
- *
- *   page += N * NATIVE_SLOT_PAGES  (2 per slot)
- *   clut += N * NATIVE_SLOT_CLUTS  (8 per slot)
- *
- * Disabled for now (returns immediately). Enable once the segmentation
- * fault is confirmed to be elsewhere.
- * ------------------------------------------------------------------------- */
-
-static void ApplyPlayerOffsetToLayouts(unsigned char *buf, long fileSize, int playerIndex)
-{
-    (void)buf;
-    (void)fileSize;
-    (void)playerIndex;
-    /* Disabled for diagnostic run. */
-    return;
-
-#if 0
-    if (playerIndex == 0)
-        return;
-
-    if (fileSize < 60)
-        return;
-
-    unsigned int dataSize = *(unsigned int *)buf;
-    if ((long)(4 + dataSize) > fileSize)
-        return;
-
-    unsigned char *modelData = buf + 4;
-
-    /* Header pointer at offset 20. */
-    unsigned int headerPtr = *(unsigned int *)(modelData + 20);
-    if (headerPtr == 0)
-        return;
-
-    unsigned int *header = (unsigned int *)headerPtr;
-    unsigned int commandsPtr = header[8];   /* offset 32 = index 8 */
-    unsigned int texArrayPtr = header[10];  /* offset 40 = index 10 */
-
-    if (commandsPtr == 0 || texArrayPtr == 0)
-        return;
-
-    unsigned int *commands = (unsigned int *)commandsPtr;
-    unsigned int *cmd = &commands[1];
-
-    unsigned int maxLayout = 0;
-    for (unsigned int i = 0; i < 4096; i++)
-    {
-        if (cmd[i] == 0xFFFFFFFF)
-            break;
-        unsigned int layout = cmd[i] & 0x1FF;
-        if (layout > maxLayout)
-            maxLayout = layout;
-        if (maxLayout > 511)
-        {
-            maxLayout = 0;
-            break;
-        }
-    }
-    if (maxLayout == 0)
-        return;
-
-    unsigned int *texArray = (unsigned int *)texArrayPtr;
-
-    unsigned int pageOffset = (unsigned int)playerIndex * NATIVE_SLOT_PAGES;
-    unsigned int clutOffset = (unsigned int)playerIndex * NATIVE_SLOT_CLUTS;
-
-    Log("[CustomRacer] layout relocate: player %d, maxLayout %u\n",
-        playerIndex, maxLayout);
-
-    for (unsigned int i = 1; i <= maxLayout; i++)
-    {
-        unsigned int layoutPtr = texArray[i - 1];
-        if (layoutPtr == 0)
-            continue;
-
-        unsigned char *layout = (unsigned char *)layoutPtr;
-
-        unsigned int page = layout[6] | (layout[7] << 8);
-        page = (page + pageOffset) & 0x1F;
-        layout[6] = page & 0xFF;
-        layout[7] = (page >> 8) & 0xFF;
-
-        unsigned int clut = layout[2] | (layout[3] << 8);
-        clut = (clut + clutOffset) & 0xFFFF;
-        layout[2] = clut & 0xFF;
-        layout[3] = (clut >> 8) & 0xFF;
-    }
-#endif
-}
-
-/* -------------------------------------------------------------------------
  * Model loader
+ *
+ * Each player index has its own .ctr file with the atlas already placed at
+ * the player's VRAM region. No runtime pointer patching is required.
  * ------------------------------------------------------------------------- */
 
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
@@ -322,21 +205,20 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 
     char path[256];
     snprintf(path, sizeof(path),
-             "assets/mods/racers/%s/model.ctr", folder);
+             "assets/mods/racers/%s/model_p%d.ctr", folder, playerIndex);
 
     long sz = 0;
     unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
     if (!buf)
     {
-        Log("[CustomRacer] model.ctr not found: %s\n", path);
+        Log("[CustomRacer] model_p%d.ctr not found: %s\n", playerIndex, path);
         return NULL;
     }
 
     ApplyContainerPtrMap(buf, sz);
-    ApplyPlayerOffsetToLayouts(buf, sz, playerIndex);
 
-    Log("[CustomRacer] model.ctr loaded: %s (player %d, %ld bytes)\n",
-        path, playerIndex, sz);
+    Log("[CustomRacer] model_p%d.ctr loaded: %s (player %d, %ld bytes)\n",
+        playerIndex, path, playerIndex, sz);
     return buf;
 }
 
@@ -378,6 +260,7 @@ static int VRM_ApplyBuffer(const unsigned char *buf, int size, int playerIndex)
         if (nextOffset > size)
             break;
 
+        /* Shift to the player's VRAM region so it matches the .ctr. */
         rect.x += (short)(playerIndex * NATIVE_SLOT_WIDTH);
 
         LoadImage(&rect, (void *)(buf + offset + 24));

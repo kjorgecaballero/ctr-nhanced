@@ -20,41 +20,27 @@
 #define NATIVE_INPUT_MAP_FLAG_AXIS         0x4000
 #define NATIVE_INPUT_MAP_FLAG_INVERSE      0x8000
 #define NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT 0
-// NOTE(aalhendi): Little-endian tag `CTRI` = CTR native Input snapshot.
 #define NATIVE_INPUT_STATE_MAGIC           0x49525443
 #define NATIVE_INPUT_STATE_VERSION         1
-
-// NOTE(aalhendi): Native input preserves behavior from PsyCross's
-// MIT-licensed pad implementation while moving host ownership into ctr-native.
-// See THIRD_PARTY_NOTICES.md.
 
 struct NativeInputKeyboardMapping
 {
 	s32 id;
-
 	s32 kc_square, kc_circle, kc_triangle, kc_cross;
-
 	s32 kc_l1, kc_l2, kc_l3;
 	s32 kc_r1, kc_r2, kc_r3;
-
 	s32 kc_start, kc_select;
-
 	s32 kc_dpad_left, kc_dpad_right, kc_dpad_up, kc_dpad_down;
 };
 
 struct NativeInputControllerMapping
 {
 	s32 id;
-
 	s32 gc_square, gc_circle, gc_triangle, gc_cross;
-
 	s32 gc_l1, gc_l2, gc_l3;
 	s32 gc_r1, gc_r2, gc_r3;
-
 	s32 gc_start, gc_select;
-
 	s32 gc_dpad_left, gc_dpad_right, gc_dpad_up, gc_dpad_down;
-
 	s32 gc_axis_left_x, gc_axis_left_y;
 	s32 gc_axis_right_x, gc_axis_right_y;
 };
@@ -253,7 +239,7 @@ internal void NativeInput_WriteInstalledSnapshots(void)
 
 internal void NativeInput_DefaultMappings(void)
 {
-	// Keyboard mappings updated to match DuckStation [Pad1] settings
+	// Player 1 keyboard mapping (unchanged).
 	s_keyboardMapping.kc_square = SDL_SCANCODE_W;
 	s_keyboardMapping.kc_circle = SDL_SCANCODE_A;
 	s_keyboardMapping.kc_triangle = SDL_SCANCODE_D;
@@ -275,7 +261,7 @@ internal void NativeInput_DefaultMappings(void)
 	s_keyboardMapping.kc_select = SDL_SCANCODE_N;
 	s_keyboardMapping.kc_start = SDL_SCANCODE_8;
 
-	// Default gamepad/controller mappings (unchanged)
+	// Default gamepad mappings (unchanged).
 	s_controllerMapping.gc_square = SDL_GAMEPAD_BUTTON_WEST;
 	s_controllerMapping.gc_circle = SDL_GAMEPAD_BUTTON_EAST;
 	s_controllerMapping.gc_triangle = SDL_GAMEPAD_BUTTON_NORTH;
@@ -477,70 +463,22 @@ internal u16 NativeInput_ReadKeyboard(void)
 		return buttons;
 	}
 
-	if (s_keyboardState[mapping->kc_square])
-	{
-		buttons &= ~0x8000;
-	}
-	if (s_keyboardState[mapping->kc_circle])
-	{
-		buttons &= ~0x2000;
-	}
-	if (s_keyboardState[mapping->kc_triangle])
-	{
-		buttons &= ~0x1000;
-	}
-	if (s_keyboardState[mapping->kc_cross])
-	{
-		buttons &= ~0x4000;
-	}
-	if (s_keyboardState[mapping->kc_l1])
-	{
-		buttons &= ~0x400;
-	}
-	if (s_keyboardState[mapping->kc_l2])
-	{
-		buttons &= ~0x100;
-	}
-	if (s_keyboardState[mapping->kc_l3])
-	{
-		buttons &= ~0x2;
-	}
-	if (s_keyboardState[mapping->kc_r1])
-	{
-		buttons &= ~0x800;
-	}
-	if (s_keyboardState[mapping->kc_r2])
-	{
-		buttons &= ~0x200;
-	}
-	if (s_keyboardState[mapping->kc_r3])
-	{
-		buttons &= ~0x4;
-	}
-	if (s_keyboardState[mapping->kc_dpad_up])
-	{
-		buttons &= ~0x10;
-	}
-	if (s_keyboardState[mapping->kc_dpad_down])
-	{
-		buttons &= ~0x40;
-	}
-	if (s_keyboardState[mapping->kc_dpad_left])
-	{
-		buttons &= ~0x80;
-	}
-	if (s_keyboardState[mapping->kc_dpad_right])
-	{
-		buttons &= ~0x20;
-	}
-	if (s_keyboardState[mapping->kc_select])
-	{
-		buttons &= ~0x1;
-	}
-	if (s_keyboardState[mapping->kc_start])
-	{
-		buttons &= ~0x8;
-	}
+	if (s_keyboardState[mapping->kc_square])   buttons &= ~0x8000;
+	if (s_keyboardState[mapping->kc_circle])   buttons &= ~0x2000;
+	if (s_keyboardState[mapping->kc_triangle]) buttons &= ~0x1000;
+	if (s_keyboardState[mapping->kc_cross])    buttons &= ~0x4000;
+	if (s_keyboardState[mapping->kc_l1])       buttons &= ~0x400;
+	if (s_keyboardState[mapping->kc_l2])       buttons &= ~0x100;
+	if (s_keyboardState[mapping->kc_l3])       buttons &= ~0x2;
+	if (s_keyboardState[mapping->kc_r1])       buttons &= ~0x800;
+	if (s_keyboardState[mapping->kc_r2])       buttons &= ~0x200;
+	if (s_keyboardState[mapping->kc_r3])       buttons &= ~0x4;
+	if (s_keyboardState[mapping->kc_dpad_up])    buttons &= ~0x10;
+	if (s_keyboardState[mapping->kc_dpad_down])  buttons &= ~0x40;
+	if (s_keyboardState[mapping->kc_dpad_left])  buttons &= ~0x80;
+	if (s_keyboardState[mapping->kc_dpad_right]) buttons &= ~0x20;
+	if (s_keyboardState[mapping->kc_select])   buttons &= ~0x1;
+	if (s_keyboardState[mapping->kc_start])    buttons &= ~0x8;
 
 	return buttons;
 }
@@ -559,7 +497,23 @@ internal void NativeInput_ApplyKeyboard(s32 slot, u16 keyboardButtons)
 {
 	struct PlatformInputPadSnapshot *snapshot = &s_controllers[slot].snapshot;
 
-	if (slot != s_keyboardControllerSlot)
+	// Slot 0 preserves the original single-player keyboard mapping.
+	// Slots 1-3 use a separate debug mapping so multi-player selection
+	// is possible without four physical gamepads.
+	if (slot == 0)
+	{
+		if (snapshot->connected == 0)
+		{
+			snapshot->connected = 1;
+			snapshot->status = 0;
+			snapshot->id = NATIVE_INPUT_PAD_DIGITAL;
+		}
+		u16 buttons = NativeInput_GetSnapshotButtons(snapshot);
+		NativeInput_SetSnapshotButtons(snapshot, buttons & keyboardButtons);
+		return;
+	}
+
+	if (s_keyboardState == NULL)
 	{
 		return;
 	}
@@ -571,8 +525,59 @@ internal void NativeInput_ApplyKeyboard(s32 slot, u16 keyboardButtons)
 		snapshot->id = NATIVE_INPUT_PAD_DIGITAL;
 	}
 
-	u16 buttons = NativeInput_GetSnapshotButtons(snapshot);
-	NativeInput_SetSnapshotButtons(snapshot, buttons & keyboardButtons);
+	// Debug per-slot mapping (used only for player 2..4):
+	//   Player 2: D-pad = arrow keys, Cross = Enter
+	//   Player 3: D-pad = numpad 8/5/4/6, Cross = numpad 0
+	//   Player 4: D-pad = top-row 1/2/3/4, Cross = 5
+	// Face buttons are mapped minimally so character selection works.
+	u16 buttons = 0xffff;
+
+	switch (slot)
+	{
+	case 1: // Player 2
+		if (s_keyboardState[SDL_SCANCODE_UP])    buttons &= ~0x10;
+		if (s_keyboardState[SDL_SCANCODE_DOWN])  buttons &= ~0x40;
+		if (s_keyboardState[SDL_SCANCODE_LEFT])  buttons &= ~0x80;
+		if (s_keyboardState[SDL_SCANCODE_RIGHT]) buttons &= ~0x20;
+		if (s_keyboardState[SDL_SCANCODE_RETURN]) buttons &= ~0x4000;
+		if (s_keyboardState[SDL_SCANCODE_RSHIFT]) buttons &= ~0x2000;
+		if (s_keyboardState[SDL_SCANCODE_SLASH])  buttons &= ~0x1000;
+		if (s_keyboardState[SDL_SCANCODE_PERIOD]) buttons &= ~0x8000;
+		if (s_keyboardState[SDL_SCANCODE_RCTRL])  buttons &= ~0x8;
+		if (s_keyboardState[SDL_SCANCODE_BACKSPACE]) buttons &= ~0x1;
+		break;
+
+	case 2: // Player 3
+		if (s_keyboardState[SDL_SCANCODE_KP_8]) buttons &= ~0x10;
+		if (s_keyboardState[SDL_SCANCODE_KP_5]) buttons &= ~0x40;
+		if (s_keyboardState[SDL_SCANCODE_KP_4]) buttons &= ~0x80;
+		if (s_keyboardState[SDL_SCANCODE_KP_6]) buttons &= ~0x20;
+		if (s_keyboardState[SDL_SCANCODE_KP_0]) buttons &= ~0x4000;
+		if (s_keyboardState[SDL_SCANCODE_KP_1]) buttons &= ~0x2000;
+		if (s_keyboardState[SDL_SCANCODE_KP_2]) buttons &= ~0x1000;
+		if (s_keyboardState[SDL_SCANCODE_KP_3]) buttons &= ~0x8000;
+		if (s_keyboardState[SDL_SCANCODE_KP_PLUS]) buttons &= ~0x8;
+		if (s_keyboardState[SDL_SCANCODE_KP_MINUS]) buttons &= ~0x1;
+		break;
+
+	case 3: // Player 4
+		if (s_keyboardState[SDL_SCANCODE_1]) buttons &= ~0x10;
+		if (s_keyboardState[SDL_SCANCODE_2]) buttons &= ~0x40;
+		if (s_keyboardState[SDL_SCANCODE_3]) buttons &= ~0x80;
+		if (s_keyboardState[SDL_SCANCODE_4]) buttons &= ~0x20;
+		if (s_keyboardState[SDL_SCANCODE_5]) buttons &= ~0x4000;
+		if (s_keyboardState[SDL_SCANCODE_9]) buttons &= ~0x2000;
+		if (s_keyboardState[SDL_SCANCODE_0]) buttons &= ~0x1000;
+		if (s_keyboardState[SDL_SCANCODE_MINUS]) buttons &= ~0x8000;
+		if (s_keyboardState[SDL_SCANCODE_EQUALS]) buttons &= ~0x8;
+		if (s_keyboardState[SDL_SCANCODE_BACKSLASH]) buttons &= ~0x1;
+		break;
+
+	default:
+		return;
+	}
+
+	NativeInput_SetSnapshotButtons(snapshot, buttons);
 }
 
 internal s32 NativeInput_FindActiveControllerSlot(void)
@@ -777,8 +782,6 @@ void Platform_InputUpdate(void)
 
 	if (s_installedSnapshotsActive != 0)
 	{
-		// NOTE(aalhendi): replay/state installs PSX-shaped pad bytes here;
-		// SDL host state is not serialized.
 		NativeInput_WriteInstalledSnapshots();
 		return;
 	}
