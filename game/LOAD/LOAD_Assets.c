@@ -93,11 +93,19 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	{
 		for (i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
-			// low lod CTR model
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
+			{
+				void *customModel = NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
+				data.driverModelExtras[i].fileBase = customModel;
+			}
+			else
+			{
+				// low lod CTR model
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+			}
 		}
 
-		// load 4P MPK of fourth player
+		// Always load the 4P arcade MPK: bots rely on its data.
 		lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[3];
 	}
 
@@ -135,7 +143,15 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		    (gGT->cup.cupID == 4))
 		{
 			// high lod model
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+			if (NativeCustomRacer_HasSlot(data.characterIDs[0]))
+			{
+				void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
+				data.driverModelExtras[0].fileBase = customModel;
+			}
+			else
+			{
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+			}
 
 			// pack of four AIs with bosses
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + LOAD_PURPLE_GEM_CUP_AI_SET_INDEX, NULL, callback);
@@ -153,7 +169,18 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_Robots1P(data.characterIDs[0]);
 		}
 
-		// arcade mpk
+		// arcade 1P. Replace the player's model with the custom one, but keep
+		// loading the original MPK: the bots depend on its internal data.
+		if (NativeCustomRacer_HasSlot(data.characterIDs[0]))
+		{
+			void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
+			data.driverModelExtras[0].fileBase = customModel;
+		}
+		else
+		{
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+		}
+
 		lastFileIndexMPK = BI_1PARCADEPACK + data.characterIDs[0];
 	}
 
@@ -165,10 +192,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		// then mask-grab breaks for all characters
 		// on Hot Air Skyway (except Crash Bandicoot)
 
-		// Load Player 1 [0]
+		// Load Player 1 [0]. Replace the model if it has a custom racer.
 		if (NativeCustomRacer_HasSlot(data.characterIDs[0]))
 		{
-			void *customModel = NativeCustomRacer_LoadModel(data.characterIDs[0]);
+			void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
 			data.driverModelExtras[0].fileBase = customModel;
 		}
 		else
@@ -176,26 +203,26 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
-		// Load boss or ghost [1]. If the ghost is a custom racer, skip its MPK
-		// entirely to free the VRAM for the custom texture atlas.
-		if (NativeCustomRacer_HasSlot(data.characterIDs[1]))
-		{
-			lastFileIndexMPK = 0;
-		}
-		else
-		{
-			lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
-		}
+		// Load boss or ghost [1]. Always load the ghost MPK: same reason as
+		// arcade, the game relies on its data during the race.
+		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
 	}
 
 	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
 	else
 	{
-		// med models
 		for (i = 0; i < LOAD_MED_LOD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
-			// med lod CTR model
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
+			{
+				void *customModel = NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
+				data.driverModelExtras[i].fileBase = customModel;
+			}
+			else
+			{
+				// med lod CTR model
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELMED + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+			}
 		}
 
 		LOAD_Robots2P(bigfile, data.characterIDs[0], data.characterIDs[1], callback);
@@ -203,22 +230,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	}
 
 QueueLastPack:
-	if (lastFileIndexMPK != 0)
-	{
-		LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
-	}
-	else
-	{
-		// No MPK to load (custom racer). Invoke the callback manually with a
-		// null destination so the load gate resets and the queue does not stall.
-		if (callback != NULL)
-		{
-			struct LoadQueueSlot lqs;
-			lqs.ptrDestination = 0;
-			lqs.flags = 0;
-			callback(&lqs);
-		}
-	}
+	LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
 	return sdata->ptrMPK;
 }
 

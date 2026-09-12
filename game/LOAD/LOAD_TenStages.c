@@ -711,8 +711,24 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		ElimBG_Deactivate(gGT);
 
-		/* === Custom Racer === */
-		NativeCustomRacer_ApplySlot(data.characterIDs[0]);
+		/* === Custom Racer ===
+		 * Only apply custom textures during an actual race. The main menu,
+		 * cutscenes, and adventure hub reuse driver IDs for previews and do
+		 * not need per-player VRAM regions. Applying offsets there corrupts
+		 * other VRAM assets (UI, cutscene textures) and causes crashes. */
+		if ((gGT->gameMode1 & (MAIN_MENU | GAME_CUTSCENE | ADVENTURE_ARENA)) == 0)
+		{
+			for (int playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
+			{
+				NativeCustomRacer_ApplySlot(playerIndex, data.characterIDs[playerIndex]);
+			}
+
+			if ((gGT->gameMode1 & TIME_TRIAL) != 0)
+			{
+				NativeCustomRacer_ApplySlot(gGT->numPlyrCurrGame, data.characterIDs[1]);
+			}
+		}
+
 		NativeCustomRacer_DumpVRAMIfRequested();
 		/* === End Custom Racer === */
 

@@ -28,8 +28,8 @@ ATLAS_X, ATLAS_Y = 0, 264
 PAGE_W = 128              # total atlas width in words (2 sub-pages of 64)
 SUBPAGE_W = 64            # PSX texture page width in words
 NUM_SUBPAGES = PAGE_W // SUBPAGE_W  # = 2
-TEXTURE_ROWS = 18         # rows available for textures
-CLUT_ROWS = 4             # rows available for CLUTs (8 per row = 32 max)
+TEXTURE_ROWS = 17         # rows available for textures (264..280)
+CLUT_ROWS = 5             # rows available for CLUTs (281..285), 8 per row = 40 max
 
 SCALE = 2
 
