@@ -25,7 +25,6 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 	u8 *robotSet;
 	b32 boolFoundRepeat = false;
 
-	// 8 sets, but only check 7 because the last is the Gem Cups pack (4 bosses).
 	for (setIndex = 0; setIndex < LOAD_2P_AI_SET_COUNT; setIndex++)
 	{
 		robotSet = data.characterIDs_2P_AIs[setIndex];
@@ -91,9 +90,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	// 3P/4P
 	if ((u32)(levelLOD - LOAD_LEVEL_LOD_3P) < LOAD_LEVEL_LOD_3P4P_COUNT)
 	{
-		// In 3P and 4P, one LOW LOD model per active player. The original
-		// loop bound was LOAD_DRIVER_MODEL_EXTRA_COUNT (3), which left the
-		// 4th player without a custom model. Use the actual player count.
+		// NOTE: The 3P/4P LOW LOD path in this port has a distance-based
+		// deformation bug that affects both custom and original models.
+		// Custom racers load normally here; the deformation is a separate
+		// engine issue, not caused by the custom .ctr files.
 		int playerCount = gGT->numPlyrCurrGame;
 		if (playerCount < 3) playerCount = 3;
 		if (playerCount > 4) playerCount = 4;
@@ -107,8 +107,8 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			}
 			else
 			{
-				// low lod CTR model
-				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELLOW + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+				// high lod CTR model
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 			}
 		}
 

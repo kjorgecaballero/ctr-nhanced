@@ -14,6 +14,9 @@
 /* Width in VRAM words assigned to each player slot. */
 #define NATIVE_SLOT_WIDTH 128
 
+#define NATIVE_MODELHEADER_SIZE 0x40
+#define NATIVE_MODELHEADER_COUNT 4
+
 static void Log(const char *fmt, ...)
 {
     va_list args;
@@ -32,10 +35,6 @@ typedef struct
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
 static int s_rosterCount = 0;
 static int s_rosterLoaded = 0;
-
-/* -------------------------------------------------------------------------
- * Roster parsing
- * ------------------------------------------------------------------------- */
 
 static int Roster_ParseLine(char *line, RosterEntry *out)
 {
@@ -115,10 +114,6 @@ const char *NativeCustomRacer_GetFolder(int characterID)
     return NULL;
 }
 
-/* -------------------------------------------------------------------------
- * File helpers
- * ------------------------------------------------------------------------- */
-
 static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *outSize)
 {
     FILE *f = fopen(path, "rb");
@@ -156,10 +151,6 @@ static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *out
     return buf;
 }
 
-/* -------------------------------------------------------------------------
- * CTR container pointer relocation
- * ------------------------------------------------------------------------- */
-
 static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 {
     if (fileSize < 8)
@@ -191,11 +182,61 @@ static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 }
 
 /* -------------------------------------------------------------------------
- * Model loader
+ * Model header expansion
  *
- * Each player index has its own .ctr file with the atlas already placed at
- * the player's VRAM region. No runtime pointer patching is required.
+ * Each .ctr produced by build_character.py has a single ModelHeader.
+ * When the engine asks for a lower LOD for distant models, it reads
+ * headers[1..3] which are outside the header array. We replicate the
+ * single header 4 times and force maxDistanceLOD to 0xFFFF so any 16-bit
+ * projected distance resolves to header[0] (the HI mesh).
+ *
+ * struct Model:
+ *   0x00  char name[16]
+ *   0x10  s16 id
+ *   0x12  s16 numHeaders
+ *   0x14  u32 headers pointer
+ *
+ * struct ModelHeader:
+ *   0x14  s16 maxDistanceLOD (compared as u16)
  * ------------------------------------------------------------------------- */
+
+static void ExpandModelHeaders(unsigned char *buf, long fileSize)
+{
+    if (fileSize < 4 + 0x18)
+        return;
+
+    unsigned char *md = buf + 4;
+
+    s16 numHeaders = *(s16 *)(md + 0x12);
+    u32 headersPtr = *(u32 *)(md + 0x14);
+
+    if (headersPtr == 0)
+        return;
+    if (numHeaders >= NATIVE_MODELHEADER_COUNT)
+        return;
+
+    u8 *newHeaders = (u8 *)malloc(NATIVE_MODELHEADER_SIZE * NATIVE_MODELHEADER_COUNT);
+    if (!newHeaders)
+        return;
+
+    for (int i = 0; i < NATIVE_MODELHEADER_COUNT; i++)
+    {
+        memcpy(newHeaders + i * NATIVE_MODELHEADER_SIZE,
+               (u8 *)headersPtr,
+               NATIVE_MODELHEADER_SIZE);
+
+        /* maxDistanceLOD is read as u16 in RenderBucket_SelectModelHeader,
+         * so use the largest possible value. This guarantees the loop
+         * never advances past header[0]. */
+        *(u16 *)(newHeaders + i * NATIVE_MODELHEADER_SIZE + 0x14) = 0xFFFF;
+    }
+
+    *(s16 *)(md + 0x12) = NATIVE_MODELHEADER_COUNT;
+    *(u32 *)(md + 0x14) = (u32)newHeaders;
+
+    Log("[CustomRacer] expanded model headers: %d -> %d (maxDistanceLOD=0xFFFF)\n",
+        numHeaders, NATIVE_MODELHEADER_COUNT);
+}
 
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 {
@@ -216,15 +257,12 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
     }
 
     ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
 
     Log("[CustomRacer] model_p%d.ctr loaded: %s (player %d, %ld bytes)\n",
         playerIndex, path, playerIndex, sz);
     return buf;
 }
-
-/* -------------------------------------------------------------------------
- * VRM (texture upload) loader
- * ------------------------------------------------------------------------- */
 
 static int VRM_ApplyBuffer(const unsigned char *buf, int size, int playerIndex)
 {
@@ -260,7 +298,6 @@ static int VRM_ApplyBuffer(const unsigned char *buf, int size, int playerIndex)
         if (nextOffset > size)
             break;
 
-        /* Shift to the player's VRAM region so it matches the .ctr. */
         rect.x += (short)(playerIndex * NATIVE_SLOT_WIDTH);
 
         LoadImage(&rect, (void *)(buf + offset + 24));
@@ -299,10 +336,6 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID)
             characterID, playerIndex, folder, blocks);
     }
 }
-
-/* -------------------------------------------------------------------------
- * VRAM dump (debug)
- * ------------------------------------------------------------------------- */
 
 void NativeCustomRacer_DumpVRAMIfRequested(void)
 {
