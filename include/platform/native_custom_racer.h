@@ -7,29 +7,41 @@
 extern "C" {
 #endif
 
-/* Initializes the custom racer subsystem. Reads roster.txt on first call. */
+/* Inicializa el subsistema. Lee roster.txt en la primera llamada. */
 void NativeCustomRacer_Init(void);
 
-/* Forces a reload of roster.txt. Use if the file changes at runtime. */
+/* Fuerza recarga de roster.txt (útil para hot-reload). */
 void NativeCustomRacer_ReloadRoster(void);
 
-/* Returns 1 if the given character ID has a custom racer entry. */
+/* Devuelve 1 si el characterID tiene racer custom en la página actual. */
 int NativeCustomRacer_HasSlot(int characterID);
 
-/* Returns the folder name for the given character ID, or NULL. */
+/* Devuelve el folder del racer para characterID, o NULL. */
 const char *NativeCustomRacer_GetFolder(int characterID);
 
-/* Loads model.ctr for the given character into a malloc'ed buffer with
- * internal pointers relocated and layout VRAM coordinates shifted to the
- * specified player slot. Returns NULL on failure. The caller owns the buffer. */
+/* Carga model_p{playerIndex}.ctr para el characterID, con punteros
+ * reubicados y UVs desplazadas al slot VRAM del jugador.
+ * Devuelve buffer malloc'ed (caller owns) o NULL. */
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID);
 
-/* Applies textures.vrm for the given character to the player's VRAM region. */
+/* Sube textures.vrm a la región VRAM del jugador. */
 void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
 
-/* Dumps the current VRAM to a file if the environment variable
- * CTR_DUMP_VRAM is set to a non-empty path. No-op otherwise. */
+/* Dump VRAM si CTR_DUMP_VRAM está seteado. No-op si no. */
 void NativeCustomRacer_DumpVRAMIfRequested(void);
+
+/* === Paginación de racers === */
+int  NativeCustomRacer_GetPageCount(void);
+int  NativeCustomRacer_GetCurrentPage(void);
+void NativeCustomRacer_SetCurrentPage(int page);
+void NativeCustomRacer_NextPage(void);
+void NativeCustomRacer_PrevPage(void);
+
+/* Reaplica atlas VRAM + metadata de la página actual. Idempotente. */
+void NativeCustomRacer_RefreshPage(void);
+
+/* TEMPORAL: dump de ptrIcons[32..47] la primera vez que existan. */
+void NativeCustomRacer_DebugDumpIcons(void);
 
 #ifdef __cplusplus
 }

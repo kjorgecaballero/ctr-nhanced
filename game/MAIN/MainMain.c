@@ -6,6 +6,8 @@
 #include <platform/native_savestate.h>
 #endif
 
+#include <platform/native_custom_racer.h>
+
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 static struct NativePerfFrameInfo MainPerf_FrameInfo(struct GameTracker *gGT)
 {
@@ -664,6 +666,9 @@ void StateZero()
 	// This loads UI textures (shared.vrm)
 	// This includes traffic lights, font, and more
 	LOAD_VramFile(sdata->ptrBigfile1, 0x102, NULL, &vramSize, -1);
+
+	/* NUEVO: cargar roster de racers custom y aplicar página 0 */
+	NativeCustomRacer_Init();
 
 	sdata->mainGameState = 3;
 

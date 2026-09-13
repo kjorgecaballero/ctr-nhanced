@@ -7,15 +7,20 @@
 #include <platform/native_custom_racer.h>
 #include <platform/native_renderer.h>
 
-#define NATIVE_ROSTER_MAX 64
+#define NATIVE_ROSTER_MAX   64
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
 
-/* Width in VRAM words assigned to each player slot. */
+/* Ancho en palabras VRAM por jugador. */
 #define NATIVE_SLOT_WIDTH 128
 
-#define NATIVE_MODELHEADER_SIZE 0x40
+#define NATIVE_MODELHEADER_SIZE  0x40
 #define NATIVE_MODELHEADER_COUNT 4
+
+/* Paginación */
+#define NATIVE_PAGE_SIZE  16
+#define NATIVE_ICON_BASE  32
+#define NATIVE_ICON_COUNT 16
 
 static void Log(const char *fmt, ...)
 {
@@ -32,10 +37,33 @@ typedef struct
     char folder[64];
 } RosterEntry;
 
+/* Entrada del roster nuevo formato: page slot folder */
+typedef struct
+{
+    int page;
+    int slot;
+    char folder[64];
+} PageEntry;
+
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
 static int s_rosterCount = 0;
 static int s_rosterLoaded = 0;
 
+static PageEntry s_pageEntries[NATIVE_ROSTER_MAX];
+static int s_pageEntryCount = 0;
+
+static int s_page = 0;
+static int s_pageCount = 1;
+static int s_appliedPage = -1;
+
+/* Backup de MetaDataCharacters[0..15] para restaurar entre páginas. */
+static int s_metaBackupDone = 0;
+static struct MetaDataCHAR s_metaBackup[16];
+
+
+/* --------------------------------------------------------------------- */
+/* Parser viejo (ext_id folder). Se conserva por compatibilidad.        */
+/* --------------------------------------------------------------------- */
 static int Roster_ParseLine(char *line, RosterEntry *out)
 {
     char *p = line;
@@ -69,9 +97,43 @@ static int Roster_ParseLine(char *line, RosterEntry *out)
     return 1;
 }
 
+/* --------------------------------------------------------------------- */
+/* Parser nuevo: "page slot folder [engine] ["name"]"                    */
+/* --------------------------------------------------------------------- */
+static int Page_ParseLine(char *line, PageEntry *out)
+{
+    char *p = line;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == '#' || *p == '\n' || *p == '\0') return 0;
+
+    char *end = NULL;
+    long page = strtol(p, &end, 10);
+    if (end == p) return 0;
+    p = end;
+    while (*p == ' ' || *p == '\t') p++;
+
+    long slot = strtol(p, &end, 10);
+    if (end == p) return 0;
+    p = end;
+    while (*p == ' ' || *p == '\t') p++;
+
+    int i = 0;
+    while (*p && *p != '\n' && *p != '\r' && *p != ' ' && *p != '\t'
+           && i < (int)sizeof(out->folder) - 1)
+        out->folder[i++] = *p++;
+    out->folder[i] = '\0';
+    if (i == 0) return 0;
+
+    out->page = (int)page;
+    out->slot = (int)slot;
+    return 1;
+}
+
 void NativeCustomRacer_ReloadRoster(void)
 {
     s_rosterCount = 0;
+    s_pageEntryCount = 0;
+    s_pageCount = 1;
     s_rosterLoaded = 1;
 
     FILE *f = fopen("assets/mods/racers/roster.txt", "rb");
@@ -79,41 +141,78 @@ void NativeCustomRacer_ReloadRoster(void)
         return;
 
     char line[256];
-    while (fgets(line, sizeof(line), f) && s_rosterCount < NATIVE_ROSTER_MAX)
+    int maxPage = 0;
+    while (fgets(line, sizeof(line), f) && s_pageEntryCount < NATIVE_ROSTER_MAX)
     {
-        RosterEntry entry;
-        if (Roster_ParseLine(line, &entry))
-            s_roster[s_rosterCount++] = entry;
+        PageEntry e;
+        if (!Page_ParseLine(line, &e))
+            continue;
+
+        s_pageEntries[s_pageEntryCount++] = e;
+        if (e.page > maxPage)
+            maxPage = e.page;
+
+        /* Compatibilidad: rellenamos s_roster[] con slotID = page*16+slot */
+        if (s_rosterCount < NATIVE_ROSTER_MAX)
+        {
+            s_roster[s_rosterCount].slotID = e.page * NATIVE_PAGE_SIZE + e.slot;
+            strncpy(s_roster[s_rosterCount].folder, e.folder,
+                    sizeof(s_roster[s_rosterCount].folder) - 1);
+            s_roster[s_rosterCount].folder[
+                sizeof(s_roster[s_rosterCount].folder) - 1] = '\0';
+            s_rosterCount++;
+        }
     }
     fclose(f);
 
-    Log("[CustomRacer] Roster loaded: %d entries\n", s_rosterCount);
+    s_pageCount = maxPage + 1;
+    if (s_pageCount < 1)
+        s_pageCount = 1;
+
+    Log("[CustomRacer] Roster: %d entries, %d pages\n",
+        s_pageEntryCount, s_pageCount);
 }
 
 void NativeCustomRacer_Init(void)
 {
     if (!s_rosterLoaded)
+    {
         NativeCustomRacer_ReloadRoster();
+        NativeCustomRacer_RefreshPage();
+    }
+}
+
+/* --------------------------------------------------------------------- */
+/* Búsqueda por página + slot                                            */
+/* --------------------------------------------------------------------- */
+static const PageEntry *FindPageEntry(int page, int slot)
+{
+    for (int i = 0; i < s_pageEntryCount; i++)
+    {
+        if (s_pageEntries[i].page == page && s_pageEntries[i].slot == slot)
+            return &s_pageEntries[i];
+    }
+    return NULL;
 }
 
 int NativeCustomRacer_HasSlot(int characterID)
 {
     NativeCustomRacer_Init();
-    for (int i = 0; i < s_rosterCount; i++)
-        if (s_roster[i].slotID == characterID)
-            return 1;
-    return 0;
+    return FindPageEntry(s_page, characterID) != NULL;
 }
 
 const char *NativeCustomRacer_GetFolder(int characterID)
 {
     NativeCustomRacer_Init();
-    for (int i = 0; i < s_rosterCount; i++)
-        if (s_roster[i].slotID == characterID)
-            return s_roster[i].folder;
+    const PageEntry *e = FindPageEntry(s_page, characterID);
+    if (e)
+        return e->folder;
     return NULL;
 }
 
+/* --------------------------------------------------------------------- */
+/* Carga de archivos                                                     */
+/* --------------------------------------------------------------------- */
 static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *outSize)
 {
     FILE *f = fopen(path, "rb");
@@ -151,6 +250,9 @@ static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *out
     return buf;
 }
 
+/* --------------------------------------------------------------------- */
+/* Reubicación de punteros del .ctr                                      */
+/* --------------------------------------------------------------------- */
 static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 {
     if (fileSize < 8)
@@ -181,25 +283,8 @@ static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
     }
 }
 
-/* -------------------------------------------------------------------------
- * Model header expansion
- *
- * Each .ctr produced by build_character.py has a single ModelHeader.
- * When the engine asks for a lower LOD for distant models, it reads
- * headers[1..3] which are outside the header array. We replicate the
- * single header 4 times and force maxDistanceLOD to 0xFFFF so any 16-bit
- * projected distance resolves to header[0] (the HI mesh).
- *
- * struct Model:
- *   0x00  char name[16]
- *   0x10  s16 id
- *   0x12  s16 numHeaders
- *   0x14  u32 headers pointer
- *
- * struct ModelHeader:
- *   0x14  s16 maxDistanceLOD (compared as u16)
- * ------------------------------------------------------------------------- */
-
+/* Expansión de ModelHeader: duplica el único header 4 veces con
+ * maxDistanceLOD=0xFFFF para forzar siempre LOD HI. */
 static void ExpandModelHeaders(unsigned char *buf, long fileSize)
 {
     if (fileSize < 4 + 0x18)
@@ -225,9 +310,6 @@ static void ExpandModelHeaders(unsigned char *buf, long fileSize)
                (u8 *)headersPtr,
                NATIVE_MODELHEADER_SIZE);
 
-        /* maxDistanceLOD is read as u16 in RenderBucket_SelectModelHeader,
-         * so use the largest possible value. This guarantees the loop
-         * never advances past header[0]. */
         *(u16 *)(newHeaders + i * NATIVE_MODELHEADER_SIZE + 0x14) = 0xFFFF;
     }
 
@@ -264,6 +346,9 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
     return buf;
 }
 
+/* --------------------------------------------------------------------- */
+/* Aplicación de .vrm a VRAM                                             */
+/* --------------------------------------------------------------------- */
 static int VRM_ApplyBuffer(const unsigned char *buf, int size, int playerIndex)
 {
     if (size < 8)
@@ -337,6 +422,9 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID)
     }
 }
 
+/* --------------------------------------------------------------------- */
+/* Dump VRAM                                                             */
+/* --------------------------------------------------------------------- */
 void NativeCustomRacer_DumpVRAMIfRequested(void)
 {
     const char *path = getenv("CTR_DUMP_VRAM");
@@ -359,4 +447,135 @@ void NativeCustomRacer_DumpVRAMIfRequested(void)
     }
 
     free(buf);
+}
+
+/* ===================================================================== */
+/* PAGINACIÓN                                                            */
+/* ===================================================================== */
+
+static void EnsureMetaBackup(void)
+{
+    if (s_metaBackupDone)
+        return;
+    memcpy(s_metaBackup, data.MetaDataCharacters, sizeof(s_metaBackup));
+    s_metaBackupDone = 1;
+}
+
+/* Sube page_N.vrm al atlas VRAM (0,216) 512x48.
+ * Reutiliza VRM_ApplyBuffer con playerIndex=0 para no añadir offset. */
+static void ApplyPageIcons(int page)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
+
+    long size = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES, &size);
+    if (!buf)
+    {
+        Log("[CustomRacer] page_%d.vrm no encontrado: %s\n", page, path);
+        return;
+    }
+
+    int blocks = VRM_ApplyBuffer(buf, (int)size, 0);
+    free(buf);
+    Log("[CustomRacer] page %d icons: %d blocks\n", page, blocks);
+}
+
+/* Reescribe MetaDataCharacters[0..15] para la página dada.
+ * NO toca name_Debug (lo usa MM_Characters_GetModelByName para el modelo 3D). */
+static void ApplyPageMeta(int page)
+{
+    EnsureMetaBackup();
+
+    /* Restaurar originales primero */
+    memcpy(data.MetaDataCharacters, s_metaBackup, sizeof(s_metaBackup));
+
+    if (page == 0)
+        return;
+
+    /* Override slots que tengan entrada en esta página (0..14) */
+    for (int i = 0; i < s_pageEntryCount; i++)
+    {
+        PageEntry *e = &s_pageEntries[i];
+        if (e->page != page)
+            continue;
+        if (e->slot < 0 || e->slot >= 15)
+            continue;
+
+        struct MetaDataCHAR *md = &data.MetaDataCharacters[e->slot];
+        md->iconID = NATIVE_ICON_BASE + e->slot;  /* 32..46 */
+        /* name_LNG_* y engineID se dejan por ahora (TODO) */
+    }
+}
+
+int NativeCustomRacer_GetPageCount(void)   { return s_pageCount; }
+int NativeCustomRacer_GetCurrentPage(void) { return s_page; }
+
+void NativeCustomRacer_RefreshPage(void)
+{
+    if (s_appliedPage == s_page)
+        return;
+    EnsureMetaBackup();
+    ApplyPageMeta(s_page);
+    ApplyPageIcons(s_page);
+    s_appliedPage = s_page;
+}
+
+void NativeCustomRacer_SetCurrentPage(int page)
+{
+    if (page < 0 || page >= s_pageCount)
+        return;
+    if (page == s_page)
+        return;
+
+    s_page = page;
+    s_appliedPage = -1;   /* forzar re-aplicación */
+    NativeCustomRacer_RefreshPage();
+    Log("[CustomRacer] page -> %d\n", page);
+}
+
+void NativeCustomRacer_NextPage(void)
+{
+    if (s_page + 1 < s_pageCount)
+        NativeCustomRacer_SetCurrentPage(s_page + 1);
+}
+
+void NativeCustomRacer_PrevPage(void)
+{
+    if (s_page > 0)
+        NativeCustomRacer_SetCurrentPage(s_page - 1);
+}
+
+/* ===================================================================== */
+/* DEBUG TEMPORAL: dump de ptrIcons[32..47]                              */
+/* ===================================================================== */
+void NativeCustomRacer_DebugDumpIcons(void)
+{
+    static int s_iconDbgDone = 0;
+    if (s_iconDbgDone)
+        return;
+    if (!sdata || !sdata->gGT)
+        return;
+    if (sdata->gGT->ptrIcons[32] == NULL)
+        return;
+
+    s_iconDbgDone = 1;
+    Log("--- ptrIcons[32..47] ---\n");
+    for (int i = 32; i < 48; i++)
+    {
+        struct Icon *ic = sdata->gGT->ptrIcons[i];
+        if (!ic)
+        {
+            Log("  [%02d] NULL\n", i);
+            continue;
+        }
+        Log("  [%02d] name=%-12s u0=%3u v0=%3u u1=%3u v1=%3u u2=%3u v2=%3u u3=%3u v3=%3u tpage=0x%04X clut=0x%04X\n",
+            i, ic->name,
+            ic->texLayout.u0, ic->texLayout.v0,
+            ic->texLayout.u1, ic->texLayout.v1,
+            ic->texLayout.u2, ic->texLayout.v2,
+            ic->texLayout.u3, ic->texLayout.v3,
+            ic->texLayout.tpage, ic->texLayout.clut);
+    }
+    Log("--- fin ptrIcons ---\n");
 }

@@ -128,6 +128,16 @@ else()
     endif()
 endif()
 target_link_libraries(ctr_native SDL3::SDL3)
+
+# Copia el exe al root del repo tras cada build para que SDL_GetBasePath()
+# encuentre la carpeta assets/ (que vive en el root, no en build-msvc-x86/).
+add_custom_command(TARGET ctr_native POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:ctr_native>
+            ${CMAKE_SOURCE_DIR}/ctr_native.exe
+    COMMENT "Copiando ctr_native.exe al root del repo"
+)
+
 if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
     target_link_options(ctr_native PRIVATE -static-libgcc)
 endif()
