@@ -211,8 +211,25 @@ wc -l docs/CUSTOM_RACER_BUGS_PENDING.md
 
 ## BUG-ARCADE-01: 1P arcade load hang on Hot Air Skyway with specific originals
 
-**Status:** pending (pre-existing, unrelated to custom racer system)
+**Status:** fixed in `platform/native_memory.c` (commit 417b3e8b2)
 **Detected:** Phase 2.6, after BUG-TNT-01
+
+**Root cause:** The native port reduced the MEMPACK arena to `0x144e10`
+(1.27 MiB) while keeping the retail NTSC-U start offset `0xba9f0`. With
+Crash/Cortex/Dingodile/Pura on Hot Air Skyway / N.Gin Labs / Polar Pass,
+the 1P arcade bot pack (`LOAD_Robots1P`) consumed ~262 KiB more than with
+the other four characters, and the level's ClipBuffer allocation
+(`want=12000`) hit `free=9840` → `MEMPACK_AllocMem` OOM → infinite loop.
+
+**Fix:** Doubled `CTR_NATIVE_MEMPACK_BUFFER_SIZE` (0x200000 → 0x400000)
+and `CTR_NATIVE_MEMPACK_SIZE` (0x144e10 → 0x344e10). PC memory is not the
+constraint, so the tight retail window was unnecessarily preserved.
+**Safety net:** `MEMPACK_AllocMem` / `MEMPACK_AllocHighMem` now log and
+return `NULL` on OOM in native builds instead of looping forever.
+
+**Verification:** Crash / Cortex / Dingodile / Pura on Hot Air Skyway /
+N.Gin Labs / Polar Pass now load without OOM. Tiny / Coco / N.Gin / Polar
+unaffected (regression test).
 
 **Symptom:** In **1P arcade**, launching **Hot Air Skyway** (and reportedly
 N.Gin Labs, Polar Pass; more testing needed) hangs on the **loading screen**
