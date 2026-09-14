@@ -60,13 +60,17 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 
 void LOAD_Robots1P(int characterID)
 {
+	/* Fase 2: keep the original ID at [0] (may be 16+), but the AI slots
+	 * must use slots 0..15 so they can index into BI_RACERMODELHI and
+	 * MetaDataCharacters without going out of bounds. */
+	int mpkID = GET_MPK_ID(characterID);
 	int newCharacterID = 0;
 
 	data.characterIDs[0] = characterID;
 
 	for (int i = 1; i < LOAD_CHARACTER_ID_COUNT; i++, newCharacterID++)
 	{
-		if (newCharacterID == characterID)
+		if (newCharacterID == mpkID)
 		{
 			newCharacterID++;
 		}
@@ -113,7 +117,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		}
 
 		// The 4P arcade MPK always loads; bots and game logic depend on its data.
-		lastFileIndexMPK = BI_4PARCADEPACK + data.characterIDs[3];
+		lastFileIndexMPK = BI_4PARCADEPACK + GET_MPK_ID(data.characterIDs[3]);
 	}
 
 	else if (levelLOD == LOAD_LEVEL_LOD_1P)
@@ -133,7 +137,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		    // adventure character select
 		    (gGT->levelID == ADVENTURE_GARAGE))
 		{
-			lastFileIndexMPK = BI_ADVENTUREPACK + data.characterIDs[0];
+			lastFileIndexMPK = BI_ADVENTUREPACK + GET_MPK_ID(data.characterIDs[0]);
 			goto QueueLastPack;
 		}
 
@@ -188,7 +192,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
-		lastFileIndexMPK = BI_1PARCADEPACK + data.characterIDs[0];
+		lastFileIndexMPK = BI_1PARCADEPACK + GET_MPK_ID(data.characterIDs[0]);
 	}
 
 	else if ((levelLOD == LOAD_LEVEL_LOD_RELIC) || ((gameMode1 & TIME_TRIAL) != 0))
@@ -212,7 +216,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 
 		// Load boss or ghost [1]. Always load the ghost MPK: the game relies
 		// on its data during the race.
-		lastFileIndexMPK = BI_TIMETRIALPACK + data.characterIDs[1];
+		lastFileIndexMPK = BI_TIMETRIALPACK + GET_MPK_ID(data.characterIDs[1]);
 	}
 
 	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
@@ -233,7 +237,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			}
 		}
 
-		LOAD_Robots2P(bigfile, data.characterIDs[0], data.characterIDs[1], callback);
+		LOAD_Robots2P(bigfile, GET_MPK_ID(data.characterIDs[0]), GET_MPK_ID(data.characterIDs[1]), callback);
 		return sdata->ptrMPK;
 	}
 

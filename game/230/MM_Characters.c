@@ -425,14 +425,28 @@ void MM_Characters_RestoreIDs(void)
 
 	MM_Characters_SetMenuLayout();
 
+	/* === Fase 2: apply custom IDs to the active meta for this page === */
+	D230.activeCharacterSelectMeta = NativeCustomRacer_GetPageMeta(
+	    D230.activeCharacterSelectMeta, MM_CHARACTER_SELECT_ICON_COUNT);
+	/* ================================================================ */
+
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
-		D230.characterMenuID[(s32)D230.activeCharacterSelectMeta[iconIndex].characterID] = iconIndex;
+		s16 cid = D230.activeCharacterSelectMeta[iconIndex].characterID;
+		if (cid >= NATIVE_CUSTOM_ID_BASE)
+			s_customMenuID[cid - NATIVE_CUSTOM_ID_BASE] = (s16)iconIndex;
+		else if (cid >= 0 && cid < 0x10)
+			D230.characterMenuID[cid] = (s16)iconIndex;
 	}
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
 		s16 *currID = &data.characterIDs[playerIndex];
+
+		/* === Fase 2: custom IDs (>= 16) are always "unlocked" === */
+		if (*currID >= NATIVE_CUSTOM_ID_BASE)
+			continue;
+		/* ========================================================= */
 
 		s16 unlocked = D230.activeCharacterSelectMeta[(s32)*currID].unlockFlags;
 
@@ -515,10 +529,22 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 	NativeCustomRacer_RefreshPage();
 	/* ================================================================ */
 
-	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
+	/* === Fase 2: a custom selected on another page is no longer valid,
+	 * fall back to Crash so we never index past the current meta. === */
 	{
-		iconPerPlayer[playerIndex] = D230.characterMenuID[data.characterIDs[playerIndex]];
+		int currentPage = NativeCustomRacer_GetCurrentPage();
+		for (int i = 0; i < MM_CHARACTER_SELECT_MAX_PLAYERS; i++)
+		{
+			s16 cid = data.characterIDs[i];
+			if (cid >= NATIVE_CUSTOM_ID_BASE)
+			{
+				int cidPage = ((cid - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE) + 1;
+				if (cidPage != currentPage)
+					data.characterIDs[i] = CRASH_BANDICOOT;
+			}
+		}
 	}
+	/* ================================================================ */
 
 	if (D230.characterSelectMenuState != IN_MENU)
 	{
@@ -526,6 +552,34 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 	}
 
 	MM_Characters_SetMenuLayout();
+
+	/* === Fase 2: swap the active meta for our page-patched copy === */
+	D230.activeCharacterSelectMeta = NativeCustomRacer_GetPageMeta(
+	    D230.activeCharacterSelectMeta, MM_CHARACTER_SELECT_ICON_COUNT);
+	/* ================================================================ */
+
+	/* === Fase 2: refresh ID <-> icon-index maps for the current layout === */
+	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
+	{
+		s16 cid = D230.activeCharacterSelectMeta[iconIndex].characterID;
+		if (cid >= NATIVE_CUSTOM_ID_BASE)
+			s_customMenuID[cid - NATIVE_CUSTOM_ID_BASE] = (s16)iconIndex;
+		else if (cid >= 0 && cid < 0x10)
+			D230.characterMenuID[cid] = (s16)iconIndex;
+	}
+	/* ================================================================ */
+
+	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
+	{
+		s16 cid = data.characterIDs[playerIndex];
+		if (cid >= NATIVE_CUSTOM_ID_BASE)
+			iconPerPlayer[playerIndex] = s_customMenuID[cid - NATIVE_CUSTOM_ID_BASE];
+		else if (cid >= 0 && cid < 0x10)
+			iconPerPlayer[playerIndex] = D230.characterMenuID[cid];
+		else
+			iconPerPlayer[playerIndex] = 0;
+	}
+
 	MM_Characters_DrawWindows(1);
 
 	if (D230.characterSelectMenuState == ENTERING_MENU)
@@ -927,9 +981,16 @@ dontDrawSelectCharacter:
 				nameY = nameBaseY + D230.characterSelectNameTextY + nameYOffset;
 			}
 
-			DecalFont_DrawLine(sdata->lngStrings[GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long],
-			                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
-			                   (JUSTIFY_CENTER | ORANGE));
+			/* === Fase 2: custom racers still have no LNG strings (Fase 5).
+			 * Guard against reading lngStrings[-1]. === */
+			s16 nameLNG = GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long;
+			if (nameLNG >= 0)
+			{
+				DecalFont_DrawLine(sdata->lngStrings[nameLNG],
+				                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
+				                   (JUSTIFY_CENTER | ORANGE));
+			}
+			/* ============================================================= */
 		}
 
 		D230.characterSelectPlayerState.angle[playerIndex] += MM_CHARACTER_SELECT_SPIN_STEP;

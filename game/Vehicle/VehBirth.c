@@ -665,9 +665,46 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 		id = data.characterIDs[index];
 	}
 
-	struct Model *m = VehBirth_GetModelByName(GET_METADATA(id)->name_Debug);
+/* Fase 2: driver-aware model lookup.
+ *
+ * Custom IDs (16+): use the .ctr already loaded into driverModelExtras[index]
+ * by LOAD_DriverMPK. We bypass the name-based lookup on purpose — the .ctr
+ * internal name may collide with an original character name (e.g. a rusty
+ * mod built with internal name "tiny" would hijack the Tiny bot if we went
+ * through VehBirth_GetModelByName).
+ *
+ * Original IDs (0..15): search PLYROBJECTLIST only (the level's model list).
+ * We deliberately skip the driverModelExtras fast path for the same reason. */
+struct Model *m = NULL;
+if (id >= NATIVE_CUSTOM_ID_BASE)
+{
+    m = data.driverModelExtras[index].model;
+}
+else
+{
+    const char *searchName = GET_METADATA(id)->name_Debug;
+    struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
 
-	struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
+    if (models != NULL && models[0] != NULL)
+    {
+        for (int i = 0; models[i] != NULL; i++)
+        {
+            if (VehBirth_ModelNameEquals(models[i], searchName))
+            {
+                m = models[i];
+                break;
+            }
+        }
+    }
+}
+
+if (m == NULL)
+{
+    /* Last-resort fallback: Crash's level model. Should never happen. */
+    m = VehBirth_GetModelByName(GET_METADATA(CRASH_BANDICOOT)->name_Debug);
+}
+
+struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 
 	t->inst = inst;
 

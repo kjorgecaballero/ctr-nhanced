@@ -40,3 +40,5 @@ __pycache__/
 *~
 vram_*.bin
 *.bin
+VRAM.TGA
+run.log

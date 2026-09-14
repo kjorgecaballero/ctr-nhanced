@@ -1,5 +1,5 @@
 #include <common.h>
-
+#include <platform/native_custom_racer.h>
 enum
 {
 	VEH_FRAME_ANIM_DRIVE = 0,
@@ -235,7 +235,7 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			characterID = CRASH_BANDICOOT;
 		}
 
-		matrixArray = characterID + VEH_FRAME_AIRBORNE_MATRIX_BASE;
+		matrixArray = GET_MPK_ID(characterID) + VEH_FRAME_AIRBORNE_MATRIX_BASE;
 		if (characterID == NITROS_OXIDE)
 		{
 			matrixArray = VEH_FRAME_OXIDE_MATRIX_ARRAY;

@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void Music_SetIntro(void)
 {
@@ -229,19 +230,22 @@ u32 Music_AsyncParseBanks(void)
 				// numPlyrCurrGame
 				if (sdata->bankCount < gGT->numPlyrCurrGame)
 				{
+					/* Fase 2: use the wrapped MPK slot to decide whether the
+					 * 8-driver bank already covers this racer. Custom IDs 16+
+					 * would otherwise produce bank index 72+, out of range. */
 					if (
 					    // if bank of 8 drivers is loaded
 					    (sdata->bankLoad54 != 0) &&
 
 					    // if characterID is part of original 8
-					    (data.characterIDs[sdata->bankCount] < PINSTRIPE))
+					    (GET_MPK_ID(data.characterIDs[sdata->bankCount]) < PINSTRIPE))
 					{
 						// skip load bank
 						goto LAB_8002e178;
 					}
 
-					// load bank for character
-					index = data.characterIDs[sdata->bankCount] + 0x37;
+					// load bank for character (wrapped to 0..15)
+					index = GET_MPK_ID(data.characterIDs[sdata->bankCount]) + 0x37;
 					goto LOAD_BANK;
 				}
 			}
@@ -252,7 +256,7 @@ u32 Music_AsyncParseBanks(void)
 				// load 5 banks, one for each driver
 				if (sdata->bankCount < 5)
 				{
-					index = data.characterIDs[sdata->bankCount] + 0x37;
+					index = GET_MPK_ID(data.characterIDs[sdata->bankCount]) + 0x37;
 
 				LOAD_BANK:
 
@@ -270,16 +274,17 @@ u32 Music_AsyncParseBanks(void)
 		{
 			if (sdata->bankCount == 0)
 			{
+				/* Fase 2: same wrap for the adventure-arena path. */
 				if ((sdata->bankLoad54 != 0) ||
 
 				    // characterID is special character
-				    (PURA < data.characterIDs[0]))
+				    (PURA < GET_MPK_ID(data.characterIDs[0])))
 				{
 					goto LAB_8002e178;
 				}
 
-				// bank = characterID + 0x37
-				index = data.characterIDs[0] + 0x37;
+				// bank = characterID + 0x37 (wrapped to 0..15)
+				index = GET_MPK_ID(data.characterIDs[0]) + 0x37;
 
 				// load bank
 				goto LOAD_BANK;

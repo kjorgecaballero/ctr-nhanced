@@ -8,14 +8,16 @@
 extern "C" {
 #endif
 
-/* === Fase 1: IDs custom 16..63 ============================================
- * No extendemos data.MetaDataCharacters[0x10] (rompería ~30 CTR_STATIC_ASSERT
- * de struct sData). En su lugar, tabla paralela en BSS + macro de redirección.
- *   IDs 0..15 -> data.MetaDataCharacters (comportamiento original intacto).
+/* === Fase 1: custom IDs 16..63 ===========================================
+ * We do NOT extend data.MetaDataCharacters[0x10] (that would break ~30
+ * CTR_STATIC_ASSERTs on struct sData). Instead: a parallel table in BSS
+ * plus a redirection macro.
+ *   IDs 0..15 -> data.MetaDataCharacters (original behavior, untouched).
  *   IDs 16+   -> s_customMeta.
- * ========================================================================== */
+ * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
 #define NATIVE_CUSTOM_COUNT   48
+#define NATIVE_PAGE_SIZE      16
 
 extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
@@ -25,6 +27,14 @@ extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
       ((id) <  (NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)))                \
         ? &s_customMeta[(id) - NATIVE_CUSTOM_ID_BASE]                         \
         : &data.MetaDataCharacters[(id)])
+
+/* Maps a character ID to a valid slot index (0..15) for use as an index
+ * into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only have 16
+ * entries. Custom IDs 16..63 wrap back to their original character slot. */
+#define GET_MPK_ID(id)                                                        \
+    (((id) >= NATIVE_CUSTOM_ID_BASE)                                          \
+        ? (((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE)                 \
+        : (id))
 
 /* Initializes the custom racer subsystem. Reads roster.txt on first call. */
 void NativeCustomRacer_Init(void);
@@ -59,6 +69,16 @@ void NativeCustomRacer_PrevPage(void);
 
 /* Re-applies the current page's VRAM atlas + metadata. Idempotent. */
 void NativeCustomRacer_RefreshPage(void);
+
+/* === Fase 2: menu integration ===
+ * Returns the CharacterSelectMeta array the character-select menu should
+ * use for the current page.
+ * If page == 0, returns `base` untouched.
+ * If page > 0, returns a BSS copy of `base` with custom slots patched so
+ * their characterID is 16+ (so the engine treats them as first-class racers).
+ * Call from MM_Characters.c right after SetMenuLayout. */
+struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
+    struct CharacterSelectMeta *base, int count);
 
 #ifdef __cplusplus
 }

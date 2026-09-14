@@ -6,6 +6,7 @@
 
 #include <platform/native_custom_racer.h>
 #include <platform/native_renderer.h>
+#include <ovr_230.h>
 
 #define NATIVE_ROSTER_MAX   64
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
@@ -18,7 +19,6 @@
 #define NATIVE_MODELHEADER_COUNT 4
 
 /* Pagination */
-#define NATIVE_PAGE_SIZE  16
 #define NATIVE_ICON_BASE  32
 #define NATIVE_ICON_COUNT 16
 
@@ -62,10 +62,14 @@ static int s_appliedPage = -1;
 static int s_metaBackupDone = 0;
 static struct MetaDataCHAR s_metaBackup[16];
 
-/* Fase 1: tablas paralelas en BSS para IDs 16+.
- * Referenciadas desde otros .c vía GET_METADATA (por eso no son static). */
+/* Fase 1: parallel tables in BSS for IDs 16+.
+ * Referenced from other .c files through GET_METADATA (hence not static). */
 struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
+
+/* Fase 2: copy of the menu meta array with custom slots patched to
+ * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
+static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
 
 static int ParseEngineID(const char *s)
 {
@@ -75,7 +79,6 @@ static int ParseEngineID(const char *s)
     if (strcmp(s, "TURN")     == 0) return TURN;
     return BALANCED;
 }
-
 
 /* --------------------------------------------------------------------- */
 /* Legacy parser (ext_id folder). Kept for backward compatibility.       */
@@ -140,8 +143,8 @@ static int Page_ParseLine(char *line, PageEntry *out)
     out->folder[i] = '\0';
     if (i == 0) return 0;
 
-    /* engine (opcional). Si la siguiente palabra empieza por '"',
-     * no hay engine y se usa BALANCED por defecto. */
+    /* Optional engine word. If the next token starts with '"', there is no
+     * engine and BALANCED is used by default. */
     out->engineID = BALANCED;
     while (*p == ' ' || *p == '\t') p++;
     if (*p != '"')
@@ -155,7 +158,7 @@ static int Page_ParseLine(char *line, PageEntry *out)
             out->engineID = ParseEngineID(engine);
     }
 
-    /* "Display Name" (opcional, entre comillas) */
+    /* Optional "Display Name" in quotes */
     while (*p == ' ' || *p == '\t') p++;
     out->displayName[0] = '\0';
     if (*p == '"')
@@ -200,7 +203,7 @@ void NativeCustomRacer_ReloadRoster(void)
         if (e.page > maxPage)
             maxPage = e.page;
 
-        /* Fase 1: poblar tabla paralela para IDs 16+.
+        /* Fase 1: populate parallel table for IDs 16+.
          * customID = 16 + (page-1)*16 + slot */
         if (e.page > 0)
         {
@@ -211,7 +214,7 @@ void NativeCustomRacer_ReloadRoster(void)
                 customID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
             {
                 int idx = customID - NATIVE_CUSTOM_ID_BASE;
-                /* s_pageEntries es static: el puntero sobrevive a esta función */
+                /* s_pageEntries is static, so the pointer outlives this call */
                 char *folderStored = s_pageEntries[s_pageEntryCount - 1].folder;
 
                 s_customMeta[idx].name_Debug     = folderStored;
@@ -591,6 +594,42 @@ static void ApplyPageMeta(int page)
         md->iconID = NATIVE_ICON_BASE + e->slot;  /* 32..46 */
         /* name_LNG_* and engineID are TODO */
     }
+}
+
+/* --------------------------------------------------------------------- */
+/* Fase 2: menu meta pagination                                          */
+/* --------------------------------------------------------------------- */
+struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
+    struct CharacterSelectMeta *base, int count)
+{
+    NativeCustomRacer_Init();
+
+    if (base == NULL || count <= 0)
+        return base;
+    if (count > NATIVE_PAGE_SIZE)
+        count = NATIVE_PAGE_SIZE;
+
+    if (s_page == 0)
+        return base;
+
+    for (int i = 0; i < count; i++)
+        s_pageMeta[i] = base[i];
+
+    for (int i = 0; i < s_pageEntryCount; i++)
+    {
+        PageEntry *e = &s_pageEntries[i];
+        if (e->page != s_page)
+            continue;
+        if (e->slot < 0 || e->slot >= count)
+            continue;
+
+        int customID = NATIVE_CUSTOM_ID_BASE
+                     + (e->page - 1) * NATIVE_PAGE_SIZE
+                     + e->slot;
+        s_pageMeta[e->slot].characterID = (s16)customID;
+    }
+
+    return s_pageMeta;
 }
 
 int NativeCustomRacer_GetPageCount(void)   { return s_pageCount; }
