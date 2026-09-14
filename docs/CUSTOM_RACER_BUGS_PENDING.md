@@ -206,3 +206,52 @@ nano docs/CUSTOM_RACER_BUGS_PENDING.md
 sed -i 's/\r$//' docs/CUSTOM_RACER_BUGS_PENDING.md
 wc -l docs/CUSTOM_RACER_BUGS_PENDING.md
 ````
+
+---
+
+## BUG-ARCADE-01: 1P arcade load hang on Hot Air Skyway with specific originals
+
+**Status:** pending (pre-existing, unrelated to custom racer system)
+**Detected:** Phase 2.6, after BUG-TNT-01
+
+**Symptom:** In **1P arcade**, launching **Hot Air Skyway** (and reportedly
+N.Gin Labs, Polar Pass; more testing needed) hangs on the **loading screen**
+before the race starts. The app does not crash hard — it freezes (no window
+close, no stack trace). Only certain **original** characters trigger it:
+
+| Character | ID | Result |
+|-----------|----|--------|
+| Crash     | 0  | HANG   |
+| Cortex    | 1  | HANG   |
+| Tiny      | 2  | ok     |
+| Coco      | 3  | ok     |
+| N.Gin     | 4  | ok     |
+| Dingodile | 5  | HANG   |
+| Polar     | 6  | ok     |
+| Pura      | 7  | HANG   |
+
+**Does NOT reproduce:**
+- 1P arcade with any **custom** racer.
+- 2P VS, any combination (both customs, both originals, mixed).
+- 1P arcade on most other tracks.
+
+**Suspected cause:** Character-specific + level-specific + 1P-specific. The
+fact that 2P never hangs and customs never hang suggests a 1P-arcade-only
+load path (LOAD_DriverMPK branch + LOAD_Robots1P + per-character bot set)
+that collides with a level-specific asset on Hot Air Skyway. Related
+suspicion: the comment in LOAD_Assets.c about mask-grab breaking on Hot
+Air Skyway for all characters except Crash hints at load-order
+sensitivities on this level.
+
+**Not related to:** BUG-TNT-01. Confirmed by reverting the TNT fix and
+rebuilding: the hang reproduces identically.
+
+**Designed fix:** TBD. Needs diagnosis:
+1. Instrument LOAD_TenStages to print `loadingStage` each tick and see
+   exactly where it freezes.
+2. Compare the frozen stage between a crashing character (Crash) and a
+   non-crashing one (Tiny) on the same track.
+3. Test on `origin/master` if possible; if it reproduces there too, it's
+   a fork-level bug not introduced by any custom-racer work.
+
+**Related:** §8.4 latent call sites, LOAD_Assets.c load-order comments.
