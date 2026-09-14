@@ -75,6 +75,11 @@ static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
  * by NativeCustomRacer_GetMenuModel. Owned by this subsystem; never freed. */
 static struct Model *s_menuModel[NATIVE_CUSTOM_COUNT];
 
+/* Menu preview VRM cache: one buffer per custom ID, loaded on demand.
+ * Avoids re-reading textures.vrm from disk on every DrawWindows call. */
+static unsigned char *s_menuVrm[NATIVE_CUSTOM_COUNT];
+static long           s_menuVrmSize[NATIVE_CUSTOM_COUNT];
+
 /* === Fase 2.5: BUG-MENU-04 side table =====================================
  * data.driverModelExtras[] has only LOAD_DRIVER_MODEL_EXTRA_COUNT (=3)
  * slots; index 3 (P4 in 4P) aliases podiumModel_firstPlace and corrupts
@@ -715,18 +720,40 @@ struct Model *NativeCustomRacer_GetMenuModel(int characterID)
 
     int idx = characterID - NATIVE_CUSTOM_ID_BASE;
 
-    if (s_menuModel[idx] != NULL)
-        return s_menuModel[idx];
+    /* Lazy-load the .ctr once. Reuse the race loader with playerIndex = 0:
+     * in the menu we only ship model_p0.ctr, whose UVs are baked for the
+     * race slot 0 (x = 0..127, y = 264..282). */
+    if (s_menuModel[idx] == NULL)
+    {
+        void *buf = NativeCustomRacer_LoadModel(0, characterID);
+        if (buf == NULL)
+            return NULL;
 
-    /* Reuse the race loader with playerIndex = 0.
-     * model_pN.ctr share geometry; only the intended VRAM slot differs.
-     * In the menu we do not ApplySlot yet, so slot 0 is fine as the source. */
-    void *buf = NativeCustomRacer_LoadModel(0, characterID);
-    if (buf == NULL)
-        return NULL;
+        s_menuModel[idx] = (struct Model *)((unsigned char *)buf + LOAD_MODEL_FILE_HEADER_BYTES);
+        Log("[CustomRacer] menu model cached: id=%d folder='%s'\n",
+            characterID, NativeCustomRacer_GetFolder(characterID));
+    }
 
-    s_menuModel[idx] = (struct Model *)((unsigned char *)buf + LOAD_MODEL_FILE_HEADER_BYTES);
-    Log("[CustomRacer] menu model cached: id=%d folder='%s'\n",
-        characterID, NativeCustomRacer_GetFolder(characterID));
+    /* Lazy-load textures.vrm once into our own BSS buffer. */
+    if (s_menuVrm[idx] == NULL)
+    {
+        const char *folder = NativeCustomRacer_GetFolder(characterID);
+        if (folder != NULL)
+        {
+            char path[256];
+            snprintf(path, sizeof(path),
+                     "assets/mods/racers/%s/textures.vrm", folder);
+            s_menuVrm[idx] = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES,
+                                              &s_menuVrmSize[idx]);
+        }
+    }
+
+    /* Upload to slot 0 on every call. The menu shares one VRAM slot across
+     * all custom windows, so if two windows show two different customs in
+     * the same frame the last upload wins for both. Cheap: the pixel data
+     * is already cached, only the LoadImage calls run. */
+    if (s_menuVrm[idx] != NULL)
+        VRM_ApplyBuffer(s_menuVrm[idx], (int)s_menuVrmSize[idx], 0);
+
     return s_menuModel[idx];
 }
