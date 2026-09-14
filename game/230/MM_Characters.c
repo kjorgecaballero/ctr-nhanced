@@ -280,7 +280,12 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
-		struct Model *model = MM_Characters_GetModelByName(GET_METADATA((int)*currCharacterID)->name_Debug);
+		s16 _cid = *currCharacterID;
+		struct Model *model;
+		if (_cid >= NATIVE_CUSTOM_ID_BASE)
+			model = NativeCustomRacer_GetMenuModel((int)_cid);
+		else
+			model = MM_Characters_GetModelByName(GET_METADATA((int)_cid)->name_Debug);
 
 		driverInst->model = model;
 

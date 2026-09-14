@@ -71,6 +71,13 @@ void NativeCustomRacer_DumpVRAMIfRequested(void);
 void  NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model);
 void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
 
+/* === Menu preview ===
+ * Returns a struct Model* ready for the character-select 3D window.
+ * Loads model_p0.ctr on first call and caches it per characterID.
+ * Only meaningful for IDs >= NATIVE_CUSTOM_ID_BASE; returns NULL otherwise. */
+struct Model;
+struct Model *NativeCustomRacer_GetMenuModel(int characterID);
+
 /* === Racer pagination === */
 int  NativeCustomRacer_GetPageCount(void);
 int  NativeCustomRacer_GetCurrentPage(void);
