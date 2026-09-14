@@ -665,44 +665,73 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 		id = data.characterIDs[index];
 	}
 
-/* Fase 2: driver-aware model lookup.
- *
- * Custom IDs (16+): use the .ctr already loaded into driverModelExtras[index]
- * by LOAD_DriverMPK. We bypass the name-based lookup on purpose — the .ctr
- * internal name may collide with an original character name (e.g. a rusty
- * mod built with internal name "tiny" would hijack the Tiny bot if we went
- * through VehBirth_GetModelByName).
- *
- * Original IDs (0..15): search PLYROBJECTLIST only (the level's model list).
- * We deliberately skip the driverModelExtras fast path for the same reason. */
-struct Model *m = NULL;
-if (id >= NATIVE_CUSTOM_ID_BASE)
-{
-    m = data.driverModelExtras[index].model;
-}
-else
-{
-    const char *searchName = GET_METADATA(id)->name_Debug;
-    struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
-
-    if (models != NULL && models[0] != NULL)
+    /* Fase 2: driver-aware model lookup.
+     *
+     * Custom IDs (16+): use the .ctr already loaded into driverModelExtras[index]
+     * by LOAD_DriverMPK. We bypass the name-based lookup on purpose — the .ctr
+     * internal name may collide with an original character name (e.g. a rusty
+     * mod built with internal name "tiny" would hijack the Tiny bot if we went
+     * through VehBirth_GetModelByName).
+     *
+     * Original IDs (0..15): prefer PLYROBJECTLIST (the level's model list),
+     * then fall back to driverModelExtras[index]. In 2P VS, PLYROBJECTLIST
+     * is the AI pack built by LOAD_Robots2P, which excludes both human
+     * drivers — so without this fallback, an original racer would end up
+     * with m == NULL and render invisible (BUG-MENU-03). The fallback is
+     * indexed by `index`, not by GET_MPK_ID, so a custom with a colliding
+     * internal name can never hijack an original. */
+    struct Model *m = NULL;
+    if (id >= NATIVE_CUSTOM_ID_BASE)
     {
-        for (int i = 0; models[i] != NULL; i++)
+        /* BUG-MENU-04: for index >= LOAD_DRIVER_MODEL_EXTRA_COUNT (P4 in 4P)
+         * driverModelExtras[index] is out of bounds. Use the BSS side table. */
+        if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
         {
-            if (VehBirth_ModelNameEquals(models[i], searchName))
+            m = data.driverModelExtras[index].model;
+        }
+        else
+        {
+            m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
+        }
+    }
+    else
+    {
+        const char *searchName = GET_METADATA(id)->name_Debug;
+        struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
+
+        if (models != NULL && models[0] != NULL)
+        {
+            for (int i = 0; models[i] != NULL; i++)
             {
-                m = models[i];
-                break;
+                if (VehBirth_ModelNameEquals(models[i], searchName))
+                {
+                    m = models[i];
+                    break;
+                }
+            }
+        }
+
+        if (m == NULL)
+        {
+            /* BUG-MENU-04: guard OOB read for index >= LOAD_DRIVER_MODEL_EXTRA_COUNT
+             * (P4 in 4P). Side table is our own BSS, safe to read. Returns NULL
+             * for originals, so we fall through to the Crash fallback. */
+            if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
+            {
+                m = data.driverModelExtras[index].model;
+            }
+            else
+            {
+                m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
             }
         }
     }
-}
 
-if (m == NULL)
-{
-    /* Last-resort fallback: Crash's level model. Should never happen. */
-    m = VehBirth_GetModelByName(GET_METADATA(CRASH_BANDICOOT)->name_Debug);
-}
+    if (m == NULL)
+    {
+        /* Last-resort fallback: Crash's level model. Should never happen. */
+        m = VehBirth_GetModelByName(GET_METADATA(CRASH_BANDICOOT)->name_Debug);
+    }
 
 struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 
