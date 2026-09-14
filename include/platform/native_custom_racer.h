@@ -76,7 +76,7 @@ void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
  * Loads model_p0.ctr on first call and caches it per characterID.
  * Only meaningful for IDs >= NATIVE_CUSTOM_ID_BASE; returns NULL otherwise. */
 struct Model;
-struct Model *NativeCustomRacer_GetMenuModel(int characterID);
+struct Model *NativeCustomRacer_GetMenuModel(int characterID, int playerIndex);
 
 /* === Racer pagination === */
 int  NativeCustomRacer_GetPageCount(void);

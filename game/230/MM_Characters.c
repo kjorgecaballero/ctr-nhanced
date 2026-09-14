@@ -283,7 +283,7 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		s16 _cid = *currCharacterID;
 		struct Model *model;
 		if (_cid >= NATIVE_CUSTOM_ID_BASE)
-			model = NativeCustomRacer_GetMenuModel((int)_cid);
+			model = NativeCustomRacer_GetMenuModel((int)_cid, (int)playerIndex);
 		else
 			model = MM_Characters_GetModelByName(GET_METADATA((int)_cid)->name_Debug);
 
