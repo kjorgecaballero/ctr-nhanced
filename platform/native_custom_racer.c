@@ -62,12 +62,12 @@ static int s_appliedPage = -1;
 static int s_metaBackupDone = 0;
 static struct MetaDataCHAR s_metaBackup[16];
 
-/* Fase 1: parallel tables in BSS for IDs 16+.
+/* Phase 1: parallel tables in BSS for IDs 16+.
  * Referenced from other .c files through GET_METADATA (hence not static). */
 struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
 
-/* Fase 2: copy of the menu meta array with custom slots patched to
+/* Phase 2: copy of the menu meta array with custom slots patched to
  * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
 static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
 
@@ -203,7 +203,7 @@ void NativeCustomRacer_ReloadRoster(void)
         if (e.page > maxPage)
             maxPage = e.page;
 
-        /* Fase 1: populate parallel table for IDs 16+.
+        /* Phase 1: populate parallel table for IDs 16+.
          * customID = 16 + (page-1)*16 + slot */
         if (e.page > 0)
         {
@@ -218,8 +218,8 @@ void NativeCustomRacer_ReloadRoster(void)
                 char *folderStored = s_pageEntries[s_pageEntryCount - 1].folder;
 
                 s_customMeta[idx].name_Debug     = folderStored;
-                s_customMeta[idx].name_LNG_long  = -1;   /* TODO Fase 5 */
-                s_customMeta[idx].name_LNG_short = -1;   /* TODO Fase 5 */
+                s_customMeta[idx].name_LNG_long  = -1;   /* TODO Phase 5 */
+                s_customMeta[idx].name_LNG_short = -1;   /* TODO Phase 5 */
                 s_customMeta[idx].iconID         = (s16)(NATIVE_ICON_BASE + e.slot);
                 s_customMeta[idx].engineID       = e.engineID;
 
@@ -270,6 +270,9 @@ static const PageEntry *FindPageEntry(int page, int slot)
     return NULL;
 }
 
+/* === Fix D: original IDs (0..15) are NEVER custom. The previous code
+ * called FindPageEntry(s_page, characterID), which conflated a characterID
+ * with a slot of the active page (id=1 -> page 1 slot 1 -> big_norm). === */
 int NativeCustomRacer_HasSlot(int characterID)
 {
     NativeCustomRacer_Init();
@@ -279,7 +282,7 @@ int NativeCustomRacer_HasSlot(int characterID)
         int idx = characterID - NATIVE_CUSTOM_ID_BASE;
         return s_customMeta[idx].name_Debug != NULL;
     }
-    return FindPageEntry(s_page, characterID) != NULL;
+    return 0;
 }
 
 const char *NativeCustomRacer_GetFolder(int characterID)
@@ -291,9 +294,6 @@ const char *NativeCustomRacer_GetFolder(int characterID)
         int idx = characterID - NATIVE_CUSTOM_ID_BASE;
         return s_customMeta[idx].name_Debug;
     }
-    const PageEntry *e = FindPageEntry(s_page, characterID);
-    if (e)
-        return e->folder;
     return NULL;
 }
 
@@ -597,7 +597,7 @@ static void ApplyPageMeta(int page)
 }
 
 /* --------------------------------------------------------------------- */
-/* Fase 2: menu meta pagination                                          */
+/* Phase 2: menu meta pagination                                         */
 /* --------------------------------------------------------------------- */
 struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
     struct CharacterSelectMeta *base, int count)

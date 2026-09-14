@@ -124,20 +124,38 @@ int MM_Characters_GetNextDriver(s16 direction, s16 characterID)
 	return newDriver;
 }
 
-b32 MM_Characters_boolIsInvalid(s16 *iconPerPlayer, s16 characterID, s16 player)
+/* === §8.1 Diff 1: shared helper to compare by characterID === */
+static b32 MM_Characters_CharIDInUse(s16 candidateCharID, s16 excludePlayer)
 {
-	if (sdata->gGT->numPlyrNextGame)
+	for (s32 p = 0; p < sdata->gGT->numPlyrNextGame; p++)
 	{
-		for (s16 playerIndex = 0; playerIndex < sdata->gGT->numPlyrNextGame; playerIndex++)
-		{
-			if ((playerIndex != player) && (characterID == iconPerPlayer[playerIndex]))
-			{
-				return 1;
-			}
-		}
+		if ((p != excludePlayer) && (data.characterIDs[p] == candidateCharID))
+			return 1;
 	}
-
 	return 0;
+}
+
+/* === §8.1 Diff 1b: find the first free icon for the player, starting at
+ * their own index (P1 -> icon 0, P2 -> icon 1, ...) so that two auto-joins
+ * in the same frame don't collide on the same icon. === */
+static s16 MM_Characters_FindFreeIcon(s16 player)
+{
+	for (s32 i = 0; i < MM_CHARACTER_SELECT_ICON_COUNT; i++)
+	{
+		s32 tentative = ((s32)player + i) % MM_CHARACTER_SELECT_ICON_COUNT;
+		s16 candidateCharID = D230.activeCharacterSelectMeta[tentative].characterID;
+		if (!MM_Characters_CharIDInUse(candidateCharID, player))
+			return (s16)tentative;
+	}
+	return 0;
+}
+
+/* === §8.1 Diff 2: boolIsInvalid by charID === */
+b32 MM_Characters_boolIsInvalid(s16 *unused, s16 candidateIcon, s16 player)
+{
+	(void)unused;
+	s16 candidateCharID = D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID;
+	return MM_Characters_CharIDInUse(candidateCharID, player);
 }
 
 struct Model *MM_Characters_GetModelByName(const char *name)
@@ -425,10 +443,10 @@ void MM_Characters_RestoreIDs(void)
 
 	MM_Characters_SetMenuLayout();
 
-	/* === Fase 2: apply custom IDs to the active meta for this page === */
+	/* === Phase 2: apply custom IDs to the active meta for this page === */
 	D230.activeCharacterSelectMeta = NativeCustomRacer_GetPageMeta(
 	    D230.activeCharacterSelectMeta, MM_CHARACTER_SELECT_ICON_COUNT);
-	/* ================================================================ */
+	/* =================================================================== */
 
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
@@ -443,10 +461,10 @@ void MM_Characters_RestoreIDs(void)
 	{
 		s16 *currID = &data.characterIDs[playerIndex];
 
-		/* === Fase 2: custom IDs (>= 16) are always "unlocked" === */
+		/* === Phase 2: custom IDs (>= 16) are always "unlocked" === */
 		if (*currID >= NATIVE_CUSTOM_ID_BASE)
 			continue;
-		/* ========================================================= */
+		/* ======================================================== */
 
 		s16 unlocked = D230.activeCharacterSelectMeta[(s32)*currID].unlockFlags;
 
@@ -506,44 +524,36 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	u32 *ot = gGT->backBuffer->otMem.uiOT;
 
-	/* === Custom racer pagination (L1/R1, player 1) === */
+	/* === Custom racer pagination ===
+	 * L1 / R1  = change page (player 1 only)
+	 * L1+R1    = does NOT change page; the bits are left for the per-player
+	 *            loop so that confirmed off-page players can rejoin. */
 	if ((D230.characterSelectMenuState == IN_MENU) &&
 	    (NativeCustomRacer_GetPageCount() > 1))
 	{
 		u32 taps = sdata->buttonTapPerPlayer[0];
+		u32 lr = taps & (BTN_L1 | BTN_R1);
 
-		if (taps & BTN_R1)
+		if (lr == (BTN_L1 | BTN_R1))
 		{
-			NativeCustomRacer_NextPage();
-			taps &= ~BTN_R1;
+			/* Reserved for rejoin. Bits are NOT consumed here. */
 		}
-		if (taps & BTN_L1)
+		else
 		{
-			NativeCustomRacer_PrevPage();
-			taps &= ~BTN_L1;
+			if (taps & BTN_R1)
+			{
+				NativeCustomRacer_NextPage();
+				taps &= ~BTN_R1;
+			}
+			if (taps & BTN_L1)
+			{
+				NativeCustomRacer_PrevPage();
+				taps &= ~BTN_L1;
+			}
 		}
 		sdata->buttonTapPerPlayer[0] = taps;
 	}
-	/* Keep VRAM atlas and MetaDataCharacters in sync with current page.
-	 * Idempotent if already applied. */
 	NativeCustomRacer_RefreshPage();
-	/* ================================================================ */
-
-	/* === Fase 2: a custom selected on another page is no longer valid,
-	 * fall back to Crash so we never index past the current meta. === */
-	{
-		int currentPage = NativeCustomRacer_GetCurrentPage();
-		for (int i = 0; i < MM_CHARACTER_SELECT_MAX_PLAYERS; i++)
-		{
-			s16 cid = data.characterIDs[i];
-			if (cid >= NATIVE_CUSTOM_ID_BASE)
-			{
-				int cidPage = ((cid - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE) + 1;
-				if (cidPage != currentPage)
-					data.characterIDs[i] = CRASH_BANDICOOT;
-			}
-		}
-	}
 	/* ================================================================ */
 
 	if (D230.characterSelectMenuState != IN_MENU)
@@ -553,12 +563,12 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	MM_Characters_SetMenuLayout();
 
-	/* === Fase 2: swap the active meta for our page-patched copy === */
+	/* === Phase 2: swap the active meta for our page-patched copy === */
 	D230.activeCharacterSelectMeta = NativeCustomRacer_GetPageMeta(
 	    D230.activeCharacterSelectMeta, MM_CHARACTER_SELECT_ICON_COUNT);
-	/* ================================================================ */
+	/* ============================================================= */
 
-	/* === Fase 2: refresh ID <-> icon-index maps for the current layout === */
+	/* === Phase 2: refresh ID <-> icon-index maps for the current layout === */
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
 		s16 cid = D230.activeCharacterSelectMeta[iconIndex].characterID;
@@ -567,18 +577,24 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 		else if (cid >= 0 && cid < 0x10)
 			D230.characterMenuID[cid] = (s16)iconIndex;
 	}
-	/* ================================================================ */
+	/* =================================================================== */
 
+	/* === §8.1 Diff 3: resolve iconPerPlayer[] by characterID.
+	 * -1 = off-page (char not present in the current page's meta). === */
 	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
 		s16 cid = data.characterIDs[playerIndex];
-		if (cid >= NATIVE_CUSTOM_ID_BASE)
-			iconPerPlayer[playerIndex] = s_customMenuID[cid - NATIVE_CUSTOM_ID_BASE];
-		else if (cid >= 0 && cid < 0x10)
-			iconPerPlayer[playerIndex] = D230.characterMenuID[cid];
-		else
-			iconPerPlayer[playerIndex] = 0;
+		iconPerPlayer[playerIndex] = -1;
+		for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
+		{
+			if (D230.activeCharacterSelectMeta[iconIndex].characterID == cid)
+			{
+				iconPerPlayer[playerIndex] = (s16)iconIndex;
+				break;
+			}
+		}
 	}
+	/* ================================================================ */
 
 	MM_Characters_DrawWindows(1);
 
@@ -687,6 +703,55 @@ dontDrawSelectCharacter:
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
+		/* === §8.1 Fix B+ (Option 1 refined): off-page handling ===
+		 * Not confirmed (bit clear):
+		 *   -> auto-join to the first free icon (avoids collision between
+		 *      players auto-joining on the same frame).
+		 * Confirmed (bit set):
+		 *   -> off-page. L1+R1 rejoins. Triangle/Square unconfirms and
+		 *      adapts to the current page (auto-join on next frame). */
+		if (iconPerPlayer[playerIndex] < 0)
+		{
+			u16 playerBit = (u16)(1 << playerIndex);
+
+			if ((sdata->characterSelectFlags & playerBit) == 0)
+			{
+				/* Auto-join to a free icon. */
+				s16 targetIcon = MM_Characters_FindFreeIcon((s16)playerIndex);
+				iconPerPlayer[playerIndex] = targetIcon;
+				data.characterIDs[playerIndex] = D230.activeCharacterSelectMeta[targetIcon].characterID;
+				/* fall through to the normal body with targetIcon */
+			}
+			else
+			{
+				u32 btn = sdata->buttonTapPerPlayer[playerIndex];
+
+				if (D230.characterSelectMenuState == IN_MENU &&
+				    ((btn & (BTN_L1 | BTN_R1)) == (BTN_L1 | BTN_R1)))
+				{
+					s16 targetIcon = MM_Characters_FindFreeIcon((s16)playerIndex);
+					iconPerPlayer[playerIndex] = targetIcon;
+					data.characterIDs[playerIndex] = D230.activeCharacterSelectMeta[targetIcon].characterID;
+					sdata->characterSelectFlags &= ~playerBit;
+					sdata->buttonTapPerPlayer[playerIndex] &= ~(BTN_L1 | BTN_R1);
+					/* fall through to the normal body with targetIcon */
+				}
+				else if (D230.characterSelectMenuState == IN_MENU &&
+				         ((btn & MM_CHARACTER_SELECT_INPUT_BACK) != 0))
+				{
+					OtherFX_Play(2, 1);
+					sdata->characterSelectFlags &= ~playerBit;
+					sdata->buttonTapPerPlayer[playerIndex] = 0;
+					continue;
+				}
+				else
+				{
+					continue;
+				}
+			}
+		}
+		/* ================================================ */
+
 		u16 playerSelectFlag = (u16)(1 << playerIndex);
 		s16 currentIcon = iconPerPlayer[playerIndex];
 		s16 candidateIcon = currentIcon;
@@ -782,16 +847,10 @@ dontDrawSelectCharacter:
 								}
 							}
 						}
-						candidateInUseByOtherPlayer = false;
-
-						for (s32 otherPlayerIndex = 0; otherPlayerIndex < gGT->numPlyrNextGame; otherPlayerIndex++)
-						{
-							if ((otherPlayerIndex != playerIndex) && ((s16)candidateIcon == iconPerPlayer[otherPlayerIndex]))
-							{
-								candidateInUseByOtherPlayer = true;
-								break;
-							}
-						}
+						/* === §8.1 Diff 5a: compare by characterID === */
+						candidateInUseByOtherPlayer = MM_Characters_CharIDInUse(
+						    D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID, (s16)playerIndex);
+						/* =========================================== */
 
 						if (previousCandidateIcon << 0x10 != candidateIcon << 0x10)
 						{
@@ -812,14 +871,14 @@ dontDrawSelectCharacter:
 				}
 				currentIcon = (u16)candidateIcon;
 
-				for (s32 otherPlayerIndex = 0; otherPlayerIndex < gGT->numPlyrNextGame; otherPlayerIndex++)
+				/* === §8.1 Diff 5b: compare by characterID === */
+				if (MM_Characters_CharIDInUse(
+				        D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID, (s16)playerIndex))
 				{
-					if ((otherPlayerIndex != playerIndex) && ((s16)candidateIcon == iconPerPlayer[otherPlayerIndex]))
-					{
-						candidateIcon = (u32)(u16)iconPerPlayer[playerIndex];
-					}
-					currentIcon = (u16)candidateIcon;
+					candidateIcon = (u32)(u16)iconPerPlayer[playerIndex];
 				}
+				currentIcon = (u16)candidateIcon;
+				/* =========================================== */
 
 				if (((sdata->buttonTapPerPlayer)[playerIndex] & MM_CHARACTER_SELECT_INPUT_CONFIRM) != 0)
 				{
@@ -923,13 +982,28 @@ dontDrawSelectCharacter:
 
 	struct CharacterSelectMeta *activeCharacterSelectMeta = D230.activeCharacterSelectMeta;
 
+	/* === §8.1 Diff 6: do not overwrite off-page players' characterIDs === */
 	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
+		if (iconPerPlayer[playerIndex] < 0)
+			continue;
 		data.characterIDs[playerIndex] = activeCharacterSelectMeta[(int)iconPerPlayer[playerIndex]].characterID;
 	}
+	/* ================================================================== */
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
+		/* === §8.1 Fix A2: model rotation always advances, even when
+		 * the player is off-page, so their window doesn't look
+		 * "frozen" while waiting for L1+R1 or Triangle. === */
+		D230.characterSelectPlayerState.angle[playerIndex] += MM_CHARACTER_SELECT_SPIN_STEP;
+		/* ============================================================ */
+
+		/* === §8.1 Fix A: off-page has no cursor === */
+		if (iconPerPlayer[playerIndex] < 0)
+			continue;
+		/* ========================================= */
+
 		s16 playerIcon = iconPerPlayer[playerIndex];
 		activeCharacterSelectMeta = &D230.activeCharacterSelectMeta[playerIcon];
 		b32 playerSelected = (((int)(s16)sdata->characterSelectFlags >> playerIndex) & 1U) != 0;
@@ -981,7 +1055,7 @@ dontDrawSelectCharacter:
 				nameY = nameBaseY + D230.characterSelectNameTextY + nameYOffset;
 			}
 
-			/* === Fase 2: custom racers still have no LNG strings (Fase 5).
+			/* === Phase 2: custom racers still have no LNG strings (Phase 5).
 			 * Guard against reading lngStrings[-1]. === */
 			s16 nameLNG = GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long;
 			if (nameLNG >= 0)
@@ -990,10 +1064,8 @@ dontDrawSelectCharacter:
 				                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
 				                   (JUSTIFY_CENTER | ORANGE));
 			}
-			/* ============================================================= */
+			/* ============================================================ */
 		}
-
-		D230.characterSelectPlayerState.angle[playerIndex] += MM_CHARACTER_SELECT_SPIN_STEP;
 	}
 
 	activeCharacterSelectMeta = D230.activeCharacterSelectMeta;
