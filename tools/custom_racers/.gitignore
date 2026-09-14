@@ -1,0 +1,12 @@
+# Intermediates produced by build_character.py / make_racer_vrm.py
+model_p*.ctr
+textures.vrm
+texture_uploads.json
+texture_layouts.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Backups
+*.bak
