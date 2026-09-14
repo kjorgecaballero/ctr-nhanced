@@ -60,6 +60,17 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
  * CTR_DUMP_VRAM is set to a non-empty path. No-op otherwise. */
 void NativeCustomRacer_DumpVRAMIfRequested(void);
 
+/* === Fase 2.5: BUG-MENU-04 side table ====================================
+ * data.driverModelExtras[] has only LOAD_DRIVER_MODEL_EXTRA_COUNT (=3)
+ * slots, so index 3 (P4 in 4P) aliases podiumModel_firstPlace. Writing
+ * there corrupts the podium model pointers and crashes the menu on exit.
+ * We keep the 4th player's custom model in a BSS side table, keyed by
+ * playerIndex, so we never touch the struct Data layout.
+ * The stored pointer is already offset by LOAD_MODEL_FILE_HEADER_BYTES,
+ * i.e. it points to a valid `struct Model`. */
+void  NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model);
+void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
+
 /* === Racer pagination === */
 int  NativeCustomRacer_GetPageCount(void);
 int  NativeCustomRacer_GetCurrentPage(void);

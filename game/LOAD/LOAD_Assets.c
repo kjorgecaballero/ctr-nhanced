@@ -102,7 +102,16 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		if (playerCount < 3) playerCount = 3;
 		if (playerCount > 4) playerCount = 4;
 
-		for (i = 0; i < playerCount; i++)
+		/* BUG-MENU-04 (4P OOB): driverModelExtras[] has only
+		 * LOAD_DRIVER_MODEL_EXTRA_COUNT (=3) slots. Writing to index 3
+		 * aliases podiumModel_firstPlace and corrupts it, which later
+		 * crashes the menu on exit. Keep the loop inside the array and
+		 * stash the 4th player's custom model in our BSS side table. */
+		int driverExtraCount = playerCount;
+		if (driverExtraCount > LOAD_DRIVER_MODEL_EXTRA_COUNT)
+			driverExtraCount = LOAD_DRIVER_MODEL_EXTRA_COUNT;
+
+		for (i = 0; i < driverExtraCount; i++)
 		{
 			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
 			{
@@ -114,6 +123,21 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 				// high lod CTR model
 				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 			}
+		}
+
+		/* 4th player (index >= LOAD_DRIVER_MODEL_EXTRA_COUNT): no slot in
+		 * driverModelExtras. If custom, keep the loaded buffer in our BSS
+		 * table with the file-header offset already applied. */
+		for (i = LOAD_DRIVER_MODEL_EXTRA_COUNT; i < playerCount; i++)
+		{
+			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
+			{
+				unsigned char *buf = (unsigned char *)NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
+				if (buf != NULL)
+					buf += LOAD_MODEL_FILE_HEADER_BYTES;
+				NativeCustomRacer_SetPlayerModelPtr(i, buf);
+			}
+			/* Originals in 4P: PLYROBJECTLIST (4P low LOD) has them. */
 		}
 
 		// The 4P arcade MPK always loads; bots and game logic depend on its data.

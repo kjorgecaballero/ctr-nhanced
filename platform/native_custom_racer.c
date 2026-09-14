@@ -71,6 +71,15 @@ s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
  * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
 static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
 
+/* === Fase 2.5: BUG-MENU-04 side table =====================================
+ * data.driverModelExtras[] has only LOAD_DRIVER_MODEL_EXTRA_COUNT (=3)
+ * slots; index 3 (P4 in 4P) aliases podiumModel_firstPlace and corrupts
+ * the podium pointers, crashing the menu on exit. We keep the 4th player's
+ * custom model here, keyed by playerIndex, already offset by
+ * LOAD_MODEL_FILE_HEADER_BYTES so it points to a valid struct Model. */
+#define NATIVE_PLAYER_MODEL_SLOTS 8
+static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
+
 static int ParseEngineID(const char *s)
 {
     if (strcmp(s, "SPEED")    == 0) return SPEED;
@@ -535,6 +544,23 @@ void NativeCustomRacer_DumpVRAMIfRequested(void)
     }
 
     free(buf);
+}
+
+/* --------------------------------------------------------------------- */
+/* Fase 2.5: 4P side table (BUG-MENU-04)                                 */
+/* --------------------------------------------------------------------- */
+void NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model)
+{
+    if (playerIndex < 0 || playerIndex >= NATIVE_PLAYER_MODEL_SLOTS)
+        return;
+    s_playerModelPtr[playerIndex] = model;
+}
+
+void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex)
+{
+    if (playerIndex < 0 || playerIndex >= NATIVE_PLAYER_MODEL_SLOTS)
+        return NULL;
+    return s_playerModelPtr[playerIndex];
 }
 
 /* ===================================================================== */
