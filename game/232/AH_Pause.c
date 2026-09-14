@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum AHPauseIconGroupID
 {
@@ -306,7 +307,7 @@ void AH_Pause_Draw(s32 pageID, s32 posX)
 		s32 bossRowY = rowBase + rowIndex * AH_PAUSE_ROW_STEP_Y;
 		s32 bossID = D232.advPausePages[pageID].characterID_Boss;
 
-		DecalFont_DrawLine(sdata->lngStrings[data.MetaDataCharacters[bossID].name_LNG_long], posX + textX, bossRowY + AH_PAUSE_ROW_TEXT_Y, FONT_BIG, WHITE);
+		DecalFont_DrawLine(sdata->lngStrings[GET_METADATA(bossID)->name_LNG_long], posX + textX, bossRowY + AH_PAUSE_ROW_TEXT_Y, FONT_BIG, WHITE);
 
 		if (hubID == 0)
 		{

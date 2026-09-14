@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void MM_Battle_DrawIcon_Character(struct Icon *icon, int posX, int posY, struct PrimMem *primMem, u32 *ot, char transparency, s16 scale)
 {
@@ -891,7 +892,7 @@ LAB_800b25f0:
 				s16 iconX = (s16)playerIconX;
 				playerIconX = playerIconX + BATTLE_TEAM_PLAYER_WIDTH;
 
-				MM_Battle_DrawIcon_Character(gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[playerIndex]].iconID],
+				MM_Battle_DrawIcon_Character(gGT->ptrIcons[GET_METADATA(data.characterIDs[playerIndex])->iconID],
 				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (int)iconX,
 				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + (int)afterLengthY + BATTLE_TEAM_PLAYER_ICON_Y_OFFSET,
 

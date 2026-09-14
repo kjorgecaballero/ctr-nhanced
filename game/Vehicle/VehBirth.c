@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum
 {
@@ -541,7 +542,7 @@ void VehBirth_SetConsts(struct Driver *driver)
 {
 	u8 *d = (u8 *)driver;
 
-	int engineID = data.MetaDataCharacters[data.characterIDs[driver->driverID]].engineID;
+	int engineID = GET_METADATA(data.characterIDs[driver->driverID])->engineID;
 
 	for (u32 i = 0; i < VEH_BIRTH_META_PHYS_COUNT; i++)
 	{
@@ -587,7 +588,7 @@ void VehBirth_EngineAudio_AllPlayers(void)
 
 		u8 driverID = d->driverID;
 
-		int engine = data.MetaDataCharacters[data.characterIDs[driverID]].engineID;
+		int engine = GET_METADATA(data.characterIDs[driverID])->engineID;
 
 		EngineAudio_InitOnce((engine * 4) + driverID, HOWL_SFX_CENTER_NO_DISTORTION);
 	}
@@ -664,7 +665,7 @@ void VehBirth_NonGhost(struct Thread *t, int index)
 		id = data.characterIDs[index];
 	}
 
-	struct Model *m = VehBirth_GetModelByName(data.MetaDataCharacters[id].name_Debug);
+	struct Model *m = VehBirth_GetModelByName(GET_METADATA(id)->name_Debug);
 
 	struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 

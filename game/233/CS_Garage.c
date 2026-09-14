@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum GarageInputMask
 {
@@ -87,7 +88,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	struct GameTracker *gGT = sdata->gGT;
 	struct PrimMem *primMem = &gGT->backBuffer->primMem;
 	s16 currCharacterID = gGarage.garageCharacterIDs[currSelectIndex];
-	struct MetaDataCHAR *MDC = &data.MetaDataCharacters[currCharacterID];
+	struct MetaDataCHAR *MDC = GET_METADATA(currCharacterID);
 	int nameIndex = MDC->name_LNG_long;
 	RECT r;
 	Color white = MakeColor(0xFF, 0xFF, 0xFF);

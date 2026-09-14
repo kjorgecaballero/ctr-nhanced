@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void GAMEPROG_AdvPercent(struct AdvProgress *adv)
 {
@@ -143,7 +144,7 @@ void GAMEPROG_ResetHighScores(struct GameProgress *gameProg)
 				entry->time = MEMCARD_HIGH_SCORE_DEFAULT_TIME;
 				entry->characterID = characterID;
 
-				char *name = sdata->lngStrings[data.MetaDataCharacters[characterID].name_LNG_short];
+				char *name = sdata->lngStrings[GET_METADATA(characterID)->name_LNG_short];
 
 				// can't do an int-copy,
 				// strings in LNG are unaligned

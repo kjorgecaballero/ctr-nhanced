@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void SelectProfile_QueueLoadHub_MenuProc(struct RectMenu *menu)
 {
@@ -146,7 +147,7 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 	{
 		int profileTextColor = JUSTIFY_RIGHT | numberColor;
 		int characterID = adv->characterID;
-		int iconID = data.MetaDataCharacters[characterID].iconID;
+		int iconID = GET_METADATA(characterID)->iconID;
 		struct SelectProfileLoadSaveObj *obj = (struct SelectProfileLoadSaveObj *)sdata->ptrLoadSaveObj;
 
 		RECTMENU_DrawPolyGT4(gGT->ptrIcons[iconID], posX + 10, posY + 6, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, iconColor, iconColor, iconColor,
@@ -404,7 +405,7 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 	if (profile != NULL)
 	{
 		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
-		int iconID = data.MetaDataCharacters[profile->characterID].iconID;
+		int iconID = GET_METADATA(profile->characterID)->iconID;
 
 		DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);

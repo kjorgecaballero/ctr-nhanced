@@ -262,7 +262,7 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
-		struct Model *model = MM_Characters_GetModelByName(data.MetaDataCharacters[(int)*currCharacterID].name_Debug);
+		struct Model *model = MM_Characters_GetModelByName(GET_METADATA((int)*currCharacterID)->name_Debug);
 
 		driverInst->model = model;
 
@@ -854,7 +854,7 @@ dontDrawSelectCharacter:
 
 			struct TransitionMeta *iconTransition = &D230.characterSelectTransitionMeta[iconIndex];
 
-			RECTMENU_DrawPolyGT4(gGT->ptrIcons[data.MetaDataCharacters[iconDrawMeta->characterID].iconID],
+			RECTMENU_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(iconDrawMeta->characterID)->iconID],
 			                     iconTransition->currX + iconDrawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X,
 			                     iconTransition->currY + iconDrawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y,
 
@@ -927,7 +927,7 @@ dontDrawSelectCharacter:
 				nameY = nameBaseY + D230.characterSelectNameTextY + nameYOffset;
 			}
 
-			DecalFont_DrawLine(sdata->lngStrings[data.MetaDataCharacters[activeCharacterSelectMeta->characterID].name_LNG_long],
+			DecalFont_DrawLine(sdata->lngStrings[GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long],
 			                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
 			                   (JUSTIFY_CENTER | ORANGE));
 		}

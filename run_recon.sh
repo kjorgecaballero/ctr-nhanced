@@ -1,7 +1,3 @@
-cd ~/Desktop/Kevin/CTR/native_fork/nhanced
-rm -f run_recon.sh
-
-cat > run_recon.sh <<'SCRIPT_EOF'
 #!/usr/bin/env bash
 # run_recon.sh — Run blocks 1..14 and save each one to its own .txt file.
 # Usage:   bash run_recon.sh
@@ -202,6 +198,3 @@ echo
 echo "Done. Files written to:"
 echo "  $OUT"
 ls -la "$OUT"/BLOCK_*.txt
-SCRIPT_EOF
-
-bash run_recon.sh

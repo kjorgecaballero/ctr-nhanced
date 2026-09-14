@@ -2,10 +2,29 @@
 #define NATIVE_CUSTOM_RACER_H
 
 #include <common.h>
+#include <namespace_Vehicle.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* === Fase 1: IDs custom 16..63 ============================================
+ * No extendemos data.MetaDataCharacters[0x10] (rompería ~30 CTR_STATIC_ASSERT
+ * de struct sData). En su lugar, tabla paralela en BSS + macro de redirección.
+ *   IDs 0..15 -> data.MetaDataCharacters (comportamiento original intacto).
+ *   IDs 16+   -> s_customMeta.
+ * ========================================================================== */
+#define NATIVE_CUSTOM_ID_BASE 16
+#define NATIVE_CUSTOM_COUNT   48
+
+extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
+extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
+
+#define GET_METADATA(id)                                                      \
+    ((((id) >= NATIVE_CUSTOM_ID_BASE) &&                                      \
+      ((id) <  (NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)))                \
+        ? &s_customMeta[(id) - NATIVE_CUSTOM_ID_BASE]                         \
+        : &data.MetaDataCharacters[(id)])
 
 /* Initializes the custom racer subsystem. Reads roster.txt on first call. */
 void NativeCustomRacer_Init(void);

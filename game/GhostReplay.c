@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 internal s16 Ghost_LerpRot12(s16 curr, s16 next, u16 t)
 {
@@ -389,7 +390,7 @@ void GhostReplay_Init1(void)
 		ghostDriver->ghostTape = sdata->ptrGhostTape[i];
 
 		s32 charID = data.characterIDs[i + 1];
-		struct Model *model = VehBirth_GetModelByName(data.MetaDataCharacters[charID].name_Debug);
+		struct Model *model = VehBirth_GetModelByName(GET_METADATA(charID)->name_Debug);
 		struct Instance *inst = INSTANCE_Birth3D(model, model->name, t);
 		t->inst = inst;
 
@@ -481,7 +482,7 @@ void GhostReplay_Init2(void)
 		}
 
 		s32 characterID = data.characterIDs[characterIndex];
-		struct Model *model = VehBirth_GetModelByName(data.MetaDataCharacters[characterID].name_Debug);
+		struct Model *model = VehBirth_GetModelByName(GET_METADATA(characterID)->name_Debug);
 
 		driver->wheelSize = (characterID != NITROS_OXIDE) ? 0xccc : 0;
 

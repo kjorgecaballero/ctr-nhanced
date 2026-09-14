@@ -1,5 +1,5 @@
 #include <common.h>
-
+#include <platform/native_custom_racer.h>
 
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID)
 {
@@ -152,7 +152,7 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 
 	strcat(&description[strlen(description)], sdata->lngStrings[data.metaDataLEV[(s16)levelID].name_LNG]);
 	strcat(description, sdata->strcatData1_colon);
-	strcat(&description[strlen(description)], sdata->lngStrings[data.MetaDataCharacters[(s16)characterID].name_LNG_short]);
+	strcat(&description[strlen(description)], sdata->lngStrings[GET_METADATA((s16)characterID)->name_LNG_short]);
 	strcat(description, sdata->strcatData1_colon);
 	strcat(description, (char *)RECTMENU_DrawTime(time));
 

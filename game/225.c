@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 global_variable struct RectMenu menuVS;
 global_variable struct RectMenu menuBattle;
@@ -175,7 +176,7 @@ void VB_EndEvent_DrawMenu(void)
 			rankTextY = s_vsStandingsYByPlayerCount[playerCountIndex][VB_POSY_P1 + standingsIndex];
 
 			struct Driver *driver = gGT->drivers[entityID];
-			struct Icon *icon = gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driver->driverID]].iconID];
+			struct Icon *icon = gGT->ptrIcons[GET_METADATA(data.characterIDs[driver->driverID])->iconID];
 
 			DecalHUD_DrawPolyFT4(icon, pos.x, rankTextY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
 		}
@@ -194,7 +195,7 @@ void VB_EndEvent_DrawMenu(void)
 					continue;
 				}
 
-				struct Icon *icon = gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driver->driverID]].iconID];
+				struct Icon *icon = gGT->ptrIcons[GET_METADATA(data.characterIDs[driver->driverID])->iconID];
 				DecalHUD_DrawPolyFT4(icon, pos.x, currRowY + iconSlot * VB_BATTLE_PLAYER_ICON_SPACING, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 				                     VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
 				iconSlot++;

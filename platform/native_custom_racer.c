@@ -37,12 +37,14 @@ typedef struct
     char folder[64];
 } RosterEntry;
 
-/* New roster format entry: page slot folder */
+/* New roster format entry: page slot folder [engine] ["Display Name"] */
 typedef struct
 {
-    int page;
-    int slot;
+    int  page;
+    int  slot;
     char folder[64];
+    int  engineID;
+    char displayName[64];
 } PageEntry;
 
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
@@ -59,6 +61,20 @@ static int s_appliedPage = -1;
 /* Backup of MetaDataCharacters[0..15] to restore between pages. */
 static int s_metaBackupDone = 0;
 static struct MetaDataCHAR s_metaBackup[16];
+
+/* Fase 1: tablas paralelas en BSS para IDs 16+.
+ * Referenciadas desde otros .c vía GET_METADATA (por eso no son static). */
+struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
+s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
+
+static int ParseEngineID(const char *s)
+{
+    if (strcmp(s, "SPEED")    == 0) return SPEED;
+    if (strcmp(s, "BALANCED") == 0) return BALANCED;
+    if (strcmp(s, "ACCEL")    == 0) return ACCEL;
+    if (strcmp(s, "TURN")     == 0) return TURN;
+    return BALANCED;
+}
 
 
 /* --------------------------------------------------------------------- */
@@ -124,6 +140,34 @@ static int Page_ParseLine(char *line, PageEntry *out)
     out->folder[i] = '\0';
     if (i == 0) return 0;
 
+    /* engine (opcional). Si la siguiente palabra empieza por '"',
+     * no hay engine y se usa BALANCED por defecto. */
+    out->engineID = BALANCED;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p != '"')
+    {
+        char engine[32] = {0};
+        i = 0;
+        while (*p && *p != '\n' && *p != '\r' && *p != ' ' && *p != '\t'
+               && i < (int)sizeof(engine) - 1)
+            engine[i++] = *p++;
+        if (i > 0)
+            out->engineID = ParseEngineID(engine);
+    }
+
+    /* "Display Name" (opcional, entre comillas) */
+    while (*p == ' ' || *p == '\t') p++;
+    out->displayName[0] = '\0';
+    if (*p == '"')
+    {
+        p++;
+        i = 0;
+        while (*p && *p != '"' && *p != '\n' && *p != '\r'
+               && i < (int)sizeof(out->displayName) - 1)
+            out->displayName[i++] = *p++;
+        out->displayName[i] = '\0';
+    }
+
     out->page = (int)page;
     out->slot = (int)slot;
     return 1;
@@ -135,6 +179,10 @@ void NativeCustomRacer_ReloadRoster(void)
     s_pageEntryCount = 0;
     s_pageCount = 1;
     s_rosterLoaded = 1;
+
+    memset(s_customMeta, 0, sizeof(s_customMeta));
+    for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
+        s_customMenuID[i] = -1;
 
     FILE *f = fopen("assets/mods/racers/roster.txt", "rb");
     if (!f)
@@ -151,6 +199,30 @@ void NativeCustomRacer_ReloadRoster(void)
         s_pageEntries[s_pageEntryCount++] = e;
         if (e.page > maxPage)
             maxPage = e.page;
+
+        /* Fase 1: poblar tabla paralela para IDs 16+.
+         * customID = 16 + (page-1)*16 + slot */
+        if (e.page > 0)
+        {
+            int customID = NATIVE_CUSTOM_ID_BASE
+                         + (e.page - 1) * NATIVE_PAGE_SIZE
+                         + e.slot;
+            if (customID >= NATIVE_CUSTOM_ID_BASE &&
+                customID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            {
+                int idx = customID - NATIVE_CUSTOM_ID_BASE;
+                /* s_pageEntries es static: el puntero sobrevive a esta función */
+                char *folderStored = s_pageEntries[s_pageEntryCount - 1].folder;
+
+                s_customMeta[idx].name_Debug     = folderStored;
+                s_customMeta[idx].name_LNG_long  = -1;   /* TODO Fase 5 */
+                s_customMeta[idx].name_LNG_short = -1;   /* TODO Fase 5 */
+                s_customMeta[idx].iconID         = (s16)(NATIVE_ICON_BASE + e.slot);
+                s_customMeta[idx].engineID       = e.engineID;
+
+                s_customMenuID[idx] = (s16)e.slot;
+            }
+        }
 
         /* Compatibility: fill s_roster[] with slotID = page*16 + slot */
         if (s_rosterCount < NATIVE_ROSTER_MAX)
@@ -198,12 +270,24 @@ static const PageEntry *FindPageEntry(int page, int slot)
 int NativeCustomRacer_HasSlot(int characterID)
 {
     NativeCustomRacer_Init();
+    if (characterID >= NATIVE_CUSTOM_ID_BASE &&
+        characterID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+    {
+        int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+        return s_customMeta[idx].name_Debug != NULL;
+    }
     return FindPageEntry(s_page, characterID) != NULL;
 }
 
 const char *NativeCustomRacer_GetFolder(int characterID)
 {
     NativeCustomRacer_Init();
+    if (characterID >= NATIVE_CUSTOM_ID_BASE &&
+        characterID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+    {
+        int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+        return s_customMeta[idx].name_Debug;
+    }
     const PageEntry *e = FindPageEntry(s_page, characterID);
     if (e)
         return e->folder;

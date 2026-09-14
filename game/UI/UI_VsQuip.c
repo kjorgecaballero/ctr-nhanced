@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 u32 UI_VsQuipReadDriver(struct Driver *d, int offset, int size)
 {
@@ -493,7 +494,7 @@ void UI_VsQuipDrawAll(void)
 			        // second part of comment,
 			        // lngIndex of driver,
 			        // for stuff like "hit by Crash Bandicoot" or something
-			        sdata->lngStrings[data.MetaDataCharacters[d->EndOfRaceComment_characterID].name_LNG_long]);
+			        sdata->lngStrings[GET_METADATA(d->EndOfRaceComment_characterID)->name_LNG_long]);
 
 			print = printBuffer;
 		}

@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum UIRankConstants
 {
@@ -211,7 +212,7 @@ void UI_DrawRankedDrivers(void)
 
 				UI_DrawDriverIcon(
 
-				    gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID],
+				    gGT->ptrIcons[GET_METADATA(data.characterIDs[driverIndex])->iconID],
 
 				    pos.x, pos.y, &gGT->backBuffer->primMem,
 
@@ -319,7 +320,7 @@ void UI_DrawRankedDrivers(void)
 			int posX = nextTrackX + UI_RANK_TRACK_ICON_POS_X_OFFSET;
 			int posY = UI_RANK_TRACK_ICON_POS_Y;
 
-			DecalHUD_DrawPolyGT4(gGT->ptrIcons[data.MetaDataCharacters[data.characterIDs[driverIndex]].iconID], posX, posY,
+			DecalHUD_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(data.characterIDs[driverIndex])->iconID], posX, posY,
 
 			                     // pointer to PrimMem struct
 			                     &gGT->backBuffer->primMem,
