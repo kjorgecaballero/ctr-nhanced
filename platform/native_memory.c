@@ -12,11 +12,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Native uses the NTSC-U 926 mempack window inside the retail 2 MiB address
-// space so memory regressions fail here as they would on PSX.
-#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x200000u
+// Native uses the NTSC-U 926 mempack start address (0x800ba9f0) inside a
+// 4 MiB backing buffer. The retail 2 MiB window is too tight for a handful
+// of 1P arcade scenarios (Crash/Cortex/Dingodile/Pura on certain tracks
+// like Hot Air Skyway, N.Gin Labs, Polar Pass), where the character's bot
+// pack pushes a late allocation past the boundary and mempack OOMs.
+// PC memory is not the constraint, so we restore headroom.
+#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x400000u
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0xba9f0u
-#define CTR_NATIVE_MEMPACK_SIZE         0x144e10u
+#define CTR_NATIVE_MEMPACK_SIZE         0x344e10u
 
 CTR_STATIC_ASSERT(CTR_NATIVE_MEMPACK_START_OFFSET + CTR_NATIVE_MEMPACK_SIZE + MEMPACK_PS1_END_GUARD_SIZE == CTR_NATIVE_MEMPACK_BUFFER_SIZE);
 
