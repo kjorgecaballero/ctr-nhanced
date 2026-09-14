@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 TOOLS  = Path(__file__).resolve().parent
-ROOT   = TOOLS.parents[1]                # <repo>/nhanced
+ROOT   = TOOLS.parents[1]
 RACERS = ROOT / "assets" / "mods" / "racers"
 VALID_ENGINES = {"SPEED", "BALANCED", "ACCEL", "TURN"}
 

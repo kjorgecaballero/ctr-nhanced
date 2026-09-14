@@ -9,9 +9,9 @@ consumed by add_racer.py.
 import bpy, json, hashlib
 from pathlib import Path
 
-# ===== EDIT THESE 2 LINES =====
-OBJECT_NAME = 'ernest'   # object name in Blender (outliner)
-OUTPUT_NAME = 'ernest'   # slug, no spaces, matches the target folder name
+# ===== CHARACTER NAME =====
+OBJECT_NAME = 'name'   # object name in Blender (outliner)
+OUTPUT_NAME = 'name'   # slug, no spaces, matches the target folder name
 # ==============================
 
 # <repo>/native_fork/racers/  (this file lives in <repo>/nhanced/tools/custom_racers/)
