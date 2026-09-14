@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 // In air, after spamming L1 or R1,
 // will explode on impact with ground
@@ -261,7 +262,7 @@ void RB_TNT_ThTick_ThrowOnHead(struct Thread *t)
 	{
 		array = (s16 *)s_tntThrowHeadY;
 
-		distHead = array[data.characterIDs[mw->driverTarget->driverID]];
+		distHead = array[GET_MPK_ID(data.characterIDs[mw->driverTarget->driverID])];
 
 		// if TNT landed on head
 		if ((mw->deltaPos.y < distHead) && (mw->deltaPos.y = distHead, inst->scale.x == 0x800))
