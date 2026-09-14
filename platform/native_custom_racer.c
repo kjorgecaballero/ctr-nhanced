@@ -11,13 +11,13 @@
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
 
-/* Ancho en palabras VRAM por jugador. */
+/* Width in VRAM words assigned to each player slot. */
 #define NATIVE_SLOT_WIDTH 128
 
 #define NATIVE_MODELHEADER_SIZE  0x40
 #define NATIVE_MODELHEADER_COUNT 4
 
-/* Paginación */
+/* Pagination */
 #define NATIVE_PAGE_SIZE  16
 #define NATIVE_ICON_BASE  32
 #define NATIVE_ICON_COUNT 16
@@ -37,7 +37,7 @@ typedef struct
     char folder[64];
 } RosterEntry;
 
-/* Entrada del roster nuevo formato: page slot folder */
+/* New roster format entry: page slot folder */
 typedef struct
 {
     int page;
@@ -56,13 +56,13 @@ static int s_page = 0;
 static int s_pageCount = 1;
 static int s_appliedPage = -1;
 
-/* Backup de MetaDataCharacters[0..15] para restaurar entre páginas. */
+/* Backup of MetaDataCharacters[0..15] to restore between pages. */
 static int s_metaBackupDone = 0;
 static struct MetaDataCHAR s_metaBackup[16];
 
 
 /* --------------------------------------------------------------------- */
-/* Parser viejo (ext_id folder). Se conserva por compatibilidad.        */
+/* Legacy parser (ext_id folder). Kept for backward compatibility.       */
 /* --------------------------------------------------------------------- */
 static int Roster_ParseLine(char *line, RosterEntry *out)
 {
@@ -98,7 +98,7 @@ static int Roster_ParseLine(char *line, RosterEntry *out)
 }
 
 /* --------------------------------------------------------------------- */
-/* Parser nuevo: "page slot folder [engine] ["name"]"                    */
+/* New parser: "page slot folder [engine] ["name"]"                      */
 /* --------------------------------------------------------------------- */
 static int Page_ParseLine(char *line, PageEntry *out)
 {
@@ -152,7 +152,7 @@ void NativeCustomRacer_ReloadRoster(void)
         if (e.page > maxPage)
             maxPage = e.page;
 
-        /* Compatibilidad: rellenamos s_roster[] con slotID = page*16+slot */
+        /* Compatibility: fill s_roster[] with slotID = page*16 + slot */
         if (s_rosterCount < NATIVE_ROSTER_MAX)
         {
             s_roster[s_rosterCount].slotID = e.page * NATIVE_PAGE_SIZE + e.slot;
@@ -183,7 +183,7 @@ void NativeCustomRacer_Init(void)
 }
 
 /* --------------------------------------------------------------------- */
-/* Búsqueda por página + slot                                            */
+/* Lookup by page + slot                                                 */
 /* --------------------------------------------------------------------- */
 static const PageEntry *FindPageEntry(int page, int slot)
 {
@@ -211,7 +211,7 @@ const char *NativeCustomRacer_GetFolder(int characterID)
 }
 
 /* --------------------------------------------------------------------- */
-/* Carga de archivos                                                     */
+/* File loading                                                          */
 /* --------------------------------------------------------------------- */
 static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *outSize)
 {
@@ -251,7 +251,7 @@ static unsigned char *LoadFileToMemory(const char *path, long maxSize, long *out
 }
 
 /* --------------------------------------------------------------------- */
-/* Reubicación de punteros del .ctr                                      */
+/* .ctr pointer relocation                                               */
 /* --------------------------------------------------------------------- */
 static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
 {
@@ -283,8 +283,9 @@ static void ApplyContainerPtrMap(unsigned char *buf, long fileSize)
     }
 }
 
-/* Expansión de ModelHeader: duplica el único header 4 veces con
- * maxDistanceLOD=0xFFFF para forzar siempre LOD HI. */
+/* Model header expansion: duplicates the single header four times with
+ * maxDistanceLOD=0xFFFF so any 16-bit projected distance resolves to
+ * header[0] (the HI mesh). */
 static void ExpandModelHeaders(unsigned char *buf, long fileSize)
 {
     if (fileSize < 4 + 0x18)
@@ -347,7 +348,7 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 }
 
 /* --------------------------------------------------------------------- */
-/* Aplicación de .vrm a VRAM                                             */
+/* .vrm to VRAM                                                          */
 /* --------------------------------------------------------------------- */
 static int VRM_ApplyBuffer(const unsigned char *buf, int size, int playerIndex)
 {
@@ -423,7 +424,7 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID)
 }
 
 /* --------------------------------------------------------------------- */
-/* Dump VRAM                                                             */
+/* VRAM dump                                                             */
 /* --------------------------------------------------------------------- */
 void NativeCustomRacer_DumpVRAMIfRequested(void)
 {
@@ -450,7 +451,7 @@ void NativeCustomRacer_DumpVRAMIfRequested(void)
 }
 
 /* ===================================================================== */
-/* PAGINACIÓN                                                            */
+/* PAGINATION                                                            */
 /* ===================================================================== */
 
 static void EnsureMetaBackup(void)
@@ -461,8 +462,8 @@ static void EnsureMetaBackup(void)
     s_metaBackupDone = 1;
 }
 
-/* Sube page_N.vrm al atlas VRAM (0,216) 512x48.
- * Reutiliza VRM_ApplyBuffer con playerIndex=0 para no añadir offset. */
+/* Uploads page_N.vrm to the icon atlas VRAM (see SLOT_RECTS in build_icons.py).
+ * Reuses VRM_ApplyBuffer with playerIndex=0 so it does not shift rect.x. */
 static void ApplyPageIcons(int page)
 {
     char path[256];
@@ -472,7 +473,7 @@ static void ApplyPageIcons(int page)
     unsigned char *buf = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES, &size);
     if (!buf)
     {
-        Log("[CustomRacer] page_%d.vrm no encontrado: %s\n", page, path);
+        Log("[CustomRacer] page_%d.vrm not found: %s\n", page, path);
         return;
     }
 
@@ -481,19 +482,19 @@ static void ApplyPageIcons(int page)
     Log("[CustomRacer] page %d icons: %d blocks\n", page, blocks);
 }
 
-/* Reescribe MetaDataCharacters[0..15] para la página dada.
- * NO toca name_Debug (lo usa MM_Characters_GetModelByName para el modelo 3D). */
+/* Rewrites MetaDataCharacters[0..15] for the given page.
+ * Does NOT touch name_Debug (used by MM_Characters_GetModelByName). */
 static void ApplyPageMeta(int page)
 {
     EnsureMetaBackup();
 
-    /* Restaurar originales primero */
+    /* Restore originals first */
     memcpy(data.MetaDataCharacters, s_metaBackup, sizeof(s_metaBackup));
 
     if (page == 0)
         return;
 
-    /* Override slots que tengan entrada en esta página (0..14) */
+    /* Override slots that have an entry on this page (0..14) */
     for (int i = 0; i < s_pageEntryCount; i++)
     {
         PageEntry *e = &s_pageEntries[i];
@@ -504,7 +505,7 @@ static void ApplyPageMeta(int page)
 
         struct MetaDataCHAR *md = &data.MetaDataCharacters[e->slot];
         md->iconID = NATIVE_ICON_BASE + e->slot;  /* 32..46 */
-        /* name_LNG_* y engineID se dejan por ahora (TODO) */
+        /* name_LNG_* and engineID are TODO */
     }
 }
 
@@ -529,7 +530,7 @@ void NativeCustomRacer_SetCurrentPage(int page)
         return;
 
     s_page = page;
-    s_appliedPage = -1;   /* forzar re-aplicación */
+    s_appliedPage = -1;   /* force re-apply */
     NativeCustomRacer_RefreshPage();
     Log("[CustomRacer] page -> %d\n", page);
 }
@@ -544,38 +545,4 @@ void NativeCustomRacer_PrevPage(void)
 {
     if (s_page > 0)
         NativeCustomRacer_SetCurrentPage(s_page - 1);
-}
-
-/* ===================================================================== */
-/* DEBUG TEMPORAL: dump de ptrIcons[32..47]                              */
-/* ===================================================================== */
-void NativeCustomRacer_DebugDumpIcons(void)
-{
-    static int s_iconDbgDone = 0;
-    if (s_iconDbgDone)
-        return;
-    if (!sdata || !sdata->gGT)
-        return;
-    if (sdata->gGT->ptrIcons[32] == NULL)
-        return;
-
-    s_iconDbgDone = 1;
-    Log("--- ptrIcons[32..47] ---\n");
-    for (int i = 32; i < 48; i++)
-    {
-        struct Icon *ic = sdata->gGT->ptrIcons[i];
-        if (!ic)
-        {
-            Log("  [%02d] NULL\n", i);
-            continue;
-        }
-        Log("  [%02d] name=%-12s u0=%3u v0=%3u u1=%3u v1=%3u u2=%3u v2=%3u u3=%3u v3=%3u tpage=0x%04X clut=0x%04X\n",
-            i, ic->name,
-            ic->texLayout.u0, ic->texLayout.v0,
-            ic->texLayout.u1, ic->texLayout.v1,
-            ic->texLayout.u2, ic->texLayout.v2,
-            ic->texLayout.u3, ic->texLayout.v3,
-            ic->texLayout.tpage, ic->texLayout.clut);
-    }
-    Log("--- fin ptrIcons ---\n");
 }

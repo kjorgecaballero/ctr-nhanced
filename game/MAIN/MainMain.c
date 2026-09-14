@@ -667,7 +667,7 @@ void StateZero()
 	// This includes traffic lights, font, and more
 	LOAD_VramFile(sdata->ptrBigfile1, 0x102, NULL, &vramSize, -1);
 
-	/* NUEVO: cargar roster de racers custom y aplicar página 0 */
+	/* Load custom racer roster and apply page 0 */
 	NativeCustomRacer_Init();
 
 	sdata->mainGameState = 3;

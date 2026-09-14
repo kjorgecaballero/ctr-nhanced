@@ -492,7 +492,7 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 	u32 *ot = gGT->backBuffer->otMem.uiOT;
 
-	/* === Paginación de racers custom (L1/R1, jugador 1) === */
+	/* === Custom racer pagination (L1/R1, player 1) === */
 	if ((D230.characterSelectMenuState == IN_MENU) &&
 	    (NativeCustomRacer_GetPageCount() > 1))
 	{
@@ -510,11 +510,10 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 		}
 		sdata->buttonTapPerPlayer[0] = taps;
 	}
+	/* Keep VRAM atlas and MetaDataCharacters in sync with current page.
+	 * Idempotent if already applied. */
 	NativeCustomRacer_RefreshPage();
-
-	/* DEBUG TEMPORAL: vuelca ptrIcons[32..47] la primera vez que existan */
-	NativeCustomRacer_DebugDumpIcons();
-	/* === Fin paginación === */
+	/* ================================================================ */
 
 	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
@@ -622,7 +621,7 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 dontDrawSelectCharacter:
 
-	/* Indicador de página ("1 / 2") */
+	/* Page indicator ("1 / 2") */
 	if (NativeCustomRacer_GetPageCount() > 1)
 	{
 		char pageBuf[16];

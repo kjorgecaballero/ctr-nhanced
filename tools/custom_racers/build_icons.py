@@ -1,26 +1,26 @@
 """
-Empaqueta los icon.png de cada racer en page_N.vrm.
+Package each racer's icon.png into page_N.vrm files.
 
-Cada icono son DOS bloques:
-  - pixels 4bpp: 44x26 pixels = 11 halfwords x 26 rows
-  - CLUT 16 colores: 16x1 halfwords (32 bytes)
+Each icon is TWO blocks:
+  - 4bpp pixels: 44x26 pixels = 11 halfwords x 26 rows
+  - 16-color CLUT: 16x1 halfwords (32 bytes)
 
-Coords VRAM por slot (extraídas de los Icon del motor):
-  slot 0 (crash):     px(368,216) clut(16,251)
-  slot 1 (cortex):    px(256,216) clut(16,252)
-  slot 2 (tiny):      px(267,216) clut(16,253)
-  slot 3 (coco):      px(278,216) clut(16,254)
-  slot 4 (ngin):      px(289,216) clut(16,255)
-  slot 5 (dingo):     px(300,216) clut(32,248)
-  slot 6 (polar):     px(920,144) clut(32,249)
-  slot 7 (pura):      px(931,144) clut(32,250)
-  slot 8 (ntropy):    px(929,192) clut(32,255)
-  slot 9 (pinstripe): px(918,192) clut(32,254)
-  slot 10 (roo):      px(942,144) clut(32,251)
-  slot 11 (papu):     px(896,192) clut(32,252)
-  slot 12 (joe):      px(907,192) clut(32,253)
+VRAM coordinates per slot (extracted from the engine's Icon data):
+  slot 0  (crash):     px(368,216) clut(16,251)
+  slot 1  (cortex):    px(256,216) clut(16,252)
+  slot 2  (tiny):      px(267,216) clut(16,253)
+  slot 3  (coco):      px(278,216) clut(16,254)
+  slot 4  (ngin):      px(289,216) clut(16,255)
+  slot 5  (dingo):     px(300,216) clut(32,248)
+  slot 6  (polar):     px(920,144) clut(32,249)
+  slot 7  (pura):      px(931,144) clut(32,250)
+  slot 8  (ntropy):    px(929,192) clut(32,255)
+  slot 9  (pinstripe): px(918,192) clut(32,254)
+  slot 10 (roo):       px(942,144) clut(32,251)
+  slot 11 (papu):      px(896,192) clut(32,252)
+  slot 12 (joe):       px(907,192) clut(32,253)
 
-Uso:
+Usage:
     python build_icons.py
     python build_icons.py --page 1
 """
@@ -70,26 +70,26 @@ def parse_roster():
             continue
         parts = s.split()
         if len(parts) < 3:
-            print(f"  línea {lineno} ignorada: {line!r}")
+            print(f"  line {lineno} skipped: {line!r}")
             continue
         try:
             page = int(parts[0])
             slot = int(parts[1])
         except ValueError:
-            print(f"  línea {lineno} ignorada (page/slot no numérico)")
+            print(f"  line {lineno} skipped (page/slot not numeric)")
             continue
         pages.setdefault(page, {})[slot] = parts[2]
     return pages
 
 
 def pack_icon(img):
-    """Devuelve (bytes_4bpp, bytes_clut)."""
+    """Returns (4bpp_bytes, clut_bytes)."""
     img = img.convert("RGBA").resize((ICON_W, ICON_H), Image.LANCZOS)
     px = img.load()
 
-    # Separar opacos de transparentes
-    opaque_pixels = []          # lista de (x, y)
-    opaque_colors = []          # lista de (r, g, b)
+    # Separate opaque from transparent
+    opaque_pixels = []          # list of (x, y)
+    opaque_colors = []          # list of (r, g, b)
     for y in range(ICON_H):
         for x in range(ICON_W):
             r, g, b, a = px[x, y]
@@ -98,15 +98,15 @@ def pack_icon(img):
                 opaque_colors.append((r, g, b))
 
     idx_grid = [[0] * ICON_W for _ in range(ICON_H)]
-    palette = [(0, 0, 0)] * 15   # padding por defecto
+    palette = [(0, 0, 0)] * 15   # default padding
 
     if opaque_colors:
-        # Cuantizar a 15 colores (índices temporales 0..14 → finales 1..15)
+        # Quantize to 15 colors (temp indices 0..14 -> final 1..15)
         tmp = Image.new("RGB", (len(opaque_colors), 1))
         tmp.putdata(opaque_colors)
         tmp_q = tmp.quantize(colors=15, method=Image.MEDIANCUT)
 
-        # getpalette() puede devolver None o menos de 45 valores → rellenar
+        # getpalette() may return None or fewer than 45 values -> pad with 0
         raw_pal = tmp_q.getpalette() or []
         raw_pal = list(raw_pal) + [0] * (15 * 3 - len(raw_pal))
         palette = [
@@ -114,12 +114,12 @@ def pack_icon(img):
             for i in range(15)
         ]
 
-        # Asignar índices en la rejilla
+        # Fill the grid with indices
         tmp_idx = list(tmp_q.getdata())
         for k, (x, y) in enumerate(opaque_pixels):
             idx_grid[y][x] = (tmp_idx[k] & 0xF) + 1   # 1..15
 
-    # Empaquetar 4bpp: nibble bajo = pixel izquierdo
+    # Pack 4bpp: low nibble = leftmost pixel
     pix = bytearray()
     for y in range(ICON_H):
         for hw in range(ICON_W // 4):
@@ -130,7 +130,9 @@ def pack_icon(img):
             pix.append(i0 | (i1 << 4))
             pix.append(i2 | (i3 << 4))
 
-    # CLUT: 16 halfwords. Índice 0 = transparente (0x0000, bit 15 = 0).
+    # CLUT: 16 halfwords. Index 0 = transparent (0x0000, bit 15 = 0).
+    # Do NOT set bit 15 on opaque entries, or the icon will render at
+    # 50% * 50% opacity (double blend) inside the character select menu.
     clut = bytearray()
     clut += struct.pack("<H", 0x0000)
     for r, g, b in palette:
@@ -141,7 +143,7 @@ def pack_icon(img):
 
 
 def write_vrm(path, blocks):
-    """blocks: lista de (x, y, w, h, bytes_pixels)."""
+    """blocks: list of (x, y, w, h, pixel_bytes)."""
     out = bytearray(struct.pack("<I", 0x20))
     for x, y, w, h, pixels in blocks:
         size = w * h * 2
@@ -160,42 +162,42 @@ def build_page(page_num, slots):
     blocks = []
     for slot, folder in sorted(slots.items()):
         if slot not in SLOTS:
-            print(f"  slot {slot} no mapeado — ignorado")
+            print(f"  slot {slot} not mapped - skipped")
             continue
 
         png = RACERS / folder / "icon.png"
         if not png.exists():
-            print(f"  falta {png} — slot {slot} ignorado")
+            print(f"  missing {png} - slot {slot} skipped")
             continue
 
         px_x, px_y, clut_x, clut_y = SLOTS[slot]
         pix, clut = pack_icon(Image.open(png))
 
-        # Bloque de píxeles: 11 halfwords x 26 rows × 2 bytes = 572 bytes.
-        # LoadImage lo trata como 16bpp (w*h*2) y copia bytes literales.
+        # Pixel block: 11 halfwords x 26 rows x 2 bytes = 572 bytes.
+        # LoadImage treats it as 16bpp (w*h*2) and copies bytes literally.
         blocks.append((px_x, px_y, ICON_W // 4, ICON_H, pix))
 
-        # Bloque de CLUT: 16 halfwords = 16 pixels 16bpp en 1 fila.
+        # CLUT block: 16 halfwords = 16 pixels at 16bpp in one row.
         blocks.append((clut_x, clut_y, 16, 1, clut))
 
     if not blocks:
-        print(f"  page_{page_num}.vrm: 0 bloques — no se escribe")
+        print(f"  page_{page_num}.vrm: 0 blocks - not written")
         return
 
     dst = RACERS / f"page_{page_num}.vrm"
     size = write_vrm(dst, blocks)
-    print(f"  {dst.name}: {len(blocks) // 2} iconos "
-          f"({len(blocks)} bloques), {size} bytes")
+    print(f"  {dst.name}: {len(blocks) // 2} icons "
+          f"({len(blocks)} blocks), {size} bytes")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--page", type=int, default=None,
-                    help="Construir solo esta página")
+                    help="Build only this page")
     args = ap.parse_args()
 
     if not (RACERS / "roster.txt").exists():
-        sys.exit(f"No existe {RACERS / 'roster.txt'}")
+        sys.exit(f"Missing {RACERS / 'roster.txt'}")
 
     pages = parse_roster()
 
@@ -206,7 +208,7 @@ def main():
             continue
         build_page(page_num, slots)
 
-    print("Listo.")
+    print("Done.")
 
 
 if __name__ == "__main__":
