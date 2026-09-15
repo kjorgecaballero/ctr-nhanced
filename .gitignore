@@ -42,3 +42,4 @@ vram_*.bin
 *.bin
 VRAM.TGA
 run.log
+build*
