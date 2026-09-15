@@ -169,10 +169,12 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 		}
 		else
 		{
-			const char *folder = NativeCustomRacer_GetFolder((int)characterID);
-			if (folder != NULL)
+			const char *display = NativeCustomRacer_GetDisplayName((int)characterID);
+			if (display == NULL)
+				display = NativeCustomRacer_GetFolder((int)characterID);
+			if (display != NULL)
 			{
-				strcat(&description[strlen(description)], folder);
+				strcat(&description[strlen(description)], display);
 			}
 		}
 	}

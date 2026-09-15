@@ -1070,12 +1070,18 @@ dontDrawSelectCharacter:
 				nameY = nameBaseY + D230.characterSelectNameTextY + nameYOffset;
 			}
 
-			/* === Phase 2: custom racers still have no LNG strings (Phase 5).
-			 * Guard against reading lngStrings[-1]. === */
-			s16 nameLNG = GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long;
-			if (nameLNG >= 0)
+			/* === Phase 2 + LNG names: prefer the roster display name for
+			 * customs, fall back to the engine LNG string for originals. === */
+			const char *nameToDraw = NativeCustomRacer_GetDisplayName(activeCharacterSelectMeta->characterID);
+			if (nameToDraw == NULL)
 			{
-				DecalFont_DrawLine(sdata->lngStrings[nameLNG],
+				s16 nameLNG = GET_METADATA(activeCharacterSelectMeta->characterID)->name_LNG_long;
+				if (nameLNG >= 0)
+					nameToDraw = sdata->lngStrings[nameLNG];
+			}
+			if (nameToDraw != NULL)
+			{
+				DecalFont_DrawLine(nameToDraw,
 				                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,
 				                   (JUSTIFY_CENTER | ORANGE));
 			}

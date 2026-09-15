@@ -69,6 +69,11 @@ static struct MetaDataCHAR s_metaBackup[16];
 struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
 
+/* Per-custom display name (roster.txt "Display Name" field). Kept in BSS
+ * so UI can read it without touching MetaDataCHAR (static_asserts) or
+ * name_Debug (used by GetFolder / model lookup). Empty = unset. */
+static char s_customDisplayName[NATIVE_CUSTOM_COUNT][64];
+
 /* Phase 2: copy of the menu meta array with custom slots patched to
  * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
 static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
@@ -245,6 +250,12 @@ void NativeCustomRacer_ReloadRoster(void)
                 s_customMeta[idx].engineID       = e.engineID;
 
                 s_customMenuID[idx] = (s16)e.slot;
+
+                {
+                    const char *dn = (e.displayName[0] != '\0') ? e.displayName : e.folder;
+                    strncpy(s_customDisplayName[idx], dn, sizeof(s_customDisplayName[idx]) - 1);
+                    s_customDisplayName[idx][sizeof(s_customDisplayName[idx]) - 1] = '\0';
+                }
             }
         }
 
@@ -314,6 +325,19 @@ const char *NativeCustomRacer_GetFolder(int characterID)
     {
         int idx = characterID - NATIVE_CUSTOM_ID_BASE;
         return s_customMeta[idx].name_Debug;
+    }
+    return NULL;
+}
+
+const char *NativeCustomRacer_GetDisplayName(int characterID)
+{
+    NativeCustomRacer_Init();
+    if (characterID >= NATIVE_CUSTOM_ID_BASE &&
+        characterID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+    {
+        int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+        if (s_customDisplayName[idx][0] != '\0')
+            return s_customDisplayName[idx];
     }
     return NULL;
 }

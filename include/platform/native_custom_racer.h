@@ -48,6 +48,12 @@ int NativeCustomRacer_HasSlot(int characterID);
 /* Returns the folder name for the given character ID, or NULL. */
 const char *NativeCustomRacer_GetFolder(int characterID);
 
+/* Returns the "Display Name" for the given custom character ID (>= 16),
+ * read from roster.txt during ReloadRoster. Falls back to the folder slug
+ * if the quoted field is empty. Returns NULL for original IDs and for
+ * unknown customs, so callers can keep their existing LNG fallback. */
+const char *NativeCustomRacer_GetDisplayName(int characterID);
+
 /* Loads model.ctr for the given character into a malloc'ed buffer with
  * internal pointers relocated and layout VRAM coordinates shifted to the
  * specified player slot. Returns NULL on failure. The caller owns the buffer. */
