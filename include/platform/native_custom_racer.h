@@ -48,6 +48,11 @@ int NativeCustomRacer_HasSlot(int characterID);
 /* Returns the folder name for the given character ID, or NULL. */
 const char *NativeCustomRacer_GetFolder(int characterID);
 
+/* Returns a pointer to the custom's packed vertex-color code array
+ * (same format as data.ptrColor[][0..3]), or NULL if the custom has
+ * no #RRGGBB field in roster.txt. */
+const u32 *NativeCustomRacer_GetColorPtr(int characterID);
+
 /* Returns the "Display Name" for the given custom character ID (>= 16),
  * read from roster.txt during ReloadRoster. Falls back to the folder slug
  * if the quoted field is empty. Returns NULL for original IDs and for

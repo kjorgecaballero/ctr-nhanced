@@ -9,6 +9,7 @@ Example:
 Runtime output goes to <repo>/nhanced/assets/mods/racers/<slug>/
 """
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -42,7 +43,18 @@ def main():
     ap.add_argument("engine",         choices=sorted(VALID_ENGINES))
     ap.add_argument("display_name",   help="label shown in character select")
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
+    ap.add_argument("--color", default=None,
+                    help="optional minimap color #RRGGBB")
     args = ap.parse_args()
+
+    color = args.color
+    if color is not None:
+        if not re.fullmatch(r"#?[0-9A-Fa-f]{6}", color):
+            sys.exit("ERROR: --color must be #RRGGBB or RRGGBB")
+        if not color.startswith("#"):
+            color = "#" + color
+    else:
+        color = None
 
     slug = args.slug
     src  = Path(args.source_mesh).resolve()
@@ -89,6 +101,8 @@ def main():
     roster_path = RACERS / "roster.txt"
     lines = roster_path.read_text().splitlines()
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
+    if color is not None:
+        new_line += f"\t{color}"
     updated = False
     for i, l in enumerate(lines):
         parts = l.split()

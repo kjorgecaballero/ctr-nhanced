@@ -47,6 +47,8 @@ typedef struct
     char folder[64];
     int  engineID;
     char displayName[64];
+    u32  color[4];       /* packed vertex-color codes (all 4 identical) */
+    int  hasColor;       /* 1 if #RRGGBB was present in roster.txt */
 } PageEntry;
 
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
@@ -77,6 +79,10 @@ static char s_customDisplayName[NATIVE_CUSTOM_COUNT][64];
 /* Phase 2: copy of the menu meta array with custom slots patched to
  * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
 static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
+
+/* Per-custom minimap color (roster.txt optional #RRGGBB field). */
+static u32 s_customColor[NATIVE_CUSTOM_COUNT][4];
+static u8  s_customHasColor[NATIVE_CUSTOM_COUNT];
 
 /* Menu preview cache: one struct Model* per (custom ID, player index).
  * Each player slot has its own model_pN.ctr whose UVs are baked for slot N,
@@ -196,6 +202,24 @@ static int Page_ParseLine(char *line, PageEntry *out)
             out->displayName[i++] = *p++;
         out->displayName[i] = '\0';
     }
+    if (*p == '"') p++;
+
+    /* Optional #RRGGBB (hash optional) */
+    out->hasColor = 0;
+    out->color[0] = out->color[1] = out->color[2] = out->color[3] = 0;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == '#') p++;
+    if (*p && *p != '\n' && *p != '\r')
+    {
+        unsigned int r = 0, g = 0, b = 0;
+        if (sscanf(p, "%2x%2x%2x", &r, &g, &b) == 3)
+        {
+            /* PS1 packed: byte0=r, byte1=g, byte2=b, byte3=code */
+            u32 packed = (r & 0xff) | ((g & 0xff) << 8) | ((b & 0xff) << 16) | (0x20u << 24);
+            out->color[0] = out->color[1] = out->color[2] = out->color[3] = packed;
+            out->hasColor = 1;
+        }
+    }
 
     out->page = (int)page;
     out->slot = (int)slot;
@@ -210,6 +234,7 @@ void NativeCustomRacer_ReloadRoster(void)
     s_rosterLoaded = 1;
 
     memset(s_customMeta, 0, sizeof(s_customMeta));
+    memset(s_customHasColor, 0, sizeof(s_customHasColor));
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
 
@@ -248,6 +273,9 @@ void NativeCustomRacer_ReloadRoster(void)
                 s_customMeta[idx].name_LNG_short = -1;   /* TODO Phase 5 */
                 s_customMeta[idx].iconID         = (s16)(NATIVE_ICON_BASE + e.slot);
                 s_customMeta[idx].engineID       = e.engineID;
+
+                memcpy(s_customColor[idx], e.color, sizeof(e.color));
+                s_customHasColor[idx] = (u8)e.hasColor;
 
                 s_customMenuID[idx] = (s16)e.slot;
 
@@ -327,6 +355,17 @@ const char *NativeCustomRacer_GetFolder(int characterID)
         return s_customMeta[idx].name_Debug;
     }
     return NULL;
+}
+
+const u32 *NativeCustomRacer_GetColorPtr(int characterID)
+{
+    if (characterID < NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (!s_customHasColor[idx])
+        return NULL;
+    return s_customColor[idx];
 }
 
 const char *NativeCustomRacer_GetDisplayName(int characterID)

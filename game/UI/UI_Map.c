@@ -230,11 +230,10 @@ void UI_Map_DrawAdvPlayer(struct UIMap *map, const s32 worldPos[3], int unused1,
 }
 
 // Draw icon on map
-void UI_Map_DrawRawIcon(struct UIMap *map, const s32 worldPos[3], int iconID, int colorID, int unused, s16 scale)
+static void UI_Map_DrawRawIcon_Ptr(struct UIMap *map, const s32 worldPos[3], int iconID, const u32 *ptrColor, int unused, s16 scale)
 {
 	int posX;
 	int posY;
-	u32 *ptrColor;
 	struct GameTracker *gGT = sdata->gGT;
 
 	(void)unused;
@@ -244,13 +243,15 @@ void UI_Map_DrawRawIcon(struct UIMap *map, const s32 worldPos[3], int iconID, in
 
 	UI_Map_GetIconPos(map, &posX, &posY);
 
-	ptrColor = data.ptrColor[colorID];
-
 	struct Icon **iconPtrArray = ICONGROUP_GETICONS(sdata->gGT->iconGroup[UI_MAP_ICON_GROUP]);
 
 	DecalHUD_DrawPolyGT4(iconPtrArray[iconID], posX, posY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, ptrColor[0], ptrColor[1], ptrColor[2],
 	                     ptrColor[3], 0, (int)scale);
+}
 
+void UI_Map_DrawRawIcon(struct UIMap *map, const s32 worldPos[3], int iconID, int colorID, int unused, s16 scale)
+{
+	UI_Map_DrawRawIcon_Ptr(map, worldPos, iconID, data.ptrColor[colorID], unused, scale);
 	return;
 }
 
@@ -258,6 +259,7 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 {
 	int kartColor;
 	int iconID;
+	const u32 *customColor;
 	struct Driver *d;
 	struct GameTracker *gGT = sdata->gGT;
 
@@ -275,6 +277,7 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 		// characterID + 5
 		// corresponds with ptrColors
 		kartColor = GET_MPK_ID(data.characterIDs[d->driverID]) + 5;
+		customColor = NativeCustomRacer_GetColorPtr(data.characterIDs[d->driverID]);
 
 		// default (AI)
 		iconID = UI_MAP_PLAYER_ICON_AI;
@@ -289,6 +292,7 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 			if ((gGT->timer & 2) == 0)
 			{
 				kartColor = WHITE;
+				customColor = NULL;
 			}
 
 			// If you're in Adventure Arena
@@ -305,7 +309,10 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 			iconID = UI_MAP_PLAYER_ICON_HUMAN;
 		}
 
-		UI_Map_DrawRawIcon(map, &bucket->inst->matrix.t[0], iconID, (s16)kartColor, 0, UI_MAP_ICON_SCALE);
+		if (customColor != NULL)
+			UI_Map_DrawRawIcon_Ptr(map, &bucket->inst->matrix.t[0], iconID, customColor, 0, UI_MAP_ICON_SCALE);
+		else
+			UI_Map_DrawRawIcon(map, &bucket->inst->matrix.t[0], iconID, (s16)kartColor, 0, UI_MAP_ICON_SCALE);
 	}
 	return;
 }
