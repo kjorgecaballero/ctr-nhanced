@@ -5,12 +5,16 @@
 > and designed fix. When it's fixed, it moves to the corresponding commit
 > and gets deleted from here.
 >
-> **Current state (HEAD `41597d689` in origin):**
+> **Current state (HEAD `6c945886a`, origin `01605273d`):**
 >
 > Still pending:
 >   - BUG-ICON-02 (known limitation, design-level)
 >
 > Closed this session:
+>   - BUG-ARCADE-ICON-01 (`6c945886a`)
+>   - BUG-HISCORE-01 (`5d973c6fe`)
+>   - BUG-VOICE-02 (`5d973c6fe`)
+>   - BUG-MAP-01 (`01605273d`)
 >   - BUG-PODIUM-01 (`41597d689`)
 >   - BUG-VOICE-01 (`a38521281`)
 >
@@ -133,6 +137,119 @@ Time Trial rusty pass voiceline, battle ernest vs bot with PickupBots
 and VehPickState paths exercised.
 
 **Related:** §8.2 of the main context.
+
+---
+
+## BUG-HISCORE-01: high-score entry name colors are wrong for a custom
+
+**Status:** fixed in `5d973c6fe`
+**Detected:** this session (Phase 2 closeout sweep, section 8.4)
+
+**Symptom:** when a custom racer (ID 16+) places in the top-5 of a high
+score table (relic race end, time trial end, main menu high scores), its
+name is drawn in the wrong color. rusty (customID 16) showed BLACK
+instead of CRASH_BLUE. customIDs 30+ read past `data.ptrColor[]` entirely.
+
+**Confirmed cause:** five sites do `characterID + N` where the result is
+used as an index into `data.ptrColor[]` (`enum DecalFontStyle`, 16 driver
+colors at indices 5..20, `NUM_COLORS` = 35):
+
+    game/223.c:271,280              RR_HIGH_SCORE_DRIVER_COLOR_OFFSET (= 5)
+    game/224.c:339                  TT_HIGH_SCORE_DRIVER_COLOR_OFFSET (= 5)
+    game/230/MM_HighScore.c:160,194 MM_HIGHSCORE_DRIVER_COLOR_OFFSET (= 5)
+
+`HighScoreEntry.characterID` stores the raw ID (`MainGameEnd.c:121,141`
+write `data.characterIDs[...]` unchanged), so customs reach these sites
+intact.
+
+**Applied fix:** wrap with `GET_MPK_ID` at all five. Customs inherit the
+color of their slot-mate (rusty -> CRASH_BLUE, nash -> COCO_MAGENTA,
+ernest -> N_GIN_PURPLE). Originals unchanged (mpkID == characterID).
+
+**Verification:** 1P arcade rusty beats a fresh relic race record -> name
+in CRASH_BLUE. Time Trial nash -> name in COCO_MAGENTA. Crash / Cortex
+unchanged. No crash.
+
+**Related:** same family as BUG-MAP-01, BUG-PODIUM-01, BUG-VOICE-01.
+
+---
+
+## BUG-VOICE-02: options menu voice slider plays the wrong SFX for a custom
+
+**Status:** fixed in `5d973c6fe`
+**Detected:** this session (section 8.4 sweep, found while auditing
+characterID reads outside GET_MPK_ID).
+
+**Symptom:** in the Options menu, moving the Voice slider with a custom
+racer as P1 plays the wrong voice SFX (or a non-existent one). No crash.
+
+**Confirmed cause:** `game/HOWL/HOWL_Settings.c`,
+`OptionsMenu_TestSound`:
+
+    int driverID = sdata->gGT->cameraDC[0].driverToFollow->driverID;
+    int characterID = data.characterIDs[driverID];       // raw 16+
+    ...
+    sampleVoiceID = characterID + 0x1c;  // (or +0x2c)
+    OtherFX_Play(sampleVoiceID, 0);
+
+Custom IDs produce SFX IDs 44+ (or 60+), outside the valid range. This
+path is NOT `Voiceline_RequestPlay`, so the BUG-VOICE-01 call-site wrap
+missed it.
+
+**Applied fix:** wrap the source:
+`characterID = GET_MPK_ID(data.characterIDs[driverID])`.
+
+**Verification:** 1P arcade rusty -> Options -> Voice slider cycles ->
+plays Crash's voice. Crash / Tiny originals unchanged.
+
+**Related:** BUG-VOICE-01 (same family, different path).
+
+---
+
+## BUG-ARCADE-ICON-01: custom icon missing in arcade end-of-race standings
+
+**Status:** fixed in `6c945886a`
+**Detected:** this session, reported by the user while validating
+BUG-HISCORE-01.
+
+**Symptom:** in 1P arcade, the end-of-race standings (8 icons showing
+the finishing order) does not draw the icon for a custom racer. The
+other icons draw normally. No crash.
+
+**Confirmed cause:** `game/222.c`, `AA_EndEvent_DrawMenu`, the loop that
+draws all 8 icons:
+
+    #define gameCharacterMetadata  (data.MetaDataCharacters)   // line 73
+    ...
+    characterID = characterIDs[driversInRaceOrder[i]->driverID];  // raw 16+
+    iconID = characterMetadata[characterID].iconID;               // OOB read
+
+`data.MetaDataCharacters` has 16 entries (0..15). Custom IDs (16+) read
+past the array into the adjacent `data.characterIDs[]` field. The
+resulting `iconID` is garbage, `gGT->ptrIcons[garbage]` is typically
+NULL, and `UI_DrawDriverIcon` silently draws nothing.
+
+Secondary: this is the only standings path that does NOT call
+`NativeCustomRacer_EnsureIconForChar` before drawing. Even after the OOB
+fix, VRAM may hold the original's icon (which the custom inherits via
+`GET_METADATA(...)->iconID` = `32 + slot`) instead of the custom's own
+`page_N.vrm` upload.
+
+**Applied fix:** two changes at the loop:
+
+    iconID = GET_METADATA(characterID)->iconID;
+    ...
+    NativeCustomRacer_EnsureIconForChar(characterID);
+    UI_DrawDriverIcon(gGT->ptrIcons[iconID], ...);
+
+Originals unchanged (mpkID == characterID; `EnsureIconForChar` is a no-op
+when the slot already holds the right content).
+
+**Verification:** 1P arcade rusty finishes any race -> rusty's icon
+appears in the standings. Same with nash.
+
+**Related:** same VRAM approach as UI_Map / UI_Rank / UI_CupStandings
+(BUG-ICON-01).
 
 ---
 
