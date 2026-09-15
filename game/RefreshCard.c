@@ -1,4 +1,5 @@
 #include <common.h>
+#include <stdio.h>
 #include <platform/native_custom_racer.h>
 
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID)
@@ -242,6 +243,46 @@ void RefreshCard_GhostDecodeProfile(struct GhostProfile *profile, char *fileName
 	*(u8 *)&profile->alwaysOne = 0;
 	memcpy(profile->profile_name, fileName, sizeof(profile->profile_name));
 	*((u8 *)&profile->trackID + 1) = 0;
+}
+
+
+/* BUG-GHOST-03: the memory-card filename packs the characterID into only
+ * 4 bits (see RefreshCard_GhostEncodeProfile / RefreshCard_GhostDecodeProfile),
+ * so custom IDs (>= 16) are truncated to their low nibble and also spill
+ * into the levelID bits. The GhostHeader inside the file has the full IDs
+ * (struct GhostHeader, offset 0x04 = levelID, 0x06 = characterID, written
+ * by GhostTape_Start). Read them from disk during enumeration so the ghost
+ * list shows the correct icon and track. */
+static void RefreshCard_GhostReadHeaderInfo(int slotIdx, char *fileName,
+                                            s16 *outLevelID, s16 *outCharID)
+{
+	*outLevelID = -1;
+	*outCharID  = -1;
+
+	/* Same path format MEMCARD_Load/MEMCARD_Save use. */
+	char path[64];
+	MEMCARD_StringSet(path, slotIdx, fileName);
+
+	FILE *f = fopen(path, "rb");
+	if (f == NULL)
+	{
+		return;
+	}
+
+	/* File layout (see memcards/slot0/BASCUS-94426G*):
+	 *   0x0000 - 0x00FF : PS1 icon header
+	 *   0x0100 - ...    : struct GhostHeader + record buffer
+	 * The GhostHeader's s16 fields at 0x04/0x06 follow the same
+	 * little-endian layout as the in-memory struct. */
+	u8 raw[8];
+	if ((fseek(f, 0x100, SEEK_SET) == 0) &&
+	    (fread(raw, 1, sizeof(raw), f) == sizeof(raw)))
+	{
+		*outLevelID = (s16)(raw[4] | (raw[5] << 8));
+		*outCharID  = (s16)(raw[6] | (raw[7] << 8));
+	}
+
+	fclose(f);
 }
 
 
@@ -658,7 +699,22 @@ void RefreshCard_Unknown4(void)
 		{
 			if (totalGhosts < 7)
 			{
-				RefreshCard_GhostDecodeProfile(&sdata->ghostProfile_memcard[totalGhosts], fileName);
+				struct GhostProfile *profile = &sdata->ghostProfile_memcard[totalGhosts];
+
+				RefreshCard_GhostDecodeProfile(profile, fileName);
+
+				/* BUG-GHOST-03: recover the full IDs from the GhostHeader.
+				 * For originals these match the packed decode; for customs
+				 * (>= 16) the packed decode was truncated and this is the
+				 * only way to recover them. */
+				s16 realLevelID, realCharID;
+				RefreshCard_GhostReadHeaderInfo(sdata->frame1_memcardSlot, fileName,
+				                                &realLevelID, &realCharID);
+				if (realLevelID >= 0)
+					profile->trackID = realLevelID;
+				if (realCharID >= 0)
+					profile->characterID = realCharID;
+
 				sdata->numGhostProfilesSaved++;
 			}
 
