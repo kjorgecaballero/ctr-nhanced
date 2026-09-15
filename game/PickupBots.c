@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void PickupBots_Init(void)
 {
@@ -90,7 +91,7 @@ static void PickupBots_SetCooldown(struct Driver *bot)
 
 static void PickupBots_PlayVoice(u32 voiceID, struct Driver *attacker, struct Driver *victim)
 {
-	Voiceline_RequestPlay(voiceID, data.characterIDs[attacker->driverID], data.characterIDs[victim->driverID]);
+	Voiceline_RequestPlay(voiceID, GET_MPK_ID(data.characterIDs[attacker->driverID]), GET_MPK_ID(data.characterIDs[victim->driverID]));
 }
 
 static void PickupBots_UpdateArcade(void)

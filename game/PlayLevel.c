@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum PlayLevelConstants
 {
@@ -408,7 +409,7 @@ void PlayLevel_UpdateLapStats(void)
 			int characterID = data.characterIDs[gGT->driversInRaceOrder[currRank - 1]->driverID];
 
 			// Make driver talk
-			Voiceline_RequestPlay(PLAYLEVEL_PASS_VOICELINE, characterID, PLAYLEVEL_VOICELINE_FLAGS);
+			Voiceline_RequestPlay(PLAYLEVEL_PASS_VOICELINE, GET_MPK_ID(characterID), PLAYLEVEL_VOICELINE_FLAGS);
 		}
 		gGT->humanPlayerPositions[driverIndex] = currRank;
 	}

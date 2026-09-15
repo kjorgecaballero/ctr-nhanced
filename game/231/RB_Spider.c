@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void RB_Spider_DrawWebs(struct Thread *t, struct PushBuffer *pb)
 {
@@ -294,7 +295,7 @@ checkCollision:
 	if ((RB_Hazard_HurtDriver(victim, 1, 0, 0) != 0) && (prevKartState != KS_SPINNING))
 	{
 		OtherFX_Play(0x7b, 1);
-		Voiceline_RequestPlay(1, data.characterIDs[victim->driverID], 0x10);
+		Voiceline_RequestPlay(1, GET_MPK_ID(data.characterIDs[victim->driverID]), 0x10);
 	}
 }
 

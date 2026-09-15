@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 // add to buildList, overwrite original
 // RB_CrateAny_ThTick_Explode at 800b3d04,
@@ -476,7 +477,7 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 				gGT->frozenTimeRemaining += 0xb40;
 				gGT->timeCrateTypeSmashed = 3;
 
-				Voiceline_RequestPlay(0x13, data.characterIDs[driver->driverID], 0x10);
+				Voiceline_RequestPlay(0x13, GET_MPK_ID(data.characterIDs[driver->driverID]), 0x10);
 			}
 
 			driver->PickupTimeboxHUD.cooldown = 10;

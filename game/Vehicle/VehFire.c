@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum
 {
@@ -52,7 +53,7 @@ void VehFire_Audio(struct Driver *driver, int speed_cap)
 		// distort
 		distortion = VEH_FIRE_AUDIO_DISTORT_HIGH;
 
-		Voiceline_RequestPlay(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, data.characterIDs[driver->driverID], VEH_FIRE_VOICELINE_PRIORITY);
+		Voiceline_RequestPlay(VEH_FIRE_VOICELINE_HIGH_BOOST_ID, GET_MPK_ID(data.characterIDs[driver->driverID]), VEH_FIRE_VOICELINE_PRIORITY);
 
 		goto Skip;
 	}
