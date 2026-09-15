@@ -152,7 +152,29 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 
 	strcat(&description[strlen(description)], sdata->lngStrings[data.metaDataLEV[(s16)levelID].name_LNG]);
 	strcat(description, sdata->strcatData1_colon);
-	strcat(&description[strlen(description)], sdata->lngStrings[GET_METADATA((s16)characterID)->name_LNG_short]);
+
+	/* BUG-GHOST-02: custom racers have name_LNG_short = -1 (Phase 5 TODO).
+	 * sdata->lngStrings[-1] is an OOB read that crashes strcat when saving
+	 * a TT ghost with a custom. For customs, use the folder slug instead
+	 * (e.g. "nash", "ernest") so the memory card icon still gets a
+	 * meaningful label. Originals keep the LNG string. Same guard pattern
+	 * as MM_Characters.c for the character-select window name. */
+	{
+		s16 _lng = GET_METADATA((s16)characterID)->name_LNG_short;
+		if (_lng >= 0)
+		{
+			strcat(&description[strlen(description)], sdata->lngStrings[_lng]);
+		}
+		else
+		{
+			const char *folder = NativeCustomRacer_GetFolder((int)characterID);
+			if (folder != NULL)
+			{
+				strcat(&description[strlen(description)], folder);
+			}
+		}
+	}
+
 	strcat(description, sdata->strcatData1_colon);
 	strcat(description, (char *)RECTMENU_DrawTime(time));
 
