@@ -8,7 +8,7 @@
 #include <platform/native_renderer.h>
 #include <ovr_230.h>
 
-#define NATIVE_ROSTER_MAX   64
+#define NATIVE_ROSTER_MAX   128
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
 

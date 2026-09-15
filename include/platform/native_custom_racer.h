@@ -16,7 +16,7 @@ extern "C" {
  *   IDs 16+   -> s_customMeta.
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
-#define NATIVE_CUSTOM_COUNT   48
+#define NATIVE_CUSTOM_COUNT   128
 #define NATIVE_PAGE_SIZE      16
 
 extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
