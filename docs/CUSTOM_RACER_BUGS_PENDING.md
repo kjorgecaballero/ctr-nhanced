@@ -5,12 +5,17 @@
 > and designed fix. When it's fixed, it moves to the corresponding commit
 > and gets deleted from here.
 >
-> **Current state (HEAD `6c945886a`, origin `01605273d`):**
+> **Current state (HEAD `65164580a`, branch `nhanced`, origin synced):**
 >
 > Still pending:
->   - BUG-ICON-02 (known limitation, design-level)
+>   (none)
 >
-> Closed this session:
+> Closed in Fase 3:
+>   - `65164580a` LNG display names from roster.txt
+>   - `d7b198610` Sentinel CLUT real (BUG-ICON-02)
+>   - `162f02aca` expand roster capacity from 48 to 128
+>
+> Closed in Fase 2:
 >   - BUG-ARCADE-ICON-01 (`6c945886a`)
 >   - BUG-HISCORE-01 (`5d973c6fe`)
 >   - BUG-VOICE-02 (`5d973c6fe`)
@@ -23,14 +28,6 @@
 >   - BUG-GHOST-02 (`5b66782a9`)
 >   - BUG-GHOST-03 (`8f4accdbc`)
 >   - BUG-ICON-01 (`f7d208475` + `8a42427fa`)
->   - BUG-MENU-01 (not reproducible on HEAD, closed Phase 2.7)
->   - BUG-MENU-02 (`2e29a5eab`)
->   - BUG-MENU-03 (`5e0f71ff7`)
->   - BUG-MENU-04 (`1942c97cc`)
->   - BUG-MENU-05 (`1ce02010e`)
->   - BUG-MENU-06 (`c1cbd8f7b`)
->   - BUG-TNT-01 (`479024c23`)
->   - BUG-ARCADE-01 (`417b3e8b2`, OOM safety net `94633f4ae`)
 
 ---
 
@@ -253,61 +250,63 @@ appears in the standings. Same with nash.
 
 ---
 
-## BUG-ICON-02: custom↔original (or custom↔custom from different pages) share the same VRAM icon slot — known limitation
+## BUG-ICON-02: custom↔original share the same VRAM icon slot
 
-**Status:** **pending — design-level, not fixed**
-**Detected:** BUG-ICON-01 investigation (same session)
+**Status:** fixed in `d7b198610`.
 
-**Symptoms (all the same root cause):**
+**Original symptoms:**
+1. 2P+ VS, custom vs matching original → whoever was uploaded last won.
+2. Ghost list, custom vs matching original → only one displayed correctly.
+3. Any screen with more than one driver where both occupied the same
+   iconID slot (32+slot).
 
-1. **2P+ VS, custom vs matching original.** P1 = Big Norm (customID 17,
-   `iconID 33`, MPK 1), P2 = Cortex (original, `iconID 33`, MPK 1). Both
-   ask for VRAM slot 1; whoever was uploaded last wins. The other renders
-   the wrong icon on track and in the HUD.
+**Cause:** customs used `iconID = 32 + slot`, exactly the same 0..12
+range the originals occupy. VRAM has one rect per original slot; two
+distinct characters sharing a single VRAM rect cannot both be displayed
+at once. No universal free block of sufficient size existed in any of
+the four VRAM dumps (charsel / title / race / 4P).
 
-2. **Ghost list, custom vs matching original.** Coco ghost (original,
-   `iconID 35`) + Nash ghost (customID 19, page 1 slot 3 -> `iconID 35`).
-   Both want VRAM slot 35, only one displays correctly.
+**Fix (Sentinel CLUT):** customs no longer use VRAM. Each custom icon is
+decoded once from its `page_N.vrm` into a dedicated RGBA8 OpenGL texture,
+and a fabricated `struct Icon` carries the Sentinel bit
+(`clut = 0x8000 | idx`) so `AddSplit` in `platform/native_gpu.c` routes
+sampling to that GL texture instead of VRAM.
 
-3. **Any screen with more than one driver** where a custom and its
-   matching original (or a custom on a different page whose slot maps
-   to the same original) appear together.
+Mechanism:
+- `platform/native_gpu.c`: `s_gpu.currentClut` set per-primitive before
+  each `AddSplit`. `AddSplit` checks bit 15; on hit, forces
+  `TF_32_BIT_RGBA`, picks `textureId` from `s_gpu.customTextures[]`,
+  sets `blendMode = BM_NONE`, and reads texel size from
+  `s_gpu.customTextureSizes`. New API `NativeGpu_RegisterCustomTexture`.
+- `platform/native_custom_racer.c`: decode 4bpp+CLUT from `page_N.vrm`
+  into RGBA8, upload with `glGenTextures`/`glTexImage2D`, register with
+  native_gpu. `NativeCustomRacer_GetIconPtr` returns the fabricated Icon
+  for customs or the real VRAM icon for originals.
+- 13 call sites swapped to `NativeCustomRacer_GetIconPtr` across:
+  standings, HUD, battle setup + battle standings, char select,
+  high scores, ghost list, cup standings, rank.
 
-**Confirmed cause:** customs use `iconID = 32 + slot`, exactly the same
-0..12 range the originals occupy. VRAM has one rect per original slot
-and no free rect reserved for customs. Two distinct characters sharing a
-single VRAM rect cannot both be displayed at once. Same root cause as
-BUG-ICON-01, but here it is user-visible because both characters are on
-screen simultaneously.
+**Side fixes in the same commit:**
+- 4P VS custom icons rendered semi-transparent because `blendMode` was
+  inherited from the caller (TRANS_50_DECAL). Sentinel branch now forces
+  BM_NONE.
+- `RefreshCard_GhostReadHeaderInfo` used `fopen("bu00:BASCUS-94426G...")`,
+  which does not resolve on Windows. Custom ghosts in the list showed
+  the filename-truncated character ID (nash 19 & 0xF = 3 = Coco). Now
+  uses `NativeMemcard_ReadSaveData` with the same path resolution as
+  MEMCARD_Load/MEMCARD_Save.
 
-**Why it's not fixed as part of BUG-ICON-01:** the on-demand
-`EnsureIconForChar` mechanism re-checks the slot per call, but if two
-call sites in the same frame disagree on which character should occupy
-that slot, the last write wins. Any real fix requires customs to have
-distinct icon IDs, which is a structural change:
+**Verified in-game:**
+- 1P arcade rusty — standings + HUD.
+- 2P VS rusty vs Crash — both icons correct.
+- 4P VS with 4 customs — all 4 correct, no semi-transparency.
+- Battle setup + battle standings with Coco + nash — correct.
+- Ghost list with Coco + nash — correct.
+- High scores with customs — correct.
+- Originals unchanged.
 
-- Assign customs `iconID = 48 + slot` (or similar) instead of `32 + slot`.
-- Reserve / add VRAM rects for those new slots in `gGT->ptrIcons[]`.
-- Update `build_icons.py` to emit page VRMs at those rects.
-- Update `NativeCustomRacer_ApplyPageIcons` / `EnsureIconForChar` rect
-  tables accordingly.
-- Verify that nothing else in the engine assumes `ptrIcons` is only 0..47.
-
-This is a Phase 3-scale change (menu/VRAM layout), not a bug fix.
-
-**Workarounds for the user:**
-
-- In 2P+ VS, don't put a custom and its MPK-matching original in the
-  same race.
-- In the ghost list, at most one of the colliding ghosts will show its
-  correct icon at a time.
-
-**Verification (negative):** reproduce with P1 = Big Norm, P2 = Cortex
-in 2P VS, or with two saved ghosts (Coco + Nash) in the ghost list.
-
-**Related:** BUG-ICON-01 (the fix that made this visible),
-BUG-GHOST-03 (identification of custom ghosts — fixed; distinct from
-this rendering limitation).
+**Related:** BUG-ICON-01 (on-demand VRAM, still active for originals and
+as a fallback when the custom texture fails), BUG-GHOST-03.
 
 ---
 
