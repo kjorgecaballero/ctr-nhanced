@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum ArcadeAdventureEndMenuConstants
 {
@@ -454,9 +455,11 @@ void AA_EndEvent_DrawMenu(void)
 				CTR_PSX_FORGET_VALUE(iconColor);
 				characterIDs = gameCharacterIDs;
 				characterID = characterIDs[gameTrackerPtr->driversInRaceOrder[i]->driverID];
-				iconID = characterMetadata[characterID].iconID;
+				iconID = GET_METADATA(characterID)->iconID;
 
 				// Draw the driver's character icon
+				NativeCustomRacer_EnsureIconForChar(characterID);
+
 				UI_DrawDriverIcon(
 
 				    gameTrackerPtr->ptrIcons[iconID],
