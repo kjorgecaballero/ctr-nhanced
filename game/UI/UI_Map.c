@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum UIMapConstants
 {
@@ -273,7 +274,7 @@ void UI_Map_DrawDrivers(struct UIMap *map, struct Thread *bucket, s16 *driverIco
 
 		// characterID + 5
 		// corresponds with ptrColors
-		kartColor = data.characterIDs[d->driverID] + 5;
+		kartColor = GET_MPK_ID(data.characterIDs[d->driverID]) + 5;
 
 		// default (AI)
 		iconID = UI_MAP_PLAYER_ICON_AI;
