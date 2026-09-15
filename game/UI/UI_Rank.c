@@ -210,6 +210,10 @@ void UI_DrawRankedDrivers(void)
 					pos.y = iconPos.y;
 				}
 
+				/* BUG-ICON-01: page_N.vrm bulk uploads may have clobbered
+				 * this slot. Re-check on demand. */
+				NativeCustomRacer_EnsureIconForChar(data.characterIDs[driverIndex]);
+
 				UI_DrawDriverIcon(
 
 				    gGT->ptrIcons[GET_METADATA(data.characterIDs[driverIndex])->iconID],
@@ -319,6 +323,9 @@ void UI_DrawRankedDrivers(void)
 
 			int posX = nextTrackX + UI_RANK_TRACK_ICON_POS_X_OFFSET;
 			int posY = UI_RANK_TRACK_ICON_POS_Y;
+
+			/* BUG-ICON-01 */
+			NativeCustomRacer_EnsureIconForChar(data.characterIDs[driverIndex]);
 
 			DecalHUD_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(data.characterIDs[driverIndex])->iconID], posX, posY,
 
