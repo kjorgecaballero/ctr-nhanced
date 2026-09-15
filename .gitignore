@@ -46,3 +46,5 @@ build*
 build*
 build_ghost*.log
 run_ghost*.log
+recon_*.txt
+vram_*.py
