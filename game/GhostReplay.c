@@ -1,6 +1,57 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
 
+/* BUG-GHOST-01
+ *
+ * Time Trial ghost with a custom racer is invisible.
+ *
+ * GhostReplay_Init1/Init2 used to resolve the ghost model via
+ *   VehBirth_GetModelByName(GET_METADATA(charID)->name_Debug)
+ * For custom IDs (>= 16) this fails for two reasons:
+ *   1) The folder slug ("nash") may not match the .ctr internal name.
+ *   2) The ghost's custom model was never loaded into
+ *      driverModelExtras[1] either. In the TT branch of LOAD_DriverMPK
+ *      only dme[0] gets populated, because at that point
+ *      data.characterIDs[1] is still 0 (the ghost's real character ID
+ *      is written later).
+ *
+ * Fix: for custom IDs, load model_p1.ctr directly (its UVs are baked
+ * for VRAM slot 1, matching the texture upload that LOAD_TenStages
+ * already performs for the ghost), upload the matching textures once,
+ * and cache the result per (ghostSlot, charID). Originals keep the
+ * name-based lookup.
+ *
+ * Same pattern as VehBirth_NonGhost: custom IDs use their loaded model
+ * directly, never the name lookup. */
+#ifndef LOAD_MODEL_FILE_HEADER_BYTES
+#define LOAD_MODEL_FILE_HEADER_BYTES 4
+#endif
+
+static struct Model *s_ghostCustomModel [2] = { NULL, NULL };
+static s32           s_ghostCustomCharID[2] = { -1,   -1 };
+
+static struct Model *GhostReplay_ResolveModel(s32 charID, s32 ghostSlot)
+{
+	if (charID >= NATIVE_CUSTOM_ID_BASE)
+	{
+		if (s_ghostCustomModel[ghostSlot] == NULL ||
+		    s_ghostCustomCharID[ghostSlot] != charID)
+		{
+			void *buf = NativeCustomRacer_LoadModel(1, charID);
+			if (buf != NULL)
+			{
+				s_ghostCustomModel[ghostSlot]  =
+				    (struct Model *)((u8 *)buf + LOAD_MODEL_FILE_HEADER_BYTES);
+				s_ghostCustomCharID[ghostSlot] = charID;
+				NativeCustomRacer_ApplySlot(1, charID);
+			}
+		}
+		return s_ghostCustomModel[ghostSlot];
+	}
+
+	return VehBirth_GetModelByName(GET_METADATA(charID)->name_Debug);
+}
+
 internal s16 Ghost_LerpRot12(s16 curr, s16 next, u16 t)
 {
 	s32 delta = ((s32)next - (s32)curr) & 0xFFF;
@@ -390,7 +441,7 @@ void GhostReplay_Init1(void)
 		ghostDriver->ghostTape = sdata->ptrGhostTape[i];
 
 		s32 charID = data.characterIDs[i + 1];
-		struct Model *model = VehBirth_GetModelByName(GET_METADATA(charID)->name_Debug);
+		struct Model *model = GhostReplay_ResolveModel(charID, i);
 		struct Instance *inst = INSTANCE_Birth3D(model, model->name, t);
 		t->inst = inst;
 
@@ -482,7 +533,7 @@ void GhostReplay_Init2(void)
 		}
 
 		s32 characterID = data.characterIDs[characterIndex];
-		struct Model *model = VehBirth_GetModelByName(GET_METADATA(characterID)->name_Debug);
+		struct Model *model = GhostReplay_ResolveModel(characterID, ghostID);
 
 		driver->wheelSize = (characterID != NITROS_OXIDE) ? 0xccc : 0;
 
