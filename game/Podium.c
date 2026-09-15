@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum PodiumConstants
 {
@@ -36,14 +37,15 @@ void Podium_InitModels(struct GameTracker *gGT)
 		case PODIUM_RANK_THIRD:
 		{
 			u8 characterID = data.characterIDs[driver->driverID];
-			podiumModelIndexArr[rank] = characterID + STATIC_CRASHDANCE;
+			u8 mpkID       = GET_MPK_ID(characterID);
+			podiumModelIndexArr[rank] = mpkID + STATIC_CRASHDANCE;
 
 			if (rank != PODIUM_RANK_FIRST)
 			{
 				break;
 			}
 
-			switch (characterID)
+			switch (mpkID)
 			{
 			case CRASH_BANDICOOT:
 			case COCO_BANDICOOT:
