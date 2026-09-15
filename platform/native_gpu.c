@@ -8,6 +8,7 @@
 #include "platform/native_gpu.h"
 
 #include <platform.h>
+#include "platform/native_glad.h"
 
 #include <SDL3/SDL.h>
 
@@ -98,6 +99,8 @@ typedef struct
 	TextureID overrideTexture;
 	int overrideTextureWidth;
 	int overrideTextureHeight;
+
+	TextureID pocMagentaTexture;
 
 	int drawPrimMode;
 	bool psxDrawMaskSet;
@@ -820,7 +823,48 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	// on this bit surviving after the blended textured pass.
 	bool psxTextureOutputSTP = textured && s_gpu.overrideTexture == 0;
 
-	if (textured && s_gpu.overrideTexture != 0)
+	// PoC: env-var driven magenta override. Creates a 1x1 magenta GL texture
+	// the first time it is requested, then forces every textured primitive
+	// to sample it via TF_32_BIT_RGBA. Verdict: if the screen turns magenta
+	// with CTR_POC_MAGENTA=1, the override path reaches the draw. If not,
+	// the hypothesis is refuted.
+	int pocOverrideW = s_gpu.overrideTextureWidth;
+	int pocOverrideH = s_gpu.overrideTextureHeight;
+	local_persist int s_pocMagenta = -1;
+	if (s_pocMagenta < 0)
+	{
+		s_pocMagenta = (getenv("CTR_POC_MAGENTA") != NULL) ? 1 : 0;
+	}
+	if (s_pocMagenta && s_gpu.pocMagentaTexture == 0)
+	{
+		static const u8 magenta[4] = { 0xFF, 0x00, 0xFF, 0xFF };
+		GLuint tex = 0;
+		GLint prevActive = GL_TEXTURE0;
+		GLint prevBound = 0;
+		glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActive);
+		glActiveTexture(GL_TEXTURE0);
+		glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevBound);
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, magenta);
+		glBindTexture(GL_TEXTURE_2D, (GLuint)prevBound);
+		glActiveTexture((GLenum)prevActive);
+		s_gpu.pocMagentaTexture = (TextureID)tex;
+	}
+	if (textured && s_pocMagenta && s_gpu.pocMagentaTexture != 0)
+	{
+		texFormat = TF_32_BIT_RGBA;
+		textureId = s_gpu.pocMagentaTexture;
+		psxTexturedSemiTrans = false;
+		psxTextureOutputSTP = false;
+		pocOverrideW = 1;
+		pocOverrideH = 1;
+	}
+	else if (textured && s_gpu.overrideTexture != 0)
 	{
 		// override texture format, zero tpage
 		texFormat = TF_32_BIT_RGBA;
@@ -859,8 +903,8 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->dispenv = activeDispEnv;
 	split->debugText = s_gpu.currentSplitDebugText;
 
-	split->drawenv.tw.w = s_gpu.overrideTextureWidth;
-	split->drawenv.tw.h = s_gpu.overrideTextureHeight;
+	split->drawenv.tw.w = pocOverrideW;
+	split->drawenv.tw.h = pocOverrideH;
 
 	split->startVertex = s_gpu.vertexIndex;
 	split->numVerts = 0;
