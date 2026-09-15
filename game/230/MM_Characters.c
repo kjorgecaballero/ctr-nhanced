@@ -441,6 +441,16 @@ void MM_Characters_RestoreIDs(void)
 	D230.characterSelectTransitionFrame = MM_CHARACTER_SELECT_TRANSITION_FRAMES;
 	D230.characterSelectMenuState = ENTERING_MENU;
 
+  	/* Issue 4: intermediate screens (track select, etc.) clobber icon VRAM.
+	 * Force a re-apply of our current page so the char-select window and
+	 * icons render correctly on entry. */
+	NativeCustomRacer_ForceReapply();
+
+	/* Issue 4: intermediate screens (track select, etc.) clobber icon VRAM.
+	 * Force a re-apply of our current page so the char-select window and
+	 * icons render correctly on entry. */
+	NativeCustomRacer_ForceReapply();
+
 	for (s32 driverIndex = 0; driverIndex < MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT; driverIndex++)
 	{
 		data.characterIDs[driverIndex] = sdata->characterIDs_backup[driverIndex];

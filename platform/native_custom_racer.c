@@ -585,7 +585,254 @@ static void EnsureMetaBackup(void)
     s_metaBackupDone = 1;
 }
 
-/* Uploads page_N.vrm to the icon atlas VRAM (see SLOT_RECTS in build_icons.py).
+/* === BUG-ICON-01 ========================================================
+ * Per-slot icon VRAM management. See the header for the rationale.
+ *
+ * Slot rectangles mirror build_icons.py's SLOTS table. Index = slot
+ * (0..12; 13-15 unused by the original engine). */
+static const struct {
+    u16 px_x, px_y, clut_x, clut_y;
+} s_iconSlotRects[16] = {
+    {368, 216,  16, 251},  /* 0: crash     */
+    {256, 216,  16, 252},  /* 1: cortex    */
+    {267, 216,  16, 253},  /* 2: tiny      */
+    {278, 216,  16, 254},  /* 3: coco      */
+    {289, 216,  16, 255},  /* 4: ngin      */
+    {300, 216,  32, 248},  /* 5: dingo     */
+    {920, 144,  32, 249},  /* 6: polar     */
+    {931, 144,  32, 250},  /* 7: pura      */
+    {929, 192,  32, 255},  /* 8: ntropy    */
+    {918, 192,  32, 254},  /* 9: pinstripe */
+    {942, 144,  32, 251},  /* 10: roo      */
+    {896, 192,  32, 252},  /* 11: papu     */
+    {907, 192,  32, 253},  /* 12: joe      */
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+    {0, 0, 0, 0},
+};
+
+/* Per-VRAM-slot page tracker. -1 = unknown, 0 = original atlas,
+ * N>0 = custom page N. */
+static s16 s_iconSlotLoadedPage[16] = {
+    -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1
+};
+
+static void IconSlot_InvalidateAll(void)
+{
+    for (int i = 0; i < 16; i++)
+        s_iconSlotLoadedPage[i] = -1;
+}
+
+/* ---- page_0 cache: raw pixel data of the original atlas block ----
+ * page_0.vrm is a single big block (0, 216, 512, 48). We keep it in BSS
+ * and slice sub-rects out of it on demand. */
+static unsigned char *s_page0Pixels = NULL;
+static unsigned char *s_page0Data   = NULL;
+static u16            s_page0BlockX = 0, s_page0BlockY = 0;
+static u16            s_page0BlockW = 0, s_page0BlockH = 0;
+
+static void EnsurePage0Cached(void)
+{
+    if (s_page0Data != NULL)
+        return;
+
+    long size = 0;
+    unsigned char *buf = LoadFileToMemory("assets/mods/racers/page_0.vrm",
+                                          NATIVE_VRM_MAX_BYTES, &size);
+    if (buf == NULL)
+        return;
+
+    /* Parse the first (and only) block header. */
+    unsigned int magic = 0;
+    memcpy(&magic, buf + 4 + 4, 4);
+    if (magic != 0x10)
+    {
+        free(buf);
+        return;
+    }
+
+    u16 bx, by, bw, bh;
+    memcpy(&bx, buf + 4 + 16, 2);
+    memcpy(&by, buf + 4 + 18, 2);
+    memcpy(&bw, buf + 4 + 20, 2);
+    memcpy(&bh, buf + 4 + 22, 2);
+
+    int pixelsSize = bw * bh * 2;
+    if ((4 + 24 + pixelsSize) > size || bw == 0 || bh == 0)
+    {
+        free(buf);
+        return;
+    }
+
+    s_page0Data   = buf;
+    s_page0Pixels = buf + 4 + 24;
+    s_page0BlockX = bx;
+    s_page0BlockY = by;
+    s_page0BlockW = bw;
+    s_page0BlockH = bh;
+}
+
+/* Upload the sub-rect of the page_0 block corresponding to a VRAM rect. */
+static void UploadSubRectFromPage0(u16 rx, u16 ry, u16 rw, u16 rh)
+{
+    if (s_page0Data == NULL)
+        return;
+    if (rx < s_page0BlockX || ry < s_page0BlockY)
+        return;
+    if ((rx + rw) > (s_page0BlockX + s_page0BlockW))
+        return;
+    if ((ry + rh) > (s_page0BlockY + s_page0BlockH))
+        return;
+
+    /* Row-by-row copy into a small stack buffer, then LoadImage.
+     * Max size: 11x26 halfwords (pixel) or 16x1 halfwords (clut). */
+    unsigned char sub[1024];
+    int rowBytes  = rw * 2;
+    int srcStride = s_page0BlockW * 2;
+    int srcBase   = ((ry - s_page0BlockY) * s_page0BlockW
+                   + (rx - s_page0BlockX)) * 2;
+
+    if (rowBytes * rh > (int)sizeof(sub))
+        return;
+
+    for (u16 row = 0; row < rh; row++)
+    {
+        memcpy(sub + row * rowBytes,
+               s_page0Pixels + srcBase + row * srcStride,
+               rowBytes);
+    }
+
+    RECT16 rect;
+    rect.x = rx;
+    rect.y = ry;
+    rect.w = rw;
+    rect.h = rh;
+    LoadImage(&rect, sub);
+}
+
+static void UploadOriginalIconSlot(int slot)
+{
+    if (slot < 0 || slot >= 13)
+        return;
+    if (s_iconSlotRects[slot].px_x == 0)
+        return;
+
+    EnsurePage0Cached();
+    if (s_page0Data == NULL)
+        return;
+
+    UploadSubRectFromPage0(s_iconSlotRects[slot].px_x,
+                           s_iconSlotRects[slot].px_y,
+                           11, 26);
+
+    UploadSubRectFromPage0(s_iconSlotRects[slot].clut_x,
+                           s_iconSlotRects[slot].clut_y,
+                           16, 1);
+}
+
+/* Same as VRM_ApplyBuffer, but only uploads blocks whose rect matches
+ * the given pixel rect or CLUT rect. Returns blocks applied. */
+static int VRM_ApplyBuffer_Filtered(const unsigned char *buf, int size,
+                                    u16 target_px_x, u16 target_px_y,
+                                    u16 target_clut_x, u16 target_clut_y)
+{
+    if (size < 8)
+        return 0;
+
+    unsigned int header = 0;
+    memcpy(&header, buf, 4);
+    if (header != 0x20)
+        return 0;
+
+    int offset = 4;
+    int applied = 0;
+
+    while (offset + 24 <= size)
+    {
+        unsigned int magic = 0;
+        memcpy(&magic, buf + offset + 4, 4);
+        if (magic != 0x10)
+            break;
+
+        RECT16 rect;
+        memcpy(&rect.x, buf + offset + 16, 2);
+        memcpy(&rect.y, buf + offset + 18, 2);
+        memcpy(&rect.w, buf + offset + 20, 2);
+        memcpy(&rect.h, buf + offset + 22, 2);
+
+        if (rect.w == 0 || rect.h == 0)
+            break;
+
+        int pixelsSize = rect.w * rect.h * 2;
+        int nextOffset = offset + 24 + pixelsSize;
+        if (nextOffset > size)
+            break;
+
+        if ((rect.x == target_px_x   && rect.y == target_px_y) ||
+            (rect.x == target_clut_x && rect.y == target_clut_y))
+        {
+            LoadImage(&rect, (void *)(buf + offset + 24));
+            applied++;
+        }
+
+        offset = nextOffset;
+    }
+
+    return applied;
+}
+
+void NativeCustomRacer_EnsureIconForChar(int characterID)
+{
+    int page, slot;
+
+    if (characterID < 0)
+        return;
+
+    if (characterID < NATIVE_CUSTOM_ID_BASE)
+    {
+        slot = characterID;
+        if (slot >= 16)
+            return;
+        if (s_iconSlotLoadedPage[slot] == 0)
+            return;
+
+        UploadOriginalIconSlot(slot);
+        s_iconSlotLoadedPage[slot] = 0;
+        return;
+    }
+
+    if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return;
+
+    page = 1 + (characterID - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE;
+    slot = (characterID - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE;
+
+    if (slot >= 16)
+        return;
+    if (s_iconSlotRects[slot].px_x == 0)
+        return;
+    if (s_iconSlotLoadedPage[slot] == page)
+        return;
+
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
+
+    long size = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES, &size);
+    if (buf == NULL)
+        return;
+
+    VRM_ApplyBuffer_Filtered(buf, (int)size,
+        s_iconSlotRects[slot].px_x, s_iconSlotRects[slot].px_y,
+        s_iconSlotRects[slot].clut_x, s_iconSlotRects[slot].clut_y);
+
+    free(buf);
+    s_iconSlotLoadedPage[slot] = page;
+}
+/* === end BUG-ICON-01 ================================================== */
+
+/* Uploads page_N.vrm to the icon atlas VRAM (see SLOTS in build_icons.py).
  * Reuses VRM_ApplyBuffer with playerIndex=0 so it does not shift rect.x. */
 static void ApplyPageIcons(int page)
 {
@@ -603,6 +850,12 @@ static void ApplyPageIcons(int page)
     int blocks = VRM_ApplyBuffer(buf, (int)size, 0);
     free(buf);
     Log("[CustomRacer] page %d icons: %d blocks\n", page, blocks);
+
+    /* BUG-ICON-01: bulk upload bypasses the per-slot tracker. Page 0 is
+     * the full original atlas, so all slots end up correct. Page N>0
+     * touches an arbitrary subset, so mark all as unknown. */
+    for (int i = 0; i < 16; i++)
+        s_iconSlotLoadedPage[i] = (page == 0) ? 0 : -1;
 }
 
 /* Rewrites MetaDataCharacters[0..15] for the given page.
@@ -704,6 +957,18 @@ void NativeCustomRacer_PrevPage(void)
 {
     if (s_page > 0)
         NativeCustomRacer_SetCurrentPage(s_page - 1);
+}
+
+/* === BUG-ICON-01 / Issue 4: force a full re-apply of the current page ===
+ * Called when entering the character-select menu (or any screen that
+ * depends on our icons being correct in VRAM). Intermediate screens
+ * (track select, etc.) load their own VRAM content and clobber whatever
+ * we had. RefreshPage() is a no-op if s_appliedPage == s_page, so we
+ * invalidate the tracker first to guarantee a re-upload. */
+void NativeCustomRacer_ForceReapply(void)
+{
+    s_appliedPage = -1;
+    NativeCustomRacer_RefreshPage();
 }
 
 /* === Menu preview === */

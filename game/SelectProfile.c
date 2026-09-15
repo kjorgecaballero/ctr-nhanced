@@ -407,6 +407,10 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
 		int iconID = GET_METADATA(profile->characterID)->iconID;
 
+		/* BUG-ICON-01: make sure the VRAM slot holds this character's
+		 * icon, not whatever page was last bulk-uploaded. */
+		NativeCustomRacer_EnsureIconForChar(profile->characterID);
+
 		DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);
 		RECTMENU_DrawPolyGT4(gGT->ptrIcons[iconID], posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,

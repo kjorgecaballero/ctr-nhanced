@@ -98,6 +98,25 @@ void NativeCustomRacer_RefreshPage(void);
 struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
     struct CharacterSelectMeta *base, int count);
 
+/* === BUG-ICON-01: on-demand icon VRAM ====================================
+ * Customs use iconID 32+slot, sharing the same VRAM slots as originals
+ * (Crash=32, Cortex=33, ...). A page-level bulk upload (ApplyPageIcons)
+ * clobbers the other side, so screens that draw driver icons without
+ * re-touching the atlas (ghost list, race results, minimap) show stale
+ * content. EnsureIconForChar uploads just the slot needed:
+ *   - for originals: slices the slot's sub-rect from a cached page_0 atlas
+ *   - for customs: uploads only that slot's blocks from page_N.vrm
+ * Safe to call every frame; no-op if the slot already has the right icon. */
+void NativeCustomRacer_EnsureIconForChar(int characterID);
+
+/* === BUG-ICON-01 / Issue 4: force a full re-apply ========================
+ * Intermediate screens (track select, etc.) load their own VRAM content
+ * and clobber the icon atlas. s_appliedPage made RefreshPage a no-op on
+ * re-entry, so the char select showed page 0 even when s_page was 1.
+ * Call this when entering a screen that depends on our icons being
+ * correct (e.g. MM_Characters_RestoreIDs). */
+void NativeCustomRacer_ForceReapply(void);
+
 #ifdef __cplusplus
 }
 #endif
