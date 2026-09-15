@@ -43,6 +43,10 @@ if 'Color' not in m.color_attributes:
     raise SystemExit("ERROR: object has no color attribute named 'Color'")
 
 # ---- collect materials + images ----
+# double_sided: Blender materials with Backface Culling OFF (the default)
+# render double-sided in the viewport. We record that here so that
+# build_character.py can emit the triangle twice (flipped winding for
+# the second copy) and match what the user sees in Blender.
 materials = []
 images = {}
 for mat in m.materials:
@@ -50,7 +54,11 @@ for mat in m.materials:
     if len(imgs) > 1:
         raise ValueError(f"Material '{mat.name}' has {len(imgs)} images; only 1 allowed per material")
     im = imgs[0] if imgs else None
-    materials.append({'name': mat.name, 'image': im.name if im else None})
+    materials.append({
+        'name': mat.name,
+        'image': im.name if im else None,
+        'double_sided': not mat.use_backface_culling,
+    })
     if im and im.name not in images:
         images[im.name] = {'size': list(im.size), 'pixels_rgba': list(im.pixels)}
 
@@ -90,6 +98,9 @@ print(f'EXPORTED {OBJECT_NAME} -> {OUT_PATH}')
 print(f'  vertices:    {len(m.vertices)}')
 print(f'  triangles:   {len(m.loop_triangles)}')
 print(f'  materials:   {len(materials)}')
+for mat in materials:
+    ds = 'DS' if mat['double_sided'] else 'single'
+    print(f"    - {mat['name']:20s}  image={mat['image']}  [{ds}]")
 print(f'  images:      {len(images)}')
 print(f'  shape keys:  {list(result["keys"].keys())}')
 print('=' * 64)

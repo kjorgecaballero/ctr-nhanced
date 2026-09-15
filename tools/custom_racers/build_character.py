@@ -7,6 +7,14 @@ Usage:
 The --player_slot argument (0-3) shifts the atlas to the VRAM region that
 the runtime assigns to that player index. The runtime writes the VRM at
 the same offset, so both match.
+
+Per-material double-sided: export_character.py records whether each
+Blender material has Backface Culling disabled (use_backface_culling
+== False, which is Blender's default). For such materials we emit each
+triangle twice: once with the original winding (visible from outside)
+and once with bit 5 (0x20) set on every vertex, which the engine
+interprets as a flipped winding (visible from inside). Net effect:
+the triangle renders from both sides, matching Blender's viewport.
 """
 import json, math, struct, hashlib, sys
 from pathlib import Path
@@ -44,6 +52,16 @@ CLUT_ROWS = 5
 SCALE = 2
 
 CACHE_MIN, CACHE_MAX = 32, 87
+
+# Vertex flag layout (byte 3 of each command word).
+#   bit 7 (0x80) = first vertex of the triangle
+#   bit 5 (0x20) = flipped winding (set only on the DS duplicate pass)
+#   bit 4 (0x10) = always set
+#   bit 2 (0x04) = vertex already present in the vertex cache
+FLAG_FIRST_VERTEX    = 0x80
+FLAG_FLIPPED_WINDING = 0x20
+FLAG_ALWAYS          = 0x10
+FLAG_CACHE_HIT       = 0x04
 
 
 def name16(s): return s.encode('ascii').ljust(16, b'\0')
@@ -231,6 +249,8 @@ def build():
     remaining = set(range(len(faces)))
     cache, last, tick = {}, {}, 0
 
+    ds_faces = 0
+
     while remaining:
         fi = max(remaining, key=lambda i: (
             sum(c['vertex'] in cache for c in faces[i]['corners']), -i))
@@ -259,15 +279,21 @@ def build():
                                  *coords[1], tex['page'],
                                  *coords[2], *coords[2])
             ti = get_index(layouts, layout, True)
+
+        double_sided = bool(material.get('double_sided', False))
+        if double_sided:
+            ds_faces += 1
+
+        # ---- Pass 1: original winding ---------------------------------
         protected = set(c['vertex'] for c in corners)
         for j, c in enumerate(corners):
             vi = c['vertex']
-            flags = 0x10 | (0x80 if j == 0 else 0)
+            flags = FLAG_ALWAYS | (FLAG_FIRST_VERTEX if j == 0 else 0)
             channels = c['color_srgb']
             color = tuple(max(0, min(255, round(x*255))) for x in channels[:3]) + (0,)
             ci = get_index(palettes, color)
             if vi in cache:
-                slot = cache[vi]; flags |= 4
+                slot = cache[vi]; flags |= FLAG_CACHE_HIT
             else:
                 unused = set(range(CACHE_MIN, CACHE_MAX + 1)) - set(cache.values())
                 if unused:
@@ -280,8 +306,28 @@ def build():
             tick += 1; last[vi] = tick
             commands.append((flags << 24) | (slot << 16) | (ci << 9) | ti)
 
+        # ---- Pass 2: DS duplicate with flipped winding ----------------
+        # Every vertex was just added to the cache in Pass 1, so this
+        # loop never allocates or evicts. It only emits a second copy
+        # of the same triangle with bit 5 set, which the engine
+        # interprets as reversed winding.
+        if double_sided:
+            for j, c in enumerate(corners):
+                vi = c['vertex']
+                flags = (FLAG_ALWAYS | FLAG_FLIPPED_WINDING
+                         | (FLAG_FIRST_VERTEX if j == 0 else 0))
+                channels = c['color_srgb']
+                color = tuple(max(0, min(255, round(x*255))) for x in channels[:3]) + (0,)
+                ci = get_index(palettes, color)
+                assert vi in cache, (
+                    f'vertex {vi} missing from cache during DS duplicate pass')
+                slot = cache[vi]; flags |= FLAG_CACHE_HIT
+                tick += 1; last[vi] = tick
+                commands.append((flags << 24) | (slot << 16) | (ci << 9) | ti)
+
     print(f"records={len(records)} palettes={len(palettes)} "
-          f"layouts={len(layouts)} commands={len(commands)}")
+          f"layouts={len(layouts)} commands={len(commands)} "
+          f"ds_faces={ds_faces}/{len(faces)}")
     assert len(palettes) <= 128
     assert len(layouts) <= 511
     assert len(records) <= 256
