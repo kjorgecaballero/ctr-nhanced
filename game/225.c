@@ -178,9 +178,8 @@ void VB_EndEvent_DrawMenu(void)
 			struct Driver *driver = gGT->drivers[entityID];
 
 			/* BUG-ICON-01 */
-			NativeCustomRacer_EnsureIconForChar(data.characterIDs[driver->driverID]);
 
-			struct Icon *icon = gGT->ptrIcons[GET_METADATA(data.characterIDs[driver->driverID])->iconID];
+			struct Icon *icon = NativeCustomRacer_GetIconPtr(data.characterIDs[driver->driverID]);
 
 			DecalHUD_DrawPolyFT4(icon, pos.x, rankTextY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
 		}
@@ -200,9 +199,8 @@ void VB_EndEvent_DrawMenu(void)
 				}
 
 				/* BUG-ICON-01 */
-				NativeCustomRacer_EnsureIconForChar(data.characterIDs[driver->driverID]);
 
-				struct Icon *icon = gGT->ptrIcons[GET_METADATA(data.characterIDs[driver->driverID])->iconID];
+				struct Icon *icon = NativeCustomRacer_GetIconPtr(data.characterIDs[driver->driverID]);
 				DecalHUD_DrawPolyFT4(icon, pos.x, currRowY + iconSlot * VB_BATTLE_PLAYER_ICON_SPACING, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 				                     VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
 				iconSlot++;

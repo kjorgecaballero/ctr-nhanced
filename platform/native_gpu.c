@@ -33,6 +33,11 @@ extern int g_dbg_polygonSelected;
 #define NATIVE_GPU_STATE_MAGIC     0x47525443
 #define NATIVE_GPU_STATE_VERSION   1
 
+// Sentinel CLUT: bit 15 of a primitive's clut flags a custom GL texture
+// instead of VRAM. Index into s_gpu.customTextures[] is clut & 0x7FFF.
+#define NATIVE_GPU_MAX_CUSTOM_TEXTURES 128
+#define NATIVE_GPU_CLUT_SENTINEL       0x8000
+
 #define GET_TPAGE_BLEND(tpage)     ((BlendMode)(((tpage >> 5) & 3) + 1))
 
 #define GET_TPAGE_DITHER(tpage)    ((tpage >> 9) & 0x1)
@@ -99,6 +104,10 @@ typedef struct
 	int overrideTextureWidth;
 	int overrideTextureHeight;
 
+	u16 currentClut;                                         // set per-primitive, read by AddSplit
+	TextureID customTextures[NATIVE_GPU_MAX_CUSTOM_TEXTURES];
+	u32 customTextureSizes[NATIVE_GPU_MAX_CUSTOM_TEXTURES];  // (w & 0xFFFF) | (h << 16)
+
 	int drawPrimMode;
 	bool psxDrawMaskSet;
 	bool framebufferFeedbackRunActive;
@@ -126,6 +135,17 @@ struct NativeGpuSnapshot
 int NativeGpu_HasPendingSplits(void)
 {
 	return s_gpu.splitIndex > 0;
+}
+
+void NativeGpu_RegisterCustomTexture(u16 idx, TextureID tex, int width, int height)
+{
+	if (idx >= NATIVE_GPU_MAX_CUSTOM_TEXTURES)
+	{
+		return;
+	}
+
+	s_gpu.customTextures[idx] = tex;
+	s_gpu.customTextureSizes[idx] = ((u32)(width & 0xFFFF)) | ((u32)(height & 0xFFFF) << 16);
 }
 
 void ClearSplits(void)
@@ -820,7 +840,26 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	// on this bit surviving after the blended textured pass.
 	bool psxTextureOutputSTP = textured && s_gpu.overrideTexture == 0;
 
-	if (textured && s_gpu.overrideTexture != 0)
+	int overrideW = s_gpu.overrideTextureWidth;
+	int overrideH = s_gpu.overrideTextureHeight;
+
+	if (textured && (s_gpu.currentClut & NATIVE_GPU_CLUT_SENTINEL))
+	{
+		// Sentinel CLUT: sample from a dedicated OpenGL texture instead of VRAM.
+		const u16 sentinelIdx = s_gpu.currentClut & 0x7FFF;
+		if ((sentinelIdx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) && (s_gpu.customTextures[sentinelIdx] != 0))
+		{
+			texFormat = TF_32_BIT_RGBA;
+			textureId = s_gpu.customTextures[sentinelIdx];
+			psxTexturedSemiTrans = false;
+			psxTextureOutputSTP = false;
+			blendMode = BM_NONE;
+			blendMode = BM_NONE;
+			overrideW = (int)(s_gpu.customTextureSizes[sentinelIdx] & 0xFFFF);
+			overrideH = (int)(s_gpu.customTextureSizes[sentinelIdx] >> 16);
+		}
+	}
+	else if (textured && s_gpu.overrideTexture != 0)
 	{
 		// override texture format, zero tpage
 		texFormat = TF_32_BIT_RGBA;
@@ -859,8 +898,8 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->dispenv = activeDispEnv;
 	split->debugText = s_gpu.currentSplitDebugText;
 
-	split->drawenv.tw.w = s_gpu.overrideTextureWidth;
-	split->drawenv.tw.h = s_gpu.overrideTextureHeight;
+	split->drawenv.tw.w = overrideW;
+	split->drawenv.tw.h = overrideH;
 
 	split->startVertex = s_gpu.vertexIndex;
 	split->numVerts = 0;
@@ -1395,6 +1434,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 		// It is an official hack from SCE devs to not use DR_TPAGE and instead use null polygon
 		if (!IsNull(poly))
 		{
+			s_gpu.currentClut = poly->clut;
 			AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage));
 
 			GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1428,6 +1468,7 @@ internal int ProcessFlatPoly(P_TAG *polyTag)
 		POLY_FT4 *poly = (POLY_FT4 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1474,6 +1515,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 		POLY_GT3 *poly = (POLY_GT3 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1507,6 +1549,7 @@ internal int ProcessGouraudPoly(P_TAG *polyTag)
 		POLY_GT4 *poly = (POLY_GT4 *)polyTag;
 		activeDrawEnv.tpage = poly->tpage;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(poly->tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1554,6 +1597,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 	{
 		SPRT *poly = (SPRT *)polyTag;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1605,6 +1649,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 	{
 		SPRT_8 *poly = (SPRT_8 *)polyTag;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];
@@ -1639,6 +1684,7 @@ internal int ProcessTileAndSprt(P_TAG *polyTag)
 	{
 		SPRT_16 *poly = (SPRT_16 *)polyTag;
 
+		s_gpu.currentClut = poly->clut;
 		AddSplit(semiTrans, true, NativeGpu_TPageOverlapsActiveDrawPage(activeDrawEnv.tpage));
 
 		GrVertex *firstVertex = &s_gpu.vertexBuffer[s_gpu.vertexIndex];

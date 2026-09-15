@@ -982,7 +982,7 @@ dontDrawSelectCharacter:
 
 			struct TransitionMeta *iconTransition = &D230.characterSelectTransitionMeta[iconIndex];
 
-			RECTMENU_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(iconDrawMeta->characterID)->iconID],
+			RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(iconDrawMeta->characterID),
 			                     iconTransition->currX + iconDrawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X,
 			                     iconTransition->currY + iconDrawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y,
 

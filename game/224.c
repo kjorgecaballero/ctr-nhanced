@@ -357,7 +357,7 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		DecalFont_DrawLine((char *)&s_rankString224, startX - 0x32, timeboxY - 1, FONT_SMALL, WHITE);
 
 		// Draw Character Icon
-    RECTMENU_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(scoreEntries[scoreEntryIndex].characterID)->iconID], startX - 0x52, timeboxY,
+    RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(scoreEntries[scoreEntryIndex].characterID), startX - 0x52, timeboxY,
 		                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 		                     // color of each corner
 		                     TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR,

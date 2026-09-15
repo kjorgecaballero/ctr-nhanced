@@ -165,7 +165,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		                    bestLapEntryMeta->currX + offsetY + MM_HIGHSCORE_BEST_LAP_TIME_Y_OFFSET, FONT_SMALL, 0);
 
 		// Character Icon
-		RECTMENU_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(entry[0].characterID)->iconID],
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(entry[0].characterID),
 		                     bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_ICON_X_OFFSET,
 		                     bestLapEntryMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_ICON_Y_OFFSET, &gGT->backBuffer->primMem, (gGT->pushBuffer_UI).ptrOT,
 		                     ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor),
@@ -180,7 +180,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		s32 metaIndex = scoreRowIndex + MM_HIGHSCORE_FIRST_VISIBLE_META_INDEX;
 
 		// Character Icon
-		RECTMENU_DrawPolyGT4(gGT->ptrIcons[GET_METADATA(entry[entryIndex].characterID)->iconID],
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(entry[entryIndex].characterID),
 		                     D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_ICON_X_OFFSET,
 		                     D230.transitionMeta_HighScores[metaIndex].currY + offsetY + (scoreRowIndex * MM_HIGHSCORE_SCORE_ROW_Y_STEP) +
 		                         MM_HIGHSCORE_SCORE_NAME_Y_OFFSET,

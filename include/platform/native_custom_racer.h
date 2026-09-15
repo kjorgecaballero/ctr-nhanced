@@ -117,6 +117,15 @@ void NativeCustomRacer_EnsureIconForChar(int characterID);
  * correct (e.g. MM_Characters_RestoreIDs). */
 void NativeCustomRacer_ForceReapply(void);
 
+/* === Sentinel CLUT (BUG-ICON-02) ===
+ * Returns a struct Icon* suitable for Decal / RECTMENU draw calls.
+ * For customs (ID >= 16): a BSS Icon with texLayout.clut carrying the
+ * Sentinel bit (0x8000 | idx); the renderer samples a dedicated GL
+ * texture instead of the shared VRAM slot.
+ * For originals (0..15): gGT->ptrIcons[iconID] with EnsureIconForChar. */
+struct Icon;
+struct Icon *NativeCustomRacer_GetIconPtr(int characterID);
+
 #ifdef __cplusplus
 }
 #endif

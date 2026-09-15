@@ -421,9 +421,8 @@ void UI_CupStandings_InputAndDraw(void)
 
 		// Draw character icon
 		/* BUG-ICON-01 */
-		NativeCustomRacer_EnsureIconForChar(data.characterIDs[d->driverID]);
 
-		UI_DrawDriverIcon(gGT->ptrIcons[GET_METADATA(data.characterIDs[d->driverID])->iconID],
+		UI_DrawDriverIcon(NativeCustomRacer_GetIconPtr(data.characterIDs[d->driverID]),
 
 		                  drawPos.x, drawPos.y, &gGT->backBuffer->primMem,
 

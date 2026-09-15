@@ -1,6 +1,7 @@
 #include <common.h>
 #include <stdio.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_memcard.h>
 
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID)
 {
@@ -259,30 +260,22 @@ static void RefreshCard_GhostReadHeaderInfo(int slotIdx, char *fileName,
 	*outLevelID = -1;
 	*outCharID  = -1;
 
-	/* Same path format MEMCARD_Load/MEMCARD_Save use. */
-	char path[64];
-	MEMCARD_StringSet(path, slotIdx, fileName);
+	/* Resolve the host path exactly the way MEMCARD_Load does, then read
+	 * the GhostHeader (offset 0x100 in the file) via the native memcard
+	 * adapter. Do NOT use fopen("bu00:...") — the PS1 device prefix does
+	 * not resolve on Windows and silently falls back to the filename-
+	 * packed (truncated) character ID. */
+	char nativeName[64];
+	MEMCARD_StringSet(nativeName, slotIdx, fileName);
 
-	FILE *f = fopen(path, "rb");
-	if (f == NULL)
+	u8 raw[8];
+	if (NativeMemcard_ReadSaveData(nativeName, raw, sizeof(raw), 0x100) != NATIVE_MEMCARD_OK)
 	{
 		return;
 	}
 
-	/* File layout (see memcards/slot0/BASCUS-94426G*):
-	 *   0x0000 - 0x00FF : PS1 icon header
-	 *   0x0100 - ...    : struct GhostHeader + record buffer
-	 * The GhostHeader's s16 fields at 0x04/0x06 follow the same
-	 * little-endian layout as the in-memory struct. */
-	u8 raw[8];
-	if ((fseek(f, 0x100, SEEK_SET) == 0) &&
-	    (fread(raw, 1, sizeof(raw), f) == sizeof(raw)))
-	{
-		*outLevelID = (s16)(raw[4] | (raw[5] << 8));
-		*outCharID  = (s16)(raw[6] | (raw[7] << 8));
-	}
-
-	fclose(f);
+	*outLevelID = (s16)(raw[4] | (raw[5] << 8));
+	*outCharID  = (s16)(raw[6] | (raw[7] << 8));
 }
 
 

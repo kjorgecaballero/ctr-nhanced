@@ -892,7 +892,7 @@ LAB_800b25f0:
 				s16 iconX = (s16)playerIconX;
 				playerIconX = playerIconX + BATTLE_TEAM_PLAYER_WIDTH;
 
-				MM_Battle_DrawIcon_Character(gGT->ptrIcons[GET_METADATA(data.characterIDs[playerIndex])->iconID],
+				MM_Battle_DrawIcon_Character(NativeCustomRacer_GetIconPtr(data.characterIDs[playerIndex]),
 				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (int)iconX,
 				                             (int)tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + (int)afterLengthY + BATTLE_TEAM_PLAYER_ICON_Y_OFFSET,
 

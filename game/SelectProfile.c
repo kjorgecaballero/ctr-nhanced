@@ -147,10 +147,9 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 	{
 		int profileTextColor = JUSTIFY_RIGHT | numberColor;
 		int characterID = adv->characterID;
-		int iconID = GET_METADATA(characterID)->iconID;
 		struct SelectProfileLoadSaveObj *obj = (struct SelectProfileLoadSaveObj *)sdata->ptrLoadSaveObj;
 
-		RECTMENU_DrawPolyGT4(gGT->ptrIcons[iconID], posX + 10, posY + 6, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, iconColor, iconColor, iconColor,
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(characterID), posX + 10, posY + 6, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, iconColor, iconColor, iconColor,
 		                     iconColor, 1, 0x1000);
 
 		DecalFont_DrawLine(adv->name, posX + 0x6c, posY + 0x29, FONT_BIG, JUSTIFY_CENTER | nameColor);
@@ -405,15 +404,13 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 	if (profile != NULL)
 	{
 		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
-		int iconID = GET_METADATA(profile->characterID)->iconID;
 
 		/* BUG-ICON-01: make sure the VRAM slot holds this character's
 		 * icon, not whatever page was last bulk-uploaded. */
-		NativeCustomRacer_EnsureIconForChar(profile->characterID);
 
 		DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);
-		RECTMENU_DrawPolyGT4(gGT->ptrIcons[iconID], posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(profile->characterID), posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
 		                     sdata->ghostIconColor, sdata->ghostIconColor, sdata->ghostIconColor, TRANS_50_DECAL, 0x1000);
 	}
 	else

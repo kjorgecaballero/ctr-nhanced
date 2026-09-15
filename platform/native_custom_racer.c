@@ -6,6 +6,8 @@
 
 #include <platform/native_custom_racer.h>
 #include <platform/native_renderer.h>
+#include <platform/native_gpu.h>
+#include <platform/native_glad.h>
 #include <ovr_230.h>
 
 #define NATIVE_ROSTER_MAX   128
@@ -965,6 +967,107 @@ void NativeCustomRacer_PrevPage(void)
  * (track select, etc.) load their own VRAM content and clobber whatever
  * we had. RefreshPage() is a no-op if s_appliedPage == s_page, so we
  * invalidate the tracker first to guarantee a re-upload. */
+/* === Sentinel CLUT (BUG-ICON-02) ======================================== */
+static TextureID   s_customIconTex      [NATIVE_CUSTOM_COUNT];
+static u8          s_customIconAttempted[NATIVE_CUSTOM_COUNT];
+static struct Icon s_customIcon         [NATIVE_CUSTOM_COUNT];
+
+static void RegisterCustomIconTexture(int idx, int charID)
+{
+    if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT || s_customIconAttempted[idx]) return;
+    s_customIconAttempted[idx] = 1;
+
+    int page = 1 + idx / NATIVE_PAGE_SIZE;
+    int slot = idx % NATIVE_PAGE_SIZE;
+    if (slot >= 13 || s_iconSlotRects[slot].px_x == 0) return;
+
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
+    long size = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES, &size);
+    if (buf == NULL) return;
+
+    const u16 px_x = s_iconSlotRects[slot].px_x, px_y = s_iconSlotRects[slot].px_y;
+    const u16 cx   = s_iconSlotRects[slot].clut_x, cy = s_iconSlotRects[slot].clut_y;
+    const u8 *px = NULL, *cl = NULL;
+
+    for (int off = 4; off + 24 <= size; )
+    {
+        u32 magic = 0; memcpy(&magic, buf + off + 4, 4);
+        if (magic != 0x10) break;
+        RECT16 r;
+        memcpy(&r.x, buf + off + 16, 2); memcpy(&r.y, buf + off + 18, 2);
+        memcpy(&r.w, buf + off + 20, 2); memcpy(&r.h, buf + off + 22, 2);
+        if (r.w == 0 || r.h == 0) break;
+        int next = off + 24 + r.w * r.h * 2;
+        if (next > size) break;
+        if (r.x == px_x && r.y == px_y) px = buf + off + 24;
+        if (r.x == cx   && r.y == cy)   cl = buf + off + 24;
+        off = next;
+    }
+    if (!px || !cl) { free(buf); return; }
+
+    enum { ICON_W = 44, ICON_H = 26, ROW_BYTES = 22 };
+    u16 clut[16]; memcpy(clut, cl, sizeof(clut));
+    u8 rgba[ICON_W * ICON_H * 4];
+
+    for (int y = 0; y < ICON_H; y++)
+    for (int x = 0; x < ICON_W; x++)
+    {
+        u8 byte = px[y * ROW_BYTES + x / 2];
+        u8 nib  = (x & 1) ? (u8)(byte >> 4) : (u8)(byte & 0x0F);
+        u16 c   = clut[nib & 0x0F];
+        u8 *d   = &rgba[(y * ICON_W + x) * 4];
+        if (nib == 0 || (c & 0x7FFF) == 0) { d[0]=d[1]=d[2]=d[3]=0; }
+        else {
+            d[0]=(u8)(((c>>0 )&0x1F)<<3);
+            d[1]=(u8)(((c>>5 )&0x1F)<<3);
+            d[2]=(u8)(((c>>10)&0x1F)<<3);
+            d[3]=255;
+        }
+    }
+    free(buf);
+
+    GLint pa=0, pb=0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &pa); glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &pb);
+    GLuint tex=0; glGenTextures(1, &tex); glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ICON_W, ICON_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)pb); glActiveTexture((GLenum)pa);
+
+    NativeGpu_RegisterCustomTexture((u16)idx, (TextureID)tex, ICON_W, ICON_H);
+    s_customIconTex[idx] = (TextureID)tex;
+
+    struct Icon *icon = &s_customIcon[idx];
+    memset(icon, 0, sizeof(*icon));
+    icon->texLayout.u0=0;      icon->texLayout.v0=0;
+    icon->texLayout.u1=ICON_W; icon->texLayout.v1=0;
+    icon->texLayout.u2=0;      icon->texLayout.v2=ICON_H;
+    icon->texLayout.u3=ICON_W; icon->texLayout.v3=ICON_H;
+    icon->texLayout.clut=(u16)(0x8000|idx);
+    icon->texLayout.tpage=0;
+
+    Log("[CustomRacer] Sentinel icon: id=%d page=%d slot=%d tex=%u\n",
+        charID, page, slot, (unsigned)tex);
+}
+
+struct Icon *NativeCustomRacer_GetIconPtr(int characterID)
+{
+    if (characterID >= NATIVE_CUSTOM_ID_BASE &&
+        characterID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+    {
+        int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+        if (!s_customIconAttempted[idx]) RegisterCustomIconTexture(idx, characterID);
+        if (s_customIconTex[idx] != 0) return &s_customIcon[idx];
+    }
+    NativeCustomRacer_EnsureIconForChar(characterID);
+    return sdata->gGT->ptrIcons[GET_METADATA(characterID)->iconID];
+}
+
 void NativeCustomRacer_ForceReapply(void)
 {
     s_appliedPage = -1;
