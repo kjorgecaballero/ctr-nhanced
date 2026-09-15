@@ -4,171 +4,199 @@
 > discovered and not yet fixed, it gets added here with its symptom, cause,
 > and designed fix. When it's fixed, it moves to the corresponding commit
 > and gets deleted from here.
+>
+> **Current state (HEAD `41597d689` in origin):**
+>
+> Still pending:
+>   - BUG-ICON-02 (known limitation, design-level)
+>
+> Closed this session:
+>   - BUG-PODIUM-01 (`41597d689`)
+>   - BUG-VOICE-01 (`a38521281`)
+>
+> Closed in earlier sessions (kept for reference until next cleanup):
+>   - BUG-GHOST-01 (`550c6972e`)
+>   - BUG-GHOST-02 (`5b66782a9`)
+>   - BUG-GHOST-03 (`8f4accdbc`)
+>   - BUG-ICON-01 (`f7d208475` + `8a42427fa`)
+>   - BUG-MENU-01 (not reproducible on HEAD, closed Phase 2.7)
+>   - BUG-MENU-02 (`2e29a5eab`)
+>   - BUG-MENU-03 (`5e0f71ff7`)
+>   - BUG-MENU-04 (`1942c97cc`)
+>   - BUG-MENU-05 (`1ce02010e`)
+>   - BUG-MENU-06 (`c1cbd8f7b`)
+>   - BUG-TNT-01 (`479024c23`)
+>   - BUG-ARCADE-01 (`417b3e8b2`, OOM safety net `94633f4ae`)
 
 ---
 
-## BUG-MENU-03: original racer invisible in 2P when it shares GET_MPK_ID with a custom
+## BUG-PODIUM-01: custom shows the wrong dance model and Tawna on the podium
 
-**Status:** fixed in `VehBirth_NonGhost` (original branch) — pending commit
+**Status:** fixed in `41597d689`
+**Detected:** this session, confirmed by static analysis of the
+`STATIC_*DANCE` enum block.
+
+**Symptom:** when a custom racer (ID 16+) finishes 1st, 2nd or 3rd, the
+podium scene shows the wrong dance model and the wrong Tawna variant.
+Concretely: rusty (customID 16) displays `STATIC_GARAGETOP` (a garage
+building), big_norm (17) shows Tawna1, fantasma (18) shows Tawna2, nash
+(19) shows Tawna3, ernest (20) shows Tawna4. Custom IDs 21+ would land on
+`STATIC_C` / `STATIC_T` / `STATIC_R` (HUD letters) and eventually
+`STATIC_CRASHINTRO`. No crash.
+
+**Confirmed cause:** `game/Podium.c`, `Podium_InitModels`:
+
+    u8 characterID = data.characterIDs[driver->driverID];
+    podiumModelIndexArr[rank] = characterID + STATIC_CRASHDANCE;
+
+`STATIC_CRASHDANCE = 0x7E` and the dance block spans 0x7E..0x8D (16
+entries, one per original). A customID of 16 already lands on 0x8E
+(`STATIC_GARAGETOP`), and higher customIDs walk through Tawna1..Tawna4,
+the HUD letters C/T/R, and eventually `STATIC_CRASHINTRO`. The
+`modelPtr[]` array is 227 entries (0xE3), so the index is in-bounds and
+nothing crashes — the podium just shows garbage.
+
+Secondary: the `switch (characterID)` that selects the Tawna variant
+(Crash/Coco -> Tawna2, Polar/Pura -> Tawna3, Cortex/N.Gin -> Tawna4,
+default -> Tawna1) never matches a customID, so customs always fall
+through to Tawna1.
+
+**Applied fix:** compute `mpkID = GET_MPK_ID(characterID)` once and use
+it for both the dance index and the Tawna switch:
+
+    u8 characterID = data.characterIDs[driver->driverID];
+    u8 mpkID       = GET_MPK_ID(characterID);
+
+    podiumModelIndexArr[rank] = mpkID + STATIC_CRASHDANCE;
+    ...
+    switch (mpkID) { ... }
+
+Customs inherit the dance model and Tawna variant of their slot-mate:
+rusty -> Crash + Tawna2, nash -> Coco + Tawna2, ernest -> N.Gin + Tawna4.
+Originals unchanged (`mpkID == characterID`).
+
+**Verification:** 1P arcade with rusty finishing top-3 shows the Crash
+dance animation and Tawna2. Originals (Crash, Coco, N.Gin, Polar)
+unchanged. No crash on any custom.
+
+**Related:** same pattern as `RB_TNT.c`, `HOWL_Music.c`, and BUG-VOICE-01.
+Per-custom dance animations remain Phase 6 (FUTURE): the
+`add_racer.py` / `export_character.py` pipeline does not export a dance
+animation yet, so inheritance is the only coherent option.
+
+---
+
+## BUG-VOICE-01: voicelines don't play with a custom
+
+**Status:** fixed in `a38521281`
 **Detected:** Phase 2.1
 
-**Symptom:** in 2P VS, if one player picks an original and the other picks a
-custom whose slot collides via GET_MPK_ID (e.g. Cortex id=1 ↔ Big Norm
-customID=17), the original becomes invisible on track. The custom renders
-fine.
+**Symptom:** no voiceline (crash, landing, item, jump) plays when the
+driver is a custom. No crash. Silent drop.
 
-**Confirmed cause (via CR-DIAG logs):** the §8.1 branch for IDs 0..15
-searched for the model ONLY in `sdata->PLYROBJECTLIST`. In 2P VS,
-`PLYROBJECTLIST` points to the 4-AI pack built by `LOAD_Robots2P`, which
-deliberately excludes both human drivers. Result: neither "cortex" nor
-"crash" are in the list, `m == NULL`, and `INSTANCE_Birth3D(NULL, ...)`
-renders nothing.
+**Confirmed cause:** `game/HOWL/HOWL_Voiceline.c`,
+`Voiceline_RequestPlay` opens with two explicit guards:
 
-**Applied fix:** in `game/Vehicle/VehBirth.c`, original branch, after the
-name-search over PLYROBJECTLIST fails, read
-`data.driverModelExtras[index].model` BY INDEX (not by GET_MPK_ID). The
-original always has its slot intact in `driverModelExtras[index]`, and a
-custom can never hijack it because the custom lives in a different index.
+    if (voiceID >= 0x18)      return;
+    if (characterID >= 0x10)  return;
+    if (characterID2 >= 0x11) return;
 
-**Bonus from the same fix:** the symptom "Tiny showed Crash's model when
-P2 picked Rusty" had the same root cause — Tiny fell through to the Crash
-fallback.
+`characterID = 16+` fails the second guard and the request is dropped.
+The function does not wrap with `GET_MPK_ID` itself.
 
-**Verification:** 2P VS Cortex + Big Norm, Crash + Cortex, Tiny + Rusty
-(custom with internal name "tiny"), 1P arcade original and custom, 3P, 4P,
-battle. All visible, no regressions.
+**Applied fix:** wrap the second (and, where applicable, third) argument
+with `GET_MPK_ID` at each call site. 20 sites across 13 files:
 
-**Related:** BUG-MENU-01, BUG-MENU-02 (menu, different root cause).
+    231/RB_Crate.c:479
+    231/RB_MaskShieldCloud.c:572
+    231/RB_Spider.c:297
+    BOTS.c:2859
+    COLL.c:2634
+    UI/UI_Meter.c:110
+    Vehicle/VehFire.c:55
+    Vehicle/VehPhysCrash.c:195,219,302
+    Vehicle/VehPhysProc.c:2372
+    Vehicle/VehPickupItem.c:619,701,841,952,1022
+    PickupBots.c:93                (both args wrapped)
+    PlayLevel.c:411
+    Vehicle/VehPickState.c:69,191
 
----
+**Not touched:** the guard inside `Voiceline_RequestPlay` stays as-is.
+Wrapping inside the function would let the raw 16+ ID reach
+`timeSet1[]` / `timeSet2[]`, the `OtherFX_Play(characterID + 0x1c/0x2c)`
+tables, and `data.voiceData[characterID].voiceSet[]` — all 16-entry
+arrays. `BOTS.c:1035` passes constants (`0xf, 0x10`), both in range.
 
-## BUG-MENU-04: crash on exiting a 4P race with a custom (OOB write to driverModelExtras[3])
+**Verification:** 1P arcade rusty (Crash voice), 1P arcade ernest (N.Gin
+voice), Crash/Tiny originals unchanged, 2P VS rusty+Crash no crash,
+Time Trial rusty pass voiceline, battle ernest vs bot with PickupBots
+and VehPickState paths exercised.
 
-**Status:** fixed (BSS side table + guard in VehBirth) — pending commit
-**Detected:** Phase 2.5, verified after the BUG-MENU-03 fix
-
-**Symptom:** in 4P (arcade or battle), exiting the race via
-`Change Character`, `Change Level`, or `Quit` crashes the app if at least
-one player uses a custom. 3P does not reproduce it.
-
-**Confirmed cause (from layout analysis):**
-
-- `DriverModelExtraSlot driverModelExtras[LOAD_DRIVER_MODEL_EXTRA_COUNT]`
-  with `LOAD_DRIVER_MODEL_EXTRA_COUNT = 3`.
-- The 3P/4P branch of `LOAD_DriverMPK` iterated up to `playerCount` (4),
-  writing to `driverModelExtras[3]` = `podiumModel_firstPlace`.
-- Each iteration overwrote the first podium model pointer with the
-  `.fileBase` of a custom (raw malloc) or the `.model` of an original
-  (already `+4`), corrupting the podium model table. On race exit the
-  engine reused those pointers and crashed.
-
-**Applied fix:**
-
-- `platform/native_custom_racer.{h,c}`: new BSS side table
-  `s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS]` with two accessors
-  `NativeCustomRacer_SetPlayerModelPtr` / `_GetPlayerModelPtr`.
-- `game/LOAD/LOAD_Assets.c`, 3P/4P branch: first loop capped at
-  `LOAD_DRIVER_MODEL_EXTRA_COUNT` (3), and a second loop for `i >= 3`
-  that loads P4's custom and stores the buffer (with
-  `+LOAD_MODEL_FILE_HEADER_BYTES` already applied) in the side table.
-  Zero writes outside `driverModelExtras`.
-- `game/Vehicle/VehBirth.c`: both branches (custom and original) guard
-  against `index >= LOAD_DRIVER_MODEL_EXTRA_COUNT` to avoid OOB reads.
-
-**Verification:** 4P arcade with custom in P1..P4, 4P battle with custom,
-exits via `Change Character` / `Change Level` / `Quit`. No crash.
-1P/2P/3P no regressions.
-
-**Related:** BUG-MENU-03 (same load flow, different bug).
+**Related:** §8.2 of the main context.
 
 ---
 
-## BUG-TNT-01: TNT on a custom's head is invisible
+## BUG-ICON-02: custom↔original (or custom↔custom from different pages) share the same VRAM icon slot — known limitation
 
-**Status:** pending (not fixed)
-**Detected:** Phase 2.1 (after `ef0d8b18d`)
+**Status:** **pending — design-level, not fixed**
+**Detected:** BUG-ICON-01 investigation (same session)
 
-**Symptom:** when a player using a custom (ID 16+) touches a TNT crate:
+**Symptoms (all the same root cause):**
 
-- The TNT **does work**: countdown, explosion, fuse sounds, "ohno"
-  voiceline (though that sounds wrong due to BUG-VOICE-01), and damage to
-  the driver are correct.
-- **But the TNT model is invisible.** The red crate with the fuse is not
-  drawn over the custom driver's head.
+1. **2P+ VS, custom vs matching original.** P1 = Big Norm (customID 17,
+   `iconID 33`, MPK 1), P2 = Cortex (original, `iconID 33`, MPK 1). Both
+   ask for VRAM slot 1; whoever was uploaded last wins. The other renders
+   the wrong icon on track and in the HUD.
 
-Originals (0..15) render it perfectly.
+2. **Ghost list, custom vs matching original.** Coco ghost (original,
+   `iconID 35`) + Nash ghost (customID 19, page 1 slot 3 -> `iconID 35`).
+   Both want VRAM slot 35, only one displays correctly.
 
-**Suspected cause:** `game/231/RB_TNT.c:264`:
+3. **Any screen with more than one driver** where a custom and its
+   matching original (or a custom on a different page whose slot maps
+   to the same original) appear together.
 
-````c
-distHead = array[data.characterIDs[mw->driverTarget->driverID]];
-array[] is a 16-entry table with per-character data. With
-characterIDs[...] = 16+ it indexes OOB.
+**Confirmed cause:** customs use `iconID = 32 + slot`, exactly the same
+0..12 range the originals occupy. VRAM has one rect per original slot
+and no free rect reserved for customs. Two distinct characters sharing a
+single VRAM rect cannot both be displayed at once. Same root cause as
+BUG-ICON-01, but here it is user-visible because both characters are on
+screen simultaneously.
 
-Designed fix: wrap the index with GET_MPK_ID:
+**Why it's not fixed as part of BUG-ICON-01:** the on-demand
+`EnsureIconForChar` mechanism re-checks the slot per call, but if two
+call sites in the same frame disagree on which character should occupy
+that slot, the last write wins. Any real fix requires customs to have
+distinct icon IDs, which is a structural change:
 
-c
-distHead = array[GET_MPK_ID(data.characterIDs[mw->driverTarget->driverID])];
-Verification: TNT on Rusty → crate visible. TNT on Crash/Cortex →
-no change.
+- Assign customs `iconID = 48 + slot` (or similar) instead of `32 + slot`.
+- Reserve / add VRAM rects for those new slots in `gGT->ptrIcons[]`.
+- Update `build_icons.py` to emit page VRMs at those rects.
+- Update `NativeCustomRacer_ApplyPageIcons` / `EnsureIconForChar` rect
+  tables accordingly.
+- Verify that nothing else in the engine assumes `ptrIcons` is only 0..47.
 
-Related: §8.4 of the main context (same pattern array[characterIDs[...]]).
+This is a Phase 3-scale change (menu/VRAM layout), not a bug fix.
 
-BUG-VOICE-01: voicelines don't play with a custom
-Status: pending (§8.2 of the main context)
+**Workarounds for the user:**
 
-Symptom: no voiceline (crash, landing, item, jump) plays when the
-driver is a custom. No crash.
+- In 2P+ VS, don't put a custom and its MPK-matching original in the
+  same race.
+- In the ghost list, at most one of the colliding ghosts will show its
+  correct icon at a time.
 
-Cause: 16-voice pool indexed by characterID.
+**Verification (negative):** reproduce with P1 = Big Norm, P2 = Cortex
+in 2P VS, or with two saved ghosts (Coco + Nash) in the ghost list.
 
-Fix: wrap with GET_MPK_ID in ~16 call sites (list in context §8.2).
+**Related:** BUG-ICON-01 (the fix that made this visible),
+BUG-GHOST-03 (identification of custom ghosts — fixed; distinct from
+this rendering limitation).
 
-BUG-GHOST-01: ghost invisible in Time Trial
-Status: pending (§8.3 of the main context)
+---
 
-Symptom: the ghost replays but its model is not drawn.
+## Template for new bugs
 
-Cause: VehBirth_GetModelByName(name) with name="rusty" but the
-.ctr internally names itself "tiny".
-
-Fix: for IDs 16+, use data.driverModelExtras[1].model or the BSS
-side table.
-
-BUG-MENU-01: 3D menu models always show Crash
-Status: pending (pre-existing, NOT §8.1)
-Detected: Phase 2.1, confirmed via stash test
-
-Symptom: in 2P VS with both characters original (e.g. P1=Crash,
-P2=Cortex), both selection windows render Crash's 3D model regardless of
-who the players pick.
-
-Suspected cause: MM_Characters_GetModelByName(GET_METADATA(id)->name_Debug)
-inside MM_Characters_DrawWindows searches level1->ptrModelsPtrArray,
-but fails to find the models (or always returns the same one).
-
-Designed fix: pending. Likely map currentCharacterID[p] to
-driverModelExtras[p].model (or equivalent) in the menu.
-
-Related: BUG-MENU-02.
-
-BUG-MENU-02: custom 3D model invisible in the selection window
-Status: pending (pre-existing, NOT §8.1)
-Detected: Phase 2.1
-
-Symptom: when a player picks a custom in the character-select menu,
-their 3D window shows an empty model (invisible). Cursor, page, icon, and
-physics work fine.
-
-Suspected cause: same root cause as BUG-MENU-01.
-
-Designed fix: for IDs 16+, use data.driverModelExtras[p].model
-directly.
-
-Related: BUG-MENU-01.
-
-Template for new bugs
-text
+```text
 ## BUG-<SYSTEM>-<NN>: <Short title>
 
 **Status:** pending | in progress | fixed in <commit>
@@ -188,87 +216,3 @@ text
 
 **Related:**
 <§X.Y of the main context, or similar bug.>
-text
-
-Cambios respecto a la versión mezclada:
-
-- **Todo en inglés**, incluido lo que antes estaba en español (bug TNT, voice, ghost, MENU-01/02).
-- **BUG-MENU-03** y **BUG-MENU-04** marcados como **fixed**, con la causa confirmada y el fix aplicado descritos.
-- **BUG-TNT-01, BUG-VOICE-01, BUG-GHOST-01, BUG-MENU-01, BUG-MENU-02** marcados como **pending**, con su síntoma/causa/fix tal como estaban.
-- **Plantilla** traducida.
-
-Para aplicarlo:
-
-```bash
-cd ~/Desktop/Kevin/CTR/native_fork/nhanced
-nano docs/CUSTOM_RACER_BUGS_PENDING.md
-# o pega el contenido con tu editor preferido
-sed -i 's/\r$//' docs/CUSTOM_RACER_BUGS_PENDING.md
-wc -l docs/CUSTOM_RACER_BUGS_PENDING.md
-````
-
----
-
-## BUG-ARCADE-01: 1P arcade load hang on Hot Air Skyway with specific originals
-
-**Status:** fixed in `platform/native_memory.c` (commit 417b3e8b2)
-**Detected:** Phase 2.6, after BUG-TNT-01
-
-**Root cause:** The native port reduced the MEMPACK arena to `0x144e10`
-(1.27 MiB) while keeping the retail NTSC-U start offset `0xba9f0`. With
-Crash/Cortex/Dingodile/Pura on Hot Air Skyway / N.Gin Labs / Polar Pass,
-the 1P arcade bot pack (`LOAD_Robots1P`) consumed ~262 KiB more than with
-the other four characters, and the level's ClipBuffer allocation
-(`want=12000`) hit `free=9840` → `MEMPACK_AllocMem` OOM → infinite loop.
-
-**Fix:** Doubled `CTR_NATIVE_MEMPACK_BUFFER_SIZE` (0x200000 → 0x400000)
-and `CTR_NATIVE_MEMPACK_SIZE` (0x144e10 → 0x344e10). PC memory is not the
-constraint, so the tight retail window was unnecessarily preserved.
-**Safety net:** `MEMPACK_AllocMem` / `MEMPACK_AllocHighMem` now log and
-return `NULL` on OOM in native builds instead of looping forever.
-
-**Verification:** Crash / Cortex / Dingodile / Pura on Hot Air Skyway /
-N.Gin Labs / Polar Pass now load without OOM. Tiny / Coco / N.Gin / Polar
-unaffected (regression test).
-
-**Symptom:** In **1P arcade**, launching **Hot Air Skyway** (and reportedly
-N.Gin Labs, Polar Pass; more testing needed) hangs on the **loading screen**
-before the race starts. The app does not crash hard — it freezes (no window
-close, no stack trace). Only certain **original** characters trigger it:
-
-| Character | ID | Result |
-|-----------|----|--------|
-| Crash     | 0  | HANG   |
-| Cortex    | 1  | HANG   |
-| Tiny      | 2  | ok     |
-| Coco      | 3  | ok     |
-| N.Gin     | 4  | ok     |
-| Dingodile | 5  | HANG   |
-| Polar     | 6  | ok     |
-| Pura      | 7  | HANG   |
-
-**Does NOT reproduce:**
-- 1P arcade with any **custom** racer.
-- 2P VS, any combination (both customs, both originals, mixed).
-- 1P arcade on most other tracks.
-
-**Suspected cause:** Character-specific + level-specific + 1P-specific. The
-fact that 2P never hangs and customs never hang suggests a 1P-arcade-only
-load path (LOAD_DriverMPK branch + LOAD_Robots1P + per-character bot set)
-that collides with a level-specific asset on Hot Air Skyway. Related
-suspicion: the comment in LOAD_Assets.c about mask-grab breaking on Hot
-Air Skyway for all characters except Crash hints at load-order
-sensitivities on this level.
-
-**Not related to:** BUG-TNT-01. Confirmed by reverting the TNT fix and
-rebuilding: the hang reproduces identically.
-
-**Designed fix:** TBD. Needs diagnosis:
-1. Instrument LOAD_TenStages to print `loadingStage` each tick and see
-   exactly where it freezes.
-2. Compare the frozen stage between a crashing character (Crash) and a
-   non-crashing one (Tiny) on the same track.
-3. Test on `origin/master` if possible; if it reproduces there too, it's
-   a fork-level bug not introduced by any custom-racer work.
-
-**Related:** §8.4 latent call sites, LOAD_Assets.c load-order comments.
