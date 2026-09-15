@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 enum RelicRaceEndMenuConstants
 {
@@ -268,7 +269,7 @@ void RR_EndEvent_DrawHighScore(s16 startX, s32 startY, s16 scoreMode)
 		if ((s8)RR_GAME_TRACKER->newHighScoreIndex == rowIndex)
 		{
 			// make name color flash every odd frame
-			nameColor = (RR_GAME_TRACKER->timer & RR_HIGH_SCORE_FLASH_TIMER_BIT) ? WHITE : scoreEntry->characterID + RR_HIGH_SCORE_DRIVER_COLOR_OFFSET;
+			nameColor = (RR_GAME_TRACKER->timer & RR_HIGH_SCORE_FLASH_TIMER_BIT) ? WHITE : GET_MPK_ID(scoreEntry->characterID) + RR_HIGH_SCORE_DRIVER_COLOR_OFFSET;
 
 			// flash color of time
 			timeColorSource = (RR_GAME_TRACKER->timer << 1) & flashMask;
@@ -277,7 +278,7 @@ void RR_EndEvent_DrawHighScore(s16 startX, s32 startY, s16 scoreMode)
 		else
 		{
 			timeColor = 0;
-			nameColor = scoreEntry->characterID + RR_HIGH_SCORE_DRIVER_COLOR_OFFSET;
+			nameColor = GET_MPK_ID(scoreEntry->characterID) + RR_HIGH_SCORE_DRIVER_COLOR_OFFSET;
 		}
 
 		// Make a rank on the high score list ('1', '2', '3', '4', '5')

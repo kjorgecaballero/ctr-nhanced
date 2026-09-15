@@ -336,7 +336,7 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 
 		// default color, not flashing
 		timeColor = 0;
-		s16 nameColor = scoreEntries[scoreEntryIndex].characterID + TT_HIGH_SCORE_DRIVER_COLOR_OFFSET;
+		s16 nameColor = GET_MPK_ID(scoreEntries[scoreEntryIndex].characterID) + TT_HIGH_SCORE_DRIVER_COLOR_OFFSET;
 
 		// If this loop index is a new high score
 		if (gGT->newHighScoreIndex == rowIndex)

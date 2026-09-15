@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 int howl_Disable(void)
 {
@@ -312,7 +313,7 @@ void OptionsMenu_TestSound(int newRow, int newBoolPlay)
 		// OG game does this, instead of gGT->drivers[0]?
 		int driverID = sdata->gGT->cameraDC[0].driverToFollow->driverID;
 
-		int characterID = data.characterIDs[driverID];
+		int characterID = GET_MPK_ID(data.characterIDs[driverID]);
 
 		int frameCount = sdata->gGT->frameTimer_MainFrame_ResetDB;
 

@@ -157,7 +157,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		// Character Name
 		MM_HighScore_Text3D(entry[0].name, bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_TEXT_X_OFFSET,
 		                    bestLapEntryMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_NAME_Y_OFFSET, FONT_BIG,
-		                    entry[0].characterID + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
+		                    GET_MPK_ID(entry[0].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
 
 		// Draw time string
 		// NOTE(aalhendi): Retail also uses currX as the Y transition base here.
@@ -191,7 +191,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		MM_HighScore_Text3D(entry[entryIndex].name, D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_NAME_X_OFFSET,
 		                    D230.transitionMeta_HighScores[metaIndex].currY + offsetY + (scoreRowIndex * MM_HIGHSCORE_SCORE_ROW_Y_STEP) +
 		                        MM_HIGHSCORE_SCORE_NAME_Y_OFFSET,
-		                    FONT_BIG, entry[entryIndex].characterID + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
+		                    FONT_BIG, GET_MPK_ID(entry[entryIndex].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
 
 		// draw the Time string
 		MM_HighScore_Text3D(
