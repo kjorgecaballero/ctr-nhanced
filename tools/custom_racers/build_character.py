@@ -16,15 +16,26 @@ and once with bit 5 (0x20) set on every vertex, which the engine
 interprets as a flipped winding (visible from inside). Net effect:
 the triangle renders from both sides, matching Blender's viewport.
 
+Per-material blend mode: export_character.py also records a blend_mode
+string per material ('half' | 'add' | 'subtract' | 'add_25'). We map it
+to the 2 ABR bits (5-6) of the tpage word inside each TextureLayout.
+Because layouts are cached by content, two materials that share an
+image but use different blend modes end up with distinct layouts.
+
 Alpha routing: each texel is classified by its alpha into one of three
 buckets:
     a <  SEMI_LO            -> transparent (palette index 0)
     SEMI_LO <= a < SEMI_HI  -> semi-transparent (STP bit 15 set on the
-                               palette entry, engine blends it at 50%)
+                               palette entry, engine blends it)
     a >= SEMI_HI            -> fully opaque (STP bit clear)
 Opaque and semi pixels get disjoint palette slots, so a black outline
 with a >= SEMI_HI can never inherit the STP bit from a semi neighbour
 (this is the same fix as build_icons.py, reimplemented without PIL).
+
+Note: the ABR bits are only honoured by the engine when the primitive
+carries the semi-transparency flag. See native_gpu.c AddSplit /
+GET_TPAGE_BLEND. Materials with blend_mode='half' keep the previous
+behaviour.
 """
 import json, math, struct, hashlib, sys
 from collections import Counter
@@ -71,6 +82,20 @@ SEMI_HI = 0.9
 # Index 0 of every palette is reserved for fully-transparent texels.
 # The remaining 15 slots are shared between the opaque and semi buckets.
 CLUT_BUDGET = 15
+
+# Material blend mode -> 2-bit ABR field of the tpage word (bits 5-6).
+# These map 1:1 to the engine's enum BlendModeDecal:
+#   half     00  -> 0.5*B + 0.5*F   (PSX default; previous behaviour)
+#   add      01  -> 1.0*B + 1.0*F
+#   subtract 10  -> 1.0*B - 1.0*F
+#   add_25   11  -> 1.0*B + 0.25*F
+# Unknown values fall back to 'half' (ABR = 0).
+ABR_MAP = {
+    'half':     0,
+    'add':      1,
+    'subtract': 2,
+    'add_25':   3,
+}
 
 # Vertex flag layout (byte 3 of each command word).
 #   bit 7 (0x80) = first vertex of the triangle
@@ -373,8 +398,14 @@ def build():
                         f'v overflow for {material["image"]}: '
                         f'tex_v={tex["v"]} corner_v={corner_v} cv={cv}')
                 coords.append((cu, cv))
+
+            # Per-material blend mode -> 2 ABR bits in tpage (bits 5-6).
+            # Two materials sharing the same image but using different
+            # blend modes end up with distinct layouts because the cache
+            # key includes the full packed struct.
+            abr = ABR_MAP.get(material.get('blend_mode', 'half'), 0)
             layout = struct.pack('<BBHBBHBBBB', *coords[0], tex['clut'],
-                                 *coords[1], tex['page'],
+                                 *coords[1], tex['page'] | (abr << 5),
                                  *coords[2], *coords[2])
             ti = get_index(layouts, layout, True)
 

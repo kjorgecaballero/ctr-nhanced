@@ -4,7 +4,7 @@
 bl_info = {
     "name": "CTR NHanced Racer Export",
     "author": "kjorgecaballero",
-    "version": (1, 7, 0),
+    "version": (1, 8, 0),
     "blender": (3, 2, 0),
     "location": "View3D > N > Racer",
     "description": "Configure and export custom CTR racers",
@@ -39,6 +39,18 @@ ENGINES = [
     ("TURN",     "Turn",     ""),
 ]
 _ENGINE_SET = {"SPEED", "BALANCED", "ACCEL", "TURN"}
+
+# Per-material blend mode. The string is stored in the Blender custom
+# property mat["blend_mode"] and forwarded verbatim to source_mesh.json;
+# build_character.py maps it to the 2 ABR bits of the tpage word.
+# Keep this list in sync with ABR_MAP in build_character.py.
+BLEND_MODES = [
+    ("half",     "Half",   "50% transparency (default)"),
+    ("add",      "Add",    "Additive blending"),
+    ("subtract", "Sub",    "Subtractive blending"),
+    ("add_25",   "A25",    "Additive at 25%"),
+]
+_BLEND_MODE_SET = {m[0] for m in BLEND_MODES}
 
 DEFAULT_REPO   = r"C:\Users\Kevin\Desktop\Kevin\CTR\native_fork\nhanced"
 DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python.exe"
@@ -115,6 +127,18 @@ def _get_prefs(context):
     if _fallback_prefs_instance is None:
         _fallback_prefs_instance = _FallbackPrefs()
     return _fallback_prefs_instance
+
+
+# =========================================================================
+# MODULE: material helpers
+# =========================================================================
+def _get_blend_mode(mat):
+    """Return the material's blend_mode string. Falls back to 'half'
+    when the custom property is absent or has an unknown value."""
+    value = mat.get("blend_mode", "half")
+    if value not in _BLEND_MODE_SET:
+        return "half"
+    return value
 
 
 # =========================================================================
@@ -384,6 +408,7 @@ def export_mesh_json(obj, out_path):
             "name": mat.name,
             "image": im.name if im else None,
             "double_sided": not mat.use_backface_culling,
+            "blend_mode": _get_blend_mode(mat),
         })
         if im and im.name not in images:
             images[im.name] = {"size": list(im.size),
@@ -1023,6 +1048,32 @@ class NFR_OT_ToggleDoubleSided(Operator):
         return {"FINISHED"}
 
 
+class NFR_OT_SetBlendMode(Operator):
+    bl_idname = "nfr.set_blend_mode"
+    bl_label = "Set blend mode"
+    bl_description = ("Per-material blend mode. Stored in the Blender custom "
+                      "property mat['blend_mode'] and forwarded to "
+                      "source_mesh.json.")
+
+    material_name: StringProperty()
+    mode: StringProperty()
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            return {"CANCELLED"}
+        mat = obj.data.materials.get(self.material_name)
+        if mat is None:
+            self.report({"WARNING"}, f"Material '{self.material_name}' not found")
+            return {"CANCELLED"}
+        if self.mode not in _BLEND_MODE_SET:
+            self.report({"WARNING"}, f"Unknown blend mode '{self.mode}'")
+            return {"CANCELLED"}
+        mat["blend_mode"] = self.mode
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
 # =========================================================================
 # MODULE: panels
 # =========================================================================
@@ -1268,6 +1319,19 @@ class NFR_PT_Materials(Panel):
                                text="Double-sided", icon=icon_name)
             op.material_name = mat.name
 
+            # Blend mode: 4-button segmented control, active one depressed.
+            current_mode = _get_blend_mode(mat)
+            blend_row = box.row(align=True)
+            blend_row.label(text="Blend:")
+            for mode_key, mode_label, _tip in BLEND_MODES:
+                is_active = (current_mode == mode_key)
+                bop = blend_row.operator(
+                    "nfr.set_blend_mode",
+                    text=mode_label,
+                    depress=is_active)
+                bop.material_name = mat.name
+                bop.mode = mode_key
+
 
 # =========================================================================
 # MODULE: registration
@@ -1291,6 +1355,7 @@ _classes = (
     NFR_OT_SlotNextPage,
     NFR_OT_SlotLoadToPanel,
     NFR_OT_ToggleDoubleSided,
+    NFR_OT_SetBlendMode,
     NFR_PT_Racer,
     NFR_PT_Slots,
     NFR_PT_Materials,

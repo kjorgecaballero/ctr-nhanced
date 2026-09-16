@@ -5,6 +5,15 @@ then execute the script.
 
 The output goes to <repo>/native_fork/racers/ by default, ready to be
 consumed by add_racer.py.
+
+Per-material custom properties read by this script:
+    use_backface_culling (native Blender) -> 'double_sided' in the JSON
+    ["blend_mode"]       (custom, optional) -> 'blend_mode' in the JSON
+        Valid values: 'half' | 'add' | 'subtract' | 'add_25'
+        Default when absent or invalid: 'half'
+The addon exposes blend_mode as a dropdown per material; materials
+authored outside the addon can still set it manually via the Blender
+'Custom Properties' panel.
 """
 import bpy, json, hashlib
 from pathlib import Path
@@ -25,6 +34,20 @@ if REPO_ROOT is None or not (REPO_ROOT / 'nhanced').exists():
 OUTPUT_DIR = Path(r'C:\Users\Kevin\Desktop\Kevin\CTR\native_fork\ctr_racer_source')
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUT_PATH = OUTPUT_DIR / f'source_mesh_{OUTPUT_NAME}.json'
+
+# Keep in sync with ABR_MAP in build_character.py.
+VALID_BLEND_MODES = ('half', 'add', 'subtract', 'add_25')
+
+
+def _get_blend_mode(mat):
+    """Return the material's blend_mode, or 'half' if unset/invalid."""
+    value = mat.get("blend_mode", "half")
+    if value not in VALID_BLEND_MODES:
+        print(f"WARNING: material '{mat.name}' has invalid blend_mode "
+              f"{value!r}, falling back to 'half'")
+        return "half"
+    return value
+
 
 # ---- fetch + validate ----
 o = bpy.data.objects.get(OBJECT_NAME)
@@ -47,6 +70,9 @@ if 'Color' not in m.color_attributes:
 # render double-sided in the viewport. We record that here so that
 # build_character.py can emit the triangle twice (flipped winding for
 # the second copy) and match what the user sees in Blender.
+#
+# blend_mode: per-material blend mode forwarded to build_character.py,
+# which encodes it into the 2 ABR bits of the tpage word per triangle.
 materials = []
 images = {}
 for mat in m.materials:
@@ -58,6 +84,7 @@ for mat in m.materials:
         'name': mat.name,
         'image': im.name if im else None,
         'double_sided': not mat.use_backface_culling,
+        'blend_mode': _get_blend_mode(mat),
     })
     if im and im.name not in images:
         images[im.name] = {'size': list(im.size), 'pixels_rgba': list(im.pixels)}
@@ -100,7 +127,8 @@ print(f'  triangles:   {len(m.loop_triangles)}')
 print(f'  materials:   {len(materials)}')
 for mat in materials:
     ds = 'DS' if mat['double_sided'] else 'single'
-    print(f"    - {mat['name']:20s}  image={mat['image']}  [{ds}]")
+    bm = mat['blend_mode']
+    print(f"    - {mat['name']:20s}  image={mat['image']}  [{ds}, blend={bm}]")
 print(f'  images:      {len(images)}')
 print(f'  shape keys:  {list(result["keys"].keys())}')
 print('=' * 64)
