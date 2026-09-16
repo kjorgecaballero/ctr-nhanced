@@ -124,7 +124,7 @@ static struct Model   *s_menuModel  [NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLO
 static unsigned char  *s_menuVrm    [NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLOTS];
 static long            s_menuVrmSize[NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLOTS];
 
-/* === Fase 2.5: BUG-MENU-04 side table =====================================
+/* === Phase 2.5: BUG-MENU-04 side table =====================================
  * data.driverModelExtras[] has only LOAD_DRIVER_MODEL_EXTRA_COUNT (=3)
  * slots; index 3 (P4 in 4P) aliases podiumModel_firstPlace and corrupts
  * the podium pointers, crashing the menu on exit. We keep the 4th player's
@@ -698,7 +698,7 @@ void NativeCustomRacer_DumpVRAMIfRequested(void)
 }
 
 /* --------------------------------------------------------------------- */
-/* Fase 2.5: 4P side table (BUG-MENU-04)                                 */
+/* Phase 2.5: 4P side table (BUG-MENU-04)                                 */
 /* --------------------------------------------------------------------- */
 void NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model)
 {
@@ -1009,11 +1009,13 @@ static void ApplyPageIcons(int page)
  * (42) to 43 and made him draw with Pinstripe's icon. Fixed in 40805acd3. */
 static void ApplyPageMeta(int page)
 {
+    (void)page;
+{
+    (void)page; /* kept for symmetry with the call site; no longer used */
     EnsureMetaBackup();
 
     /* Restore originals first */
     memcpy(data.MetaDataCharacters, s_metaBackup, sizeof(s_metaBackup));
-
 
 }
 
@@ -1060,6 +1062,7 @@ void NativeCustomRacer_RefreshPage(void)
 {
     if (s_appliedPage == s_page)
         return;
+    (void)page; /* kept for symmetry with the call site; no longer used */
     EnsureMetaBackup();
     ApplyPageMeta(s_page);
 

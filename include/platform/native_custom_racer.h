@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-/* === Fase 1: custom IDs 16..63 ===========================================
+/* === Phase 1: custom IDs 16..63 ===========================================
  * We do NOT extend data.MetaDataCharacters[0x10] (that would break ~30
  * CTR_STATIC_ASSERTs on struct sData). Instead: a parallel table in BSS
  * plus a redirection macro.
@@ -79,7 +79,7 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
  * CTR_DUMP_VRAM is set to a non-empty path. No-op otherwise. */
 void NativeCustomRacer_DumpVRAMIfRequested(void);
 
-/* === Fase 2.5: BUG-MENU-04 side table ====================================
+/* === Phase 2.5: BUG-MENU-04 side table ====================================
  * data.driverModelExtras[] has only LOAD_DRIVER_MODEL_EXTRA_COUNT (=3)
  * slots, so index 3 (P4 in 4P) aliases podiumModel_firstPlace. Writing
  * there corrupts the podium model pointers and crashes the menu on exit.
@@ -107,7 +107,7 @@ void NativeCustomRacer_PrevPage(void);
 /* Re-applies the current page's VRAM atlas + metadata. Idempotent. */
 void NativeCustomRacer_RefreshPage(void);
 
-/* === Fase 2: menu integration ===
+/* === Phase 2: menu integration ===
  * Returns the CharacterSelectMeta array the character-select menu should
  * use for the current page.
  * If page == 0, returns `base` untouched.
