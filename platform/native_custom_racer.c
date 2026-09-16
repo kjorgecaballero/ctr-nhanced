@@ -50,6 +50,7 @@ typedef struct
     u32  color[4];       /* packed vertex-color codes (all 4 identical) */
     int  hasColor;       /* 1 if #RRGGBB was present in roster.txt */
     int  maskIsGoodGuy;  /* 1 = Aku Aku, 0 = Uka Uka; default 1 */
+    int  hasWheels;      /* 1 = wheels visible, 0 = hidden; default 1 */
 } PageEntry;
 
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
@@ -87,6 +88,9 @@ static u8  s_customHasColor[NATIVE_CUSTOM_COUNT];
 
 /* Per-custom mask polarity (roster.txt optional mask=good|bad). 1 = good. */
 static u8  s_customMaskIsGoodGuy[NATIVE_CUSTOM_COUNT];
+
+/* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
+static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
 
 /* Menu preview cache: one struct Model* per (custom ID, player index).
  * Each player slot has its own model_pN.ctr whose UVs are baked for slot N,
@@ -226,14 +230,27 @@ static int Page_ParseLine(char *line, PageEntry *out)
         }
     }
 
-    /* Optional mask=good|bad. Defaults to good if absent. */
+    /* Optional tokens after color: mask=good|bad, wheels=yes|no.
+     * Order-independent, defaults: mask=good, wheels=yes. */
     out->maskIsGoodGuy = 1;
+    out->hasWheels = 1;
     while (*p == ' ' || *p == '\t') p++;
-    if (strncmp(p, "mask=", 5) == 0)
+    while (*p && *p != '\n' && *p != '\r')
     {
-        p += 5;
-        if (strncmp(p, "bad", 3) == 0)
-            out->maskIsGoodGuy = 0;
+        if (strncmp(p, "mask=", 5) == 0)
+        {
+            p += 5;
+            if (strncmp(p, "bad", 3) == 0)
+                out->maskIsGoodGuy = 0;
+        }
+        else if (strncmp(p, "wheels=", 7) == 0)
+        {
+            p += 7;
+            if (strncmp(p, "no", 2) == 0)
+                out->hasWheels = 0;
+        }
+        while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') p++;
+        while (*p == ' ' || *p == '\t') p++;
     }
 
     out->page = (int)page;
@@ -251,6 +268,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMeta, 0, sizeof(s_customMeta));
     memset(s_customHasColor, 0, sizeof(s_customHasColor));
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
+    memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
 
@@ -293,6 +311,7 @@ void NativeCustomRacer_ReloadRoster(void)
                 memcpy(s_customColor[idx], e.color, sizeof(e.color));
                 s_customHasColor[idx] = (u8)e.hasColor;
                 s_customMaskIsGoodGuy[idx] = (u8)e.maskIsGoodGuy;
+                s_customHasWheels[idx] = (u8)e.hasWheels;
 
                 s_customMenuID[idx] = (s16)e.slot;
 
@@ -392,6 +411,15 @@ int NativeCustomRacer_GetMaskIsGoodGuy(int characterID)
         return -1;
     int idx = characterID - NATIVE_CUSTOM_ID_BASE;
     return s_customMaskIsGoodGuy[idx];
+}
+
+int NativeCustomRacer_HasWheels(int characterID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return -1;
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    return s_customHasWheels[idx];
 }
 
 const char *NativeCustomRacer_GetDisplayName(int characterID)

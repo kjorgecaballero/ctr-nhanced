@@ -47,6 +47,8 @@ def main():
                     help="optional minimap color #RRGGBB")
     ap.add_argument("--mask", choices=["good", "bad"], default="good",
                     help="Aku Aku (good, default) or Uka Uka (bad)")
+    ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
+                    help="wheels visible (default) or hidden (Oxide-style)")
     args = ap.parse_args()
 
     color = args.color
@@ -106,6 +108,7 @@ def main():
     if color is not None:
         new_line += f"\t{color}"
     new_line += f"\tmask={args.mask}"
+    new_line += f"\twheels={args.wheels}"
     updated = False
     for i, l in enumerate(lines):
         parts = l.split()

@@ -152,6 +152,11 @@ void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
  * Default for customs without a mask= field in roster.txt is good. */
 int NativeCustomRacer_GetMaskIsGoodGuy(int characterID);
 
+/* === Wheels visible flag ===
+ * Returns 1 = wheels visible, 0 = wheels hidden (Oxide-style), -1 = not a custom.
+ * Default for customs without a wheels= field in roster.txt is 1. */
+int NativeCustomRacer_HasWheels(int characterID);
+
 #ifdef __cplusplus
 }
 #endif

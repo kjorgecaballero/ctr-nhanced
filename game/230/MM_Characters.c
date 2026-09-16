@@ -289,6 +289,14 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 
 		driverInst->model = model;
 
+		/* Wheels in char-select: custom racers consult roster.txt
+		 * (wheels=yes|no). Re-applied every frame since DrawWindows
+		 * runs every frame. 0xccc == VEH_BIRTH_WHEEL_SIZE. */
+		{
+			int customWheels = NativeCustomRacer_HasWheels((int)_cid);
+			gGT->drivers[playerIndex]->wheelSize = (customWheels == 0) ? 0 : 0xccc;
+		}
+
 		gGT->cameraDC[playerIndex].cameraMode = CAMERA_MODE_FREECAM;
 
 		driverInst->matrix.t[0] = D230.characterSelectDriverModel.pos.x;

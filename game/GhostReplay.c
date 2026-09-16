@@ -535,8 +535,13 @@ void GhostReplay_Init2(void)
 		s32 characterID = data.characterIDs[characterIndex];
 		struct Model *model = GhostReplay_ResolveModel(characterID, ghostID);
 
-		driver->wheelSize = (characterID != NITROS_OXIDE) ? 0xccc : 0;
-
+		{
+			int customWheels = NativeCustomRacer_HasWheels(characterID);
+			if (customWheels >= 0)
+				driver->wheelSize = customWheels ? 0xccc : 0;
+			else
+				driver->wheelSize = (characterID != NITROS_OXIDE) ? 0xccc : 0;
+		}
 		struct Instance *inst = driver->instSelf;
 		char *name = (ghostID != 0) ? sdata->s_ghost1 : sdata->s_ghost0;
 
