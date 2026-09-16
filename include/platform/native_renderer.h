@@ -37,6 +37,7 @@ void NativeRenderer_SetOverrideTextureSize(int width, int height);
 void NativeRenderer_SetPSXTextureSemiTransPass(int pass);
 void NativeRenderer_SetPSXTextureOutputSTP(int enabled);
 void NativeRenderer_SetPSXDrawMaskSet(int maskSet);
+void NativeRenderer_SetPSXKeepTextureAlpha(int enabled);
 void NativeRenderer_UpdateVertexBuffer(const GrVertex *vertices, int count);
 void NativeRenderer_DrawTriangles(int startVertex, int triangles);
 void NativeRenderer_PushDebugLabel(const char *label);

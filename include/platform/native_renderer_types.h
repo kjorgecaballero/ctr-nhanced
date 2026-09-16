@@ -48,7 +48,8 @@ typedef enum
 	BM_AVERAGE,
 	BM_ADD,
 	BM_SUBTRACT,
-	BM_ADD_QUATER_SOURCE
+	BM_ADD_QUATER_SOURCE,
+	BM_SRC_ALPHA
 } BlendMode;
 
 typedef enum

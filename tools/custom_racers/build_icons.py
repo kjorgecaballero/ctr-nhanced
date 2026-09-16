@@ -85,43 +85,87 @@ def parse_roster():
 
 
 def pack_icon(img):
-    """Returns (4bpp_bytes, clut_bytes)."""
+    """Returns (4bpp_bytes, clut_bytes).
+
+    Alpha routing:
+      a < 0.1           -> CLUT index 0 (fully transparent)
+      0.1 <= a < 0.9    -> STP bit set (decoder outputs alpha 128)
+      a >= 0.9          -> opaque (decoder outputs alpha 255)
+
+    Opacos y semi se cuantizan en DOS paletas separadas. Si se
+    mezclan en un mismo bucket, el negro del contorno puede terminar
+    con STP=1 y salir al 50% (contorno semitransparente).
+    """
     img = img.convert("RGBA").resize((ICON_W, ICON_H), Image.LANCZOS)
     px = img.load()
 
-    # Separate opaque from transparent
-    opaque_pixels = []          # list of (x, y)
-    opaque_colors = []          # list of (r, g, b)
+    SEMI_LO = 0.1
+    SEMI_HI = 0.9
+
+    opaque_px = []   # (x, y, r, g, b)
+    semi_px   = []   # (x, y, r, g, b)
+
     for y in range(ICON_H):
         for x in range(ICON_W):
             r, g, b, a = px[x, y]
-            if a >= 128:
-                opaque_pixels.append((x, y))
-                opaque_colors.append((r, g, b))
+            a_norm = a / 255.0
+            if a_norm < SEMI_LO:
+                continue
+            if a_norm < SEMI_HI:
+                semi_px.append((x, y, r, g, b))
+            else:
+                opaque_px.append((x, y, r, g, b))
 
-    idx_grid = [[0] * ICON_W for _ in range(ICON_H)]
-    palette = [(0, 0, 0)] * 15   # default padding
+    # Presupuesto: 15 entradas (índice 0 es transparente).
+    total = len(opaque_px) + len(semi_px)
+    if total == 0 or len(semi_px) == 0:
+        n_opaque, n_semi = 15, 0
+    elif len(opaque_px) == 0:
+        n_opaque, n_semi = 0, 15
+    else:
+        ratio  = len(semi_px) / total
+        n_semi = max(3, min(8, round(15 * ratio)))
+        n_opaque = 15 - n_semi
 
-    if opaque_colors:
-        # Quantize to 15 colors (temp indices 0..14 -> final 1..15)
-        tmp = Image.new("RGB", (len(opaque_colors), 1))
-        tmp.putdata(opaque_colors)
-        tmp_q = tmp.quantize(colors=15, method=Image.MEDIANCUT)
+    def quantize(px_list, n_colors):
+        if not px_list or n_colors <= 0:
+            return [], []
+        colors = [(r, g, b) for (_, _, r, g, b) in px_list]
+        tmp = Image.new("RGB", (len(colors), 1))
+        tmp.putdata(colors)
+        tmp_q = tmp.quantize(colors=n_colors, method=Image.MEDIANCUT)
+        raw_pal = list(tmp_q.getpalette() or [])
+        raw_pal += [0] * (n_colors * 3 - len(raw_pal))
+        pal = [(raw_pal[i * 3], raw_pal[i * 3 + 1], raw_pal[i * 3 + 2])
+               for i in range(n_colors)]
+        idxs = [i & 0xF for i in tmp_q.getdata()]
+        return pal, idxs
 
-        # getpalette() may return None or fewer than 45 values -> pad with 0
-        raw_pal = tmp_q.getpalette() or []
-        raw_pal = list(raw_pal) + [0] * (15 * 3 - len(raw_pal))
-        palette = [
-            (raw_pal[i * 3], raw_pal[i * 3 + 1], raw_pal[i * 3 + 2])
-            for i in range(15)
-        ]
+    idx_grid     = [[0] * ICON_W for _ in range(ICON_H)]
+    palette_rgb  = []
+    palette_semi = []
 
-        # Fill the grid with indices
-        tmp_idx = list(tmp_q.getdata())
-        for k, (x, y) in enumerate(opaque_pixels):
-            idx_grid[y][x] = (tmp_idx[k] & 0xF) + 1   # 1..15
+    if opaque_px and n_opaque > 0:
+        o_pal, o_idx = quantize(opaque_px, n_opaque)
+        base = len(palette_rgb) + 1
+        palette_rgb.extend(o_pal)
+        palette_semi.extend([False] * len(o_pal))
+        for k, (x, y, r, g, b) in enumerate(opaque_px):
+            idx_grid[y][x] = (o_idx[k] & 0xF) + base
 
-    # Pack 4bpp: low nibble = leftmost pixel
+    if semi_px and n_semi > 0:
+        s_pal, s_idx = quantize(semi_px, n_semi)
+        base = len(palette_rgb) + 1
+        palette_rgb.extend(s_pal)
+        palette_semi.extend([True] * len(s_pal))
+        for k, (x, y, r, g, b) in enumerate(semi_px):
+            idx_grid[y][x] = (s_idx[k] & 0xF) + base
+
+    while len(palette_rgb) < 15:
+        palette_rgb.append((0, 0, 0))
+        palette_semi.append(False)
+
+    # Pack 4bpp: nibble bajo = píxel izquierdo
     pix = bytearray()
     for y in range(ICON_H):
         for hw in range(ICON_W // 4):
@@ -132,13 +176,14 @@ def pack_icon(img):
             pix.append(i0 | (i1 << 4))
             pix.append(i2 | (i3 << 4))
 
-    # CLUT: 16 halfwords. Index 0 = transparent (0x0000, bit 15 = 0).
-    # Do NOT set bit 15 on opaque entries, or the icon will render at
-    # 50% * 50% opacity (double blend) inside the character select menu.
+    # CLUT: índice 0 = transparente; 1..15 con STP si el bucket es semi.
     clut = bytearray()
     clut += struct.pack("<H", 0x0000)
-    for r, g, b in palette:
+    for i in range(15):
+        r, g, b = palette_rgb[i]
         c = ((r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10)) & 0x7FFF
+        if palette_semi[i]:
+            c |= 0x8000
         clut += struct.pack("<H", c)
 
     return bytes(pix), bytes(clut)
@@ -175,11 +220,7 @@ def build_page(page_num, slots):
         px_x, px_y, clut_x, clut_y = SLOTS[slot]
         pix, clut = pack_icon(Image.open(png))
 
-        # Pixel block: 11 halfwords x 26 rows x 2 bytes = 572 bytes.
-        # LoadImage treats it as 16bpp (w*h*2) and copies bytes literally.
         blocks.append((px_x, px_y, ICON_W // 4, ICON_H, pix))
-
-        # CLUT block: 16 halfwords = 16 pixels at 16bpp in one row.
         blocks.append((clut_x, clut_y, 16, 1, clut))
 
     if not blocks:

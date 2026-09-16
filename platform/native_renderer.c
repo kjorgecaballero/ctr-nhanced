@@ -679,6 +679,7 @@ typedef struct
 	GLint psxSemiTransPassLoc;
 	GLint psxDrawMaskSetLoc;
 	GLint psxTextureOutputStpLoc;
+	GLint psxKeepTextureAlphaLoc;
 } GTEShader;
 
 internal int NativeRenderer_Shader_CheckShaderStatus(GLuint shader);
@@ -705,6 +706,7 @@ GLint u_texelSizeLoc;
 GLint u_psxSemiTransPassLoc;
 GLint u_psxDrawMaskSetLoc;
 GLint u_psxTextureOutputStpLoc;
+GLint u_psxKeepTextureAlphaLoc;
 
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                             \
 	"	// returns 16 bit colour\n"                                                \
@@ -840,12 +842,13 @@ const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
 const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
                                  "	uniform int psxDrawMaskSet;\n"
+                                 "	uniform int psxKeepTextureAlpha;\n"
                                  "	uniform vec2 texelSize;\n"
                                  "	void main() {\n"
                                  "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
                                  "		vec4 color = texture2D(s_texture, tc);\n"
                                  "		fragColor = dither(color * v_color);\n"
-                                 "		fragColor.a = float(psxDrawMaskSet);\n"
+                                 "		if (psxKeepTextureAlpha == 0) fragColor.a = float(psxDrawMaskSet);\n"
                                  "	}\n";
 
 #define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
@@ -1053,6 +1056,7 @@ internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source)
 	sh->psxSemiTransPassLoc = glGetUniformLocation(sh->shader, "psxSemiTransPass");
 	sh->psxDrawMaskSetLoc = glGetUniformLocation(sh->shader, "psxDrawMaskSet");
 	sh->psxTextureOutputStpLoc = glGetUniformLocation(sh->shader, "psxTextureOutputStp");
+	sh->psxKeepTextureAlphaLoc = glGetUniformLocation(sh->shader, "psxKeepTextureAlpha");
 }
 
 internal void NativeRenderer_InitialisePSXShaders(void)
@@ -1361,6 +1365,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_psxSemiTransPassLoc = s_gteShader4.psxSemiTransPassLoc;
 		u_psxDrawMaskSetLoc = s_gteShader4.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader4.psxTextureOutputStpLoc;
+		u_psxKeepTextureAlphaLoc = s_gteShader4.psxKeepTextureAlphaLoc;
 		break;
 	case TF_8_BIT:
 		NativeRenderer_SetShader(s_gteShader8.shader);
@@ -1370,6 +1375,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_psxSemiTransPassLoc = s_gteShader8.psxSemiTransPassLoc;
 		u_psxDrawMaskSetLoc = s_gteShader8.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader8.psxTextureOutputStpLoc;
+		u_psxKeepTextureAlphaLoc = s_gteShader8.psxKeepTextureAlphaLoc;
 		break;
 	case TF_16_BIT:
 		NativeRenderer_SetShader(s_gteShader16.shader);
@@ -1379,6 +1385,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_psxSemiTransPassLoc = s_gteShader16.psxSemiTransPassLoc;
 		u_psxDrawMaskSetLoc = s_gteShader16.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader16.psxTextureOutputStpLoc;
+		u_psxKeepTextureAlphaLoc = s_gteShader16.psxKeepTextureAlphaLoc;
 		break;
 	case TF_32_BIT_RGBA:
 		NativeRenderer_SetShader(s_gteShader32Rgba.shader);
@@ -1388,6 +1395,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_psxSemiTransPassLoc = s_gteShader32Rgba.psxSemiTransPassLoc;
 		u_psxDrawMaskSetLoc = s_gteShader32Rgba.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader32Rgba.psxTextureOutputStpLoc;
+		u_psxKeepTextureAlphaLoc = s_gteShader32Rgba.psxKeepTextureAlphaLoc;
 		break;
 	}
 
@@ -1449,6 +1457,18 @@ void NativeRenderer_SetPSXDrawMaskSet(int maskSet)
 	if (u_psxDrawMaskSetLoc >= 0)
 	{
 		glUniform1i(u_psxDrawMaskSetLoc, maskSet);
+	}
+}
+
+// >>> BUG-ALPHA-01: Sentinel CLUT path preserves the sampled RGBA alpha when
+// this is nonzero. Only the 32-bit RGBA shader declares psxKeepTextureAlpha;
+// the 4/8/16-bit shaders get -1 for the uniform location, so the setter is a
+// no-op for those formats.
+void NativeRenderer_SetPSXKeepTextureAlpha(int enabled)
+{
+	if (u_psxKeepTextureAlphaLoc >= 0)
+	{
+		glUniform1i(u_psxKeepTextureAlphaLoc, enabled);
 	}
 }
 
@@ -2219,6 +2239,13 @@ void NativeRenderer_SetBlendMode(BlendMode blendMode)
 	case BM_ADD_QUATER_SOURCE:
 		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 		glBlendFuncSeparate(GL_CONSTANT_COLOR, GL_ONE, GL_ONE, GL_ZERO);
+		break;
+	// >>> BUG-ALPHA-01: standard source-alpha blend for the Sentinel CLUT path.
+	// The (GL_ZERO, GL_ONE) alpha factors preserve the framebuffer's mask/STP
+	// bit; the RGB factors use the sampled texel's alpha for real transparency.
+	case BM_SRC_ALPHA:
+		glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 		break;
 	}
 

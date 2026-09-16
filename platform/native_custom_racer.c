@@ -1165,12 +1165,12 @@ static void RegisterCustomIconTexture(int idx, int charID)
         u8 nib  = (x & 1) ? (u8)(byte >> 4) : (u8)(byte & 0x0F);
         u16 c   = clut[nib & 0x0F];
         u8 *d   = &rgba[(y * ICON_W + x) * 4];
-        if (nib == 0 || (c & 0x7FFF) == 0) { d[0]=d[1]=d[2]=d[3]=0; }
+        if (nib == 0) { d[0]=d[1]=d[2]=d[3]=0; }
         else {
             d[0]=(u8)(((c>>0 )&0x1F)<<3);
             d[1]=(u8)(((c>>5 )&0x1F)<<3);
             d[2]=(u8)(((c>>10)&0x1F)<<3);
-            d[3]=255;
+            d[3]= (c & 0x8000) ? 128 : 255;
         }
     }
     free(buf);
