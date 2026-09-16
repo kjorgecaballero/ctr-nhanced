@@ -34,6 +34,7 @@ extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
  * dance models, kart colors, TNT height, BI_*PACK ranges). */
 extern const u8 s_gridToCharID[16];
 
+
 /* Maps a character ID to an enum Characters index (0..15) for use as an
  * index into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only
  * have 16 entries. Custom IDs 16+ wrap to their page slot, then through

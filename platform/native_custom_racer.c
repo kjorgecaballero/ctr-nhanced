@@ -999,8 +999,14 @@ static void ApplyPageIcons(int page)
         s_iconSlotLoadedPage[i] = (page == 0) ? 0 : -1;
 }
 
-/* Rewrites MetaDataCharacters[0..15] for the given page.
- * Does NOT touch name_Debug (used by MM_Characters_GetModelByName). */
+/* Restores data.MetaDataCharacters[] from the backup taken on first use.
+ * Per-page overrides are deliberately NOT applied here: see body. */
+/* Note: this function deliberately does NOT rewrite MetaDataCharacters[].
+ * data.MetaDataCharacters[] is indexed by enum Characters, not by grid slot,
+ * and the original iconIDs are NOT "32 + enum" for indices >= 8
+ * (Pinstripe=43, Papu=41, Roo=40, Joe=42, Tropy=44). The old code wrote
+ * "NATIVE_ICON_BASE + e->slot" for each custom, which set Joe's iconID
+ * (42) to 43 and made him draw with Pinstripe's icon. Fixed in 40805acd3. */
 static void ApplyPageMeta(int page)
 {
     EnsureMetaBackup();
@@ -1008,22 +1014,7 @@ static void ApplyPageMeta(int page)
     /* Restore originals first */
     memcpy(data.MetaDataCharacters, s_metaBackup, sizeof(s_metaBackup));
 
-    if (page == 0)
-        return;
 
-    /* Override slots that have an entry on this page (0..14) */
-    for (int i = 0; i < s_pageEntryCount; i++)
-    {
-        PageEntry *e = &s_pageEntries[i];
-        if (e->page != page)
-            continue;
-        if (e->slot < 0 || e->slot >= 15)
-            continue;
-
-        struct MetaDataCHAR *md = &data.MetaDataCharacters[e->slot];
-        /* APPLYPAGEMETA_FIX_APPLIED */ (void)0; /* md->iconID = NATIVE_ICON_BASE + e->slot; */  /* 32..46 */
-        /* name_LNG_* and engineID are TODO */
-    }
 }
 
 /* --------------------------------------------------------------------- */
