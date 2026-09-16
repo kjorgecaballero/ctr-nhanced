@@ -76,6 +76,27 @@ void MM_HighScore_Text3D(char *string, int posX, int posY, s16 font, u32 flags)
 	DecalFont_DrawLine(string, posX + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font, (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
 }
 
+/* Same as MM_HighScore_Text3D, but for custom racers: the main draw uses
+ * the roster color, the shadow stays BLACK. Original IDs and customs
+ * without a roster color fall through to the normal implementation. */
+static void MM_HighScore_Text3D_ForRacer(char *string, int posX, int posY, s16 font, u32 flags, int characterID)
+{
+	const u32 *custom = NativeCustomRacer_GetColorPtr(characterID);
+	if (custom == NULL)
+	{
+		MM_HighScore_Text3D(string, posX, posY, font, flags);
+		return;
+	}
+
+	const u32 *saved = s_fontColorOverride;
+	s_fontColorOverride = custom;
+	DecalFont_DrawLine(string, posX, posY, font, flags);
+	s_fontColorOverride = saved;
+
+	DecalFont_DrawLine(string, posX + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font,
+	                   (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
+}
+
 void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 {
 	struct GameTracker *gGT = sdata->gGT;
@@ -155,9 +176,10 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		                    bestLapLabelMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_LABEL_Y_OFFSET, FONT_SMALL, 0);
 
 		// Character Name
-		MM_HighScore_Text3D(entry[0].name, bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_TEXT_X_OFFSET,
-		                    bestLapEntryMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_NAME_Y_OFFSET, FONT_BIG,
-		                    GET_MPK_ID(entry[0].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
+		MM_HighScore_Text3D_ForRacer(entry[0].name, bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_TEXT_X_OFFSET,
+		                             bestLapEntryMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_NAME_Y_OFFSET, FONT_BIG,
+		                             GET_MPK_ID(entry[0].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET,
+		                             entry[0].characterID);
 
 		// Draw time string
 		// NOTE(aalhendi): Retail also uses currX as the Y transition base here.
@@ -188,10 +210,12 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 		                     ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), MM_HIGHSCORE_ICON_TRANSPARENCY, MM_HIGHSCORE_ICON_SCALE);
 
 		// draw the name string
-		MM_HighScore_Text3D(entry[entryIndex].name, D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_NAME_X_OFFSET,
-		                    D230.transitionMeta_HighScores[metaIndex].currY + offsetY + (scoreRowIndex * MM_HIGHSCORE_SCORE_ROW_Y_STEP) +
-		                        MM_HIGHSCORE_SCORE_NAME_Y_OFFSET,
-		                    FONT_BIG, GET_MPK_ID(entry[entryIndex].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET);
+		MM_HighScore_Text3D_ForRacer(entry[entryIndex].name,
+		                             D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_NAME_X_OFFSET,
+		                             D230.transitionMeta_HighScores[metaIndex].currY + offsetY + (scoreRowIndex * MM_HIGHSCORE_SCORE_ROW_Y_STEP) +
+		                                 MM_HIGHSCORE_SCORE_NAME_Y_OFFSET,
+		                             FONT_BIG, GET_MPK_ID(entry[entryIndex].characterID) + MM_HIGHSCORE_DRIVER_COLOR_OFFSET,
+		                             entry[entryIndex].characterID);
 
 		// draw the Time string
 		MM_HighScore_Text3D(

@@ -183,4 +183,13 @@ CTR_STATIC_ASSERT(OFFSETOF(struct IconGroup, numIcons) == 0x12);
 	CtrGpu_WritePackedUVWord(&(p)->u0, CTR_ReadU32LE(&(icon)->texLayout.u0)), CtrGpu_WritePackedUVWord(&(p)->u1, CTR_ReadU32LE(&(icon)->texLayout.u1)), \
 	    CtrGpu_WritePackedUV(&(p)->u2, CTR_ReadU16LE(&(icon)->texLayout.u2)), CtrGpu_WritePackedUV(&(p)->u3, CTR_ReadU16LE(&(icon)->texLayout.u3))
 
+/* Optional color override for DecalFont_DrawLine. When non-NULL, the font
+ * renderer samples its 4 vertex colors from this pointer instead of
+ * data.ptrColor[flags & 0xFFF]. Used by the custom-racer system to draw
+ * high-score names in the roster color of a custom instead of the color
+ * inherited from the original at the same MPK slot.
+ * Set it, draw, then restore the previous value. Not thread-safe, but the
+ * engine is single-threaded for UI. */
+extern const u32 *s_fontColorOverride;
+
 #endif

@@ -364,7 +364,9 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		                     TT_HIGH_SCORE_ICON_TRANSPARENCY, TT_HIGH_SCORE_ICON_SCALE);
 
 		// Draw Name
-		DecalFont_DrawLine(scoreEntries[scoreEntryIndex].name, timeboxX, timeboxY, FONT_CREDITS, nameColor);
+		NativeCustomRacer_DrawLineForRacer(scoreEntries[scoreEntryIndex].name,
+		                                    timeboxX, timeboxY, FONT_CREDITS,
+		                                    nameColor, scoreEntries[scoreEntryIndex].characterID);
 
 		// Draw time
 		DecalFont_DrawLine(RECTMENU_DrawTime(scoreEntries[scoreEntryIndex].time), timeboxX, timeboxY + 0x11, FONT_SMALL, timeColor);

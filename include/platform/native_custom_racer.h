@@ -137,6 +137,16 @@ void NativeCustomRacer_ForceReapply(void);
 struct Icon;
 struct Icon *NativeCustomRacer_GetIconPtr(int characterID);
 
+/* === High-score name color override ===
+ * Draws a string with DecalFont_DrawLine, but for custom IDs (>= 16)
+ * that have a #RRGGBB in roster.txt, temporarily swaps in the roster
+ * color instead of the DecalFontStyle index passed by the caller.
+ * Originals (0..15) and customs without a roster color fall through
+ * unchanged, so existing call sites keep their behavior. */
+void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
+                                        s16 fontType, s16 colorFlags,
+                                        int characterID);
+
 #ifdef __cplusplus
 }
 #endif

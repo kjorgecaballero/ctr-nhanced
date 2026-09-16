@@ -1194,3 +1194,23 @@ struct Model *NativeCustomRacer_GetMenuModel(int characterID, int playerIndex)
 
     return s_menuModel[idx][p];
 }
+
+/* === High-score name color override ===
+ * See the header for rationale. Uses the s_fontColorOverride global owned
+ * by DecalFont.c and declared in namespace_Decal.h (via common.h). */
+void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
+                                        s16 fontType, s16 colorFlags,
+                                        int characterID)
+{
+    const u32 *custom = NativeCustomRacer_GetColorPtr(characterID);
+    if (custom == NULL)
+    {
+        DecalFont_DrawLine(str, posX, posY, fontType, colorFlags);
+        return;
+    }
+
+    const u32 *saved = s_fontColorOverride;
+    s_fontColorOverride = custom;
+    DecalFont_DrawLine(str, posX, posY, fontType, colorFlags);
+    s_fontColorOverride = saved;
+}

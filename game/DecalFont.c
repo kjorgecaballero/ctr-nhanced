@@ -1,5 +1,7 @@
 #include <common.h>
 
+const u32 *s_fontColorOverride = NULL;
+
 int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 {
 	s16 font_charPixWidth;
@@ -89,7 +91,9 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 		s16 iconScale = FP(1.0);
 
 
-		u32 *ptrColor = data.ptrColor[flags];
+		u32 *ptrColor = (s_fontColorOverride != NULL)
+		                  ? (u32 *)s_fontColorOverride
+		                  : data.ptrColor[flags];
 
 
 		if (*strcopy == ':' || *strcopy == '.')

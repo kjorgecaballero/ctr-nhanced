@@ -297,7 +297,9 @@ void RR_EndEvent_DrawHighScore(s16 startX, s32 startY, s16 scoreMode)
 		                 s_highScoreIconColor223, s_highScoreIconColor223, s_highScoreIconColor223, s_highScoreIconColor223, 1, RR_HIGH_SCORE_ICON_SCALE);
 
 		// Draw Name
-		RR_DRAW_LINE_WIDE_X(scoreEntry->name, timeboxX, currentY, FONT_CREDITS, nameColor);
+		NativeCustomRacer_DrawLineForRacer(scoreEntry->name, timeboxX, currentY,
+		                                    FONT_CREDITS, nameColor,
+		                                    scoreEntry->characterID);
 
 		// Draw time
 		RR_DRAW_LINE_WIDE_X(RECTMENU_DrawTime(scoreEntry->time), timeboxX, currentY + 0x11, FONT_SMALL, timeColor);
