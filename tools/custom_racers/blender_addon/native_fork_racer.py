@@ -39,6 +39,18 @@ class NFR_RacerProps(PropertyGroup):
     page:       IntProperty(name="Page", default=1, min=1, max=8)
     slot:       IntProperty(name="Slot", default=0, min=0, max=15)
     engine:     EnumProperty(name="Engine", items=ENGINES, default="BALANCED")
+    mask:       EnumProperty(
+        name="Mask",
+        description="Which mask this racer receives from item boxes",
+        items=[("good", "Good (Aku Aku)", ""),
+               ("bad",  "Bad (Uka Uka)",  "")],
+        default="good")
+    wheels:     EnumProperty(
+        name="Wheels",
+        description="Tire sprite visibility (Oxide-style hidden tires)",
+        items=[("yes", "Visible",             ""),
+               ("no",  "Hidden (Oxide-style)", "")],
+        default="yes")
     long_name:  StringProperty(name="Long Name", description="Shown under the 3D preview")
     short_name: StringProperty(name="Short Name", description="Used by TT fallback etc.")
     color:      FloatVectorProperty(name="Minimap Color", subtype="COLOR",
@@ -192,6 +204,9 @@ def _do_export(context, obj):
         "--icon", r.icon_path,
     ]
 
+    # Mask polarity + wheel visibility (roster.txt: mask=, wheels=)
+    cmd += ["--mask", r.mask, "--wheels", r.wheels]
+
     # Only pass --color if it differs from default white
     if tuple(r.color[:3]) != (1.0, 1.0, 1.0):
         hexcol = "#{:02X}{:02X}{:02X}".format(
@@ -314,6 +329,7 @@ class NFR_OT_SaveSettings(Operator):
                 "slug": r.slug, "page": r.page, "slot": r.slot, "engine": r.engine,
                 "long_name": r.long_name, "short_name": r.short_name,
                 "color": list(r.color), "icon_path": r.icon_path,
+                "mask": r.mask, "wheels": r.wheels,
             }
         Path(self.filepath).write_text(json.dumps(data, indent=2), encoding="utf-8")
         self.report({"INFO"}, f"Saved {len(data)} racers to {self.filepath}")
@@ -348,6 +364,8 @@ class NFR_OT_LoadSettings(Operator):
             c = d.get("color", [1.0, 1.0, 1.0, 1.0])
             r.color = tuple(c[:4]) if len(c) >= 3 else (1.0, 1.0, 1.0, 1.0)
             r.icon_path = d.get("icon_path", "")
+            r.mask      = d.get("mask",   "good")
+            r.wheels    = d.get("wheels", "yes")
             loaded += 1
         self.report({"INFO"}, f"Loaded {loaded} racers from {self.filepath}")
         return {"FINISHED"}
@@ -384,6 +402,9 @@ class NFR_PT_Racer(Panel):
         row.prop(r, "slot")
         col.label(text=f"Custom ID: {r.custom_id()}", icon="INFO")
         col.prop(r, "engine")
+        row = col.row(align=True)
+        row.prop(r, "mask")
+        row.prop(r, "wheels")
         col.separator()
         col.prop(r, "long_name")
         col.prop(r, "short_name")
