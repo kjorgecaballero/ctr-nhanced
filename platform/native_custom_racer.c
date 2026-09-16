@@ -1021,7 +1021,7 @@ static void ApplyPageMeta(int page)
             continue;
 
         struct MetaDataCHAR *md = &data.MetaDataCharacters[e->slot];
-        md->iconID = NATIVE_ICON_BASE + e->slot;  /* 32..46 */
+        /* APPLYPAGEMETA_FIX_APPLIED */ (void)0; /* md->iconID = NATIVE_ICON_BASE + e->slot; */  /* 32..46 */
         /* name_LNG_* and engineID are TODO */
     }
 }
