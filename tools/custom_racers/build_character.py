@@ -15,8 +15,19 @@ triangle twice: once with the original winding (visible from outside)
 and once with bit 5 (0x20) set on every vertex, which the engine
 interprets as a flipped winding (visible from inside). Net effect:
 the triangle renders from both sides, matching Blender's viewport.
+
+Alpha routing: each texel is classified by its alpha into one of three
+buckets:
+    a <  SEMI_LO            -> transparent (palette index 0)
+    SEMI_LO <= a < SEMI_HI  -> semi-transparent (STP bit 15 set on the
+                               palette entry, engine blends it at 50%)
+    a >= SEMI_HI            -> fully opaque (STP bit clear)
+Opaque and semi pixels get disjoint palette slots, so a black outline
+with a >= SEMI_HI can never inherit the STP bit from a semi neighbour
+(this is the same fix as build_icons.py, reimplemented without PIL).
 """
 import json, math, struct, hashlib, sys
+from collections import Counter
 from pathlib import Path
 from ctr_animation_codec import encode_animation, pack_delta
 
@@ -53,6 +64,14 @@ SCALE = 2
 
 CACHE_MIN, CACHE_MAX = 32, 87
 
+# Alpha thresholds for texel classification (match build_icons.py).
+SEMI_LO = 0.1
+SEMI_HI = 0.9
+
+# Index 0 of every palette is reserved for fully-transparent texels.
+# The remaining 15 slots are shared between the opaque and semi buckets.
+CLUT_BUDGET = 15
+
 # Vertex flag layout (byte 3 of each command word).
 #   bit 7 (0x80) = first vertex of the triangle
 #   bit 5 (0x20) = flipped winding (set only on the DS duplicate pass)
@@ -87,34 +106,56 @@ def apply_matrix_world(mesh):
     return mesh
 
 
-def quantize_palette_to_16(rgb555):
-    """Reduce a list of RGB555 colors to at most 16 unique entries."""
+def quantize_palette_to_n(rgb555, n):
+    """Reduce a list of RGB555 colors to at most n unique entries.
+
+    Progressive per-channel bit reduction (same family of tricks the old
+    quantize_palette_to_16 used), with a frequency-based fallback for
+    very small n where even 1-bit-per-channel still yields 8 colors.
+    """
+    if not rgb555 or n <= 0:
+        return rgb555
+
     palette = sorted(set(rgb555))
-    if len(palette) <= 16:
+    if len(palette) <= n:
         return rgb555
 
     for shift in range(1, 6):
-        bits = 5 - shift
-        if bits < 1:
-            bits = 1
+        bits = max(1, 5 - shift)
+        keep = 5 - bits
         reduced = []
         for c in rgb555:
-            if c == 0 or c == 0x8000:
-                reduced.append(c)
-                continue
-            r5 = c & 31
-            g5 = (c >> 5) & 31
-            b5 = (c >> 10) & 31
-            r5 = (r5 >> (5 - bits)) << (5 - bits)
-            g5 = (g5 >> (5 - bits)) << (5 - bits)
-            b5 = (b5 >> (5 - bits)) << (5 - bits)
+            r5 = ((c      ) & 31) >> keep << keep
+            g5 = ((c >>  5) & 31) >> keep << keep
+            b5 = ((c >> 10) & 31) >> keep << keep
             reduced.append(r5 | (g5 << 5) | (b5 << 10))
         rgb555 = reduced
         palette = sorted(set(rgb555))
-        if len(palette) <= 16:
+        if len(palette) <= n:
             return rgb555
 
-    return rgb555
+    # n is so small that even bits=1 (8 possible colors) still exceeds
+    # it. Keep the n most frequent colors and snap everything else to
+    # the nearest kept color (squared euclidean distance in 5:5:5 space).
+    counts = Counter(rgb555)
+    top = [c for c, _ in counts.most_common(n)]
+
+    def dist2(a, b):
+        dr = ((a      ) & 31) - ((b      ) & 31)
+        dg = ((a >>  5) & 31) - ((b >>  5) & 31)
+        db = ((a >> 10) & 31) - ((b >> 10) & 31)
+        return dr*dr + dg*dg + db*db
+
+    nearest_cache = {}
+    out = []
+    for c in rgb555:
+        if c in nearest_cache:
+            out.append(nearest_cache[c])
+            continue
+        best = min(top, key=lambda t: dist2(c, t))
+        nearest_cache[c] = best
+        out.append(best)
+    return out
 
 
 def prepare_textures(mesh):
@@ -177,23 +218,80 @@ def prepare_textures(mesh):
         cx = ATLAS_X + 16 * (index % 8)
         cy = ATLAS_Y + TEXTURE_ROWS + index // 8
 
-        rgb555 = []
-        for r, g, b, a in rgba:
-            c = round(r * 31) | (round(g * 31) << 5) | (round(b * 31) << 10)
-            rgb555.append(0 if a < .5 else c if c else 0x8000)
+        # ---- Alpha routing ------------------------------------------
+        # Classify each texel by alpha into one of three buckets, then
+        # give opaque and semi their own disjoint palette slots. Index
+        # 0 is reserved for transparent.
+        pixel_bucket = []   # 'T' | 'O' | 'S' per texel
+        opaque_px = []      # (r, g, b) floats for a >= SEMI_HI
+        semi_px   = []      # (r, g, b) floats for SEMI_LO <= a < SEMI_HI
 
-        rgb555 = quantize_palette_to_16(rgb555)
-        palette = sorted(set(rgb555))
-        assert len(palette) <= 16, (name, len(palette))
-        lookup = {c: i for i, c in enumerate(palette)}
+        for r, g, b, a in rgba:
+            if a < SEMI_LO:
+                pixel_bucket.append('T')
+            elif a < SEMI_HI:
+                pixel_bucket.append('S')
+                semi_px.append((r, g, b))
+            else:
+                pixel_bucket.append('O')
+                opaque_px.append((r, g, b))
+
+        # Split the 15 usable slots between the two colour buckets,
+        # mirroring build_icons.py: 3..8 slots for semi depending on
+        # how much of the texture is semi, the rest for opaque.
+        if not semi_px:
+            n_opaque, n_semi = CLUT_BUDGET, 0
+        elif not opaque_px:
+            n_opaque, n_semi = 0, CLUT_BUDGET
+        else:
+            ratio  = len(semi_px) / (len(semi_px) + len(opaque_px))
+            n_semi = max(3, min(8, round(CLUT_BUDGET * ratio)))
+            n_opaque = CLUT_BUDGET - n_semi
+
+        def quantize_bucket(colors, n):
+            """colors: list of (r,g,b) floats. Returns (palette_rgb555, indices)."""
+            if not colors or n <= 0:
+                return [], []
+            rgb555 = [round(r * 31) | (round(g * 31) << 5) | (round(b * 31) << 10)
+                      for r, g, b in colors]
+            rgb555 = quantize_palette_to_n(rgb555, n)
+            palette = sorted(set(rgb555))
+            lookup = {c: i for i, c in enumerate(palette)}
+            return palette, [lookup[c] for c in rgb555]
+
+        opaque_pal, opaque_idx = quantize_bucket(opaque_px, n_opaque)
+        semi_pal,   semi_idx   = quantize_bucket(semi_px,   n_semi)
+
+        # Final palette: [transparent, opaque..., semi | STP bit].
+        # The STP bit (0x8000) is only set on the semi entries, so any
+        # opaque texel — including a black outline — is drawn solid.
+        palette = [0x0000]
+        palette.extend(opaque_pal)
+        palette.extend(c | 0x8000 for c in semi_pal)
+        while len(palette) < 16:
+            palette.append(0x0000)
+        assert len(palette) == 16, (name, len(palette))
+
+        # Per-texel palette index.
+        opaque_base = 1
+        semi_base   = 1 + len(opaque_pal)
+        palette_idx = []
+        oi = si = 0
+        for bucket in pixel_bucket:
+            if bucket == 'T':
+                palette_idx.append(0)
+            elif bucket == 'O':
+                palette_idx.append(opaque_base + opaque_idx[oi]); oi += 1
+            else:  # 'S'
+                palette_idx.append(semi_base + semi_idx[si]); si += 1
 
         pixels = bytearray()
         for row in range(h):
-            ids = [lookup[rgb555[row*w+col]] if col < w else 0
+            ids = [palette_idx[row*w+col] if col < w else 0
                    for col in range(words * 4)]
             pixels.extend(ids[i] | ids[i+1] << 4 for i in range(0, len(ids), 2))
 
-        pal = struct.pack('<16H', *(palette + [0] * (16 - len(palette))))
+        pal = struct.pack('<16H', *palette)
 
         textures[name] = {
             'size': [w, h],
