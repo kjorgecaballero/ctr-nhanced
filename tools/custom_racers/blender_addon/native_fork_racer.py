@@ -380,7 +380,11 @@ def export_mesh_json(obj, out_path):
         imgs = list({n.image for n in mat.node_tree.nodes
                      if n.type == "TEX_IMAGE" and n.image})
         im = imgs[0] if imgs else None
-        materials.append({"name": mat.name, "image": im.name if im else None})
+        materials.append({
+            "name": mat.name,
+            "image": im.name if im else None,
+            "double_sided": not mat.use_backface_culling,
+        })
         if im and im.name not in images:
             images[im.name] = {"size": list(im.size),
                                "pixels_rgba": list(im.pixels)}
