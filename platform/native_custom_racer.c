@@ -1009,14 +1009,11 @@ static void ApplyPageIcons(int page)
  * (42) to 43 and made him draw with Pinstripe's icon. Fixed in 40805acd3. */
 static void ApplyPageMeta(int page)
 {
-    (void)page;
-{
     (void)page; /* kept for symmetry with the call site; no longer used */
     EnsureMetaBackup();
 
     /* Restore originals first */
     memcpy(data.MetaDataCharacters, s_metaBackup, sizeof(s_metaBackup));
-
 }
 
 /* --------------------------------------------------------------------- */
@@ -1062,7 +1059,6 @@ void NativeCustomRacer_RefreshPage(void)
 {
     if (s_appliedPage == s_page)
         return;
-    (void)page; /* kept for symmetry with the call site; no longer used */
     EnsureMetaBackup();
     ApplyPageMeta(s_page);
 
