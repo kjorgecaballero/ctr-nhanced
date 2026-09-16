@@ -1049,7 +1049,25 @@ void NativeCustomRacer_RefreshPage(void)
         return;
     EnsureMetaBackup();
     ApplyPageMeta(s_page);
-    ApplyPageIcons(s_page);
+
+    /* === BUG-ICON-03 ====================================================
+     * Sentinel CLUT (BUG-ICON-02) made customs sample from a dedicated
+     * OpenGL texture, so they no longer need a VRAM icon slot. The
+     * per-page bulk upload (ApplyPageIcons) writes page_N.vrm to the
+     * same VRAM rects the originals occupy (see s_iconSlotRects, which
+     * mirrors build_icons.py's SLOTS). Navigating to a custom page
+     * therefore clobbered whatever original shared that slot — e.g.
+     * ernest on page 4 slot 8 overwrote N. Tropy's icon rect
+     * (929, 192) with the source PNG's pixels.
+     *
+     * Only page 0 (the full original atlas) still needs the bulk
+     * upload; originals are otherwise restored lazily by
+     * EnsureIconForChar from the cached page_0.vrm, and customs go
+     * through RegisterCustomIconTexture. */
+    if (s_page == 0)
+        ApplyPageIcons(0);
+    /* === end BUG-ICON-03 ============================================== */
+
     s_appliedPage = s_page;
 }
 
