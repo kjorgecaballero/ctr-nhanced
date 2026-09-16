@@ -225,20 +225,39 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			return;
 		}
 
+		/* Remap de animación airborne. Retail usa el enum Characters
+		 * (0..15), no el raw ID. Para customs (>= 16) hay que consultar
+		 * GET_MPK_ID: un custom en grid slot 14 hereda el enum FAKE_CRASH,
+		 * y sus matrices airborne están mal formadas en retail (por eso
+		 * el retail remapea Fake Crash a Crash). Sin este remap, el
+		 * custom cae en FAKE_CRASH + BASE y el motor lee basura →
+		 * segfault al saltar. Mismo razonamiento para Penta. */
 		characterID = data.characterIDs[d->driverID];
-		if (characterID == PENTA_PENGUIN)
 		{
-			characterID = COCO_BANDICOOT;
-		}
-		if (characterID == FAKE_CRASH)
-		{
-			characterID = CRASH_BANDICOOT;
-		}
+			u8 mpkID = GET_MPK_ID(characterID);
 
-		matrixArray = GET_MPK_ID(characterID) + VEH_FRAME_AIRBORNE_MATRIX_BASE;
-		if (characterID == NITROS_OXIDE)
-		{
-			matrixArray = VEH_FRAME_OXIDE_MATRIX_ARRAY;
+			if (mpkID == PENTA_PENGUIN)
+			{
+				characterID = COCO_BANDICOOT;
+			}
+			if (mpkID == FAKE_CRASH)
+			{
+				characterID = CRASH_BANDICOOT;
+			}
+
+			/* Recompute después del remap: para customs, characterID
+			 * acaba de ser reemplazado por su enum Characters (0..15).
+			 * GET_MPK_ID de un original pasa sin cambios. */
+			mpkID = GET_MPK_ID(characterID);
+
+			if (mpkID == NITROS_OXIDE)
+			{
+				matrixArray = VEH_FRAME_OXIDE_MATRIX_ARRAY;
+			}
+			else
+			{
+				matrixArray = mpkID + VEH_FRAME_AIRBORNE_MATRIX_BASE;
+			}
 		}
 
 		d->matrixArray = matrixArray;
