@@ -28,12 +28,19 @@ extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
         ? &s_customMeta[(id) - NATIVE_CUSTOM_ID_BASE]                         \
         : &data.MetaDataCharacters[(id)])
 
-/* Maps a character ID to a valid slot index (0..15) for use as an index
- * into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only have 16
- * entries. Custom IDs 16..63 wrap back to their original character slot. */
+/* Grid slot (0..15) -> enum Characters. Must match the permutation in
+ * game/230/D230.c characterSelectMeta1P2P, which is how the game maps
+ * character-select cells to the enum-ordered arrays (voice banks,
+ * dance models, kart colors, TNT height, BI_*PACK ranges). */
+extern const u8 s_gridToCharID[16];
+
+/* Maps a character ID to an enum Characters index (0..15) for use as an
+ * index into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only
+ * have 16 entries. Custom IDs 16+ wrap to their page slot, then through
+ * s_gridToCharID. Originals pass through unchanged. */
 #define GET_MPK_ID(id)                                                        \
     (((id) >= NATIVE_CUSTOM_ID_BASE)                                          \
-        ? (((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE)                 \
+        ? s_gridToCharID[((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE]   \
         : (id))
 
 /* Initializes the custom racer subsystem. Reads roster.txt on first call. */
