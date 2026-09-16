@@ -747,9 +747,9 @@ static const struct {
     {942, 144,  32, 251},  /* 10: roo      */
     {896, 192,  32, 252},  /* 11: papu     */
     {907, 192,  32, 253},  /* 12: joe      */
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
-    {0, 0, 0, 0},
+    {960, 216,  48, 248},  /* 13: synthetic (Sentinel only) */
+    {971, 216,  48, 249},  /* 14: synthetic (Sentinel only) */
+    {0, 0, 0, 0},          /* 15: reserved (Oxide) */
 };
 
 /* Per-VRAM-slot page tracker. -1 = unknown, 0 = original atlas,
@@ -1126,7 +1126,7 @@ static void RegisterCustomIconTexture(int idx, int charID)
 
     int page = 1 + idx / NATIVE_PAGE_SIZE;
     int slot = idx % NATIVE_PAGE_SIZE;
-    if (slot >= 13 || s_iconSlotRects[slot].px_x == 0) return;
+    if (slot >= 16 || s_iconSlotRects[slot].px_x == 0) return;
 
     char path[256];
     snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
