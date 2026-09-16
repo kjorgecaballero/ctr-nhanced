@@ -96,8 +96,13 @@ def main():
 
     # 3. Icon
     if icon:
-        shutil.copy(icon, dest / "icon.png")
-        print(f"icon copied -> {dest / 'icon.png'}")
+        src_abs = icon.resolve()
+        dst_abs = (dest / "icon.png").resolve()
+        if src_abs != dst_abs:
+            shutil.copy(icon, dest / "icon.png")
+            print(f"icon copied -> {dest / 'icon.png'}")
+        else:
+            print(f"icon already in place: {dst_abs}")
     elif not (dest / "icon.png").exists():
         print(f"WARNING: no icon.png for '{slug}'; character select will show a blank cell")
 
