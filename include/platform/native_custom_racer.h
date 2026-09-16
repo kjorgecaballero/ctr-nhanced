@@ -147,6 +147,11 @@ void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
                                         s16 fontType, s16 colorFlags,
                                         int characterID);
 
+/* === Mask good/bad (Aku Aku / Uka Uka) ===
+ * Returns 1 = good (Aku Aku), 0 = bad (Uka Uka), -1 = not a custom.
+ * Default for customs without a mask= field in roster.txt is good. */
+int NativeCustomRacer_GetMaskIsGoodGuy(int characterID);
+
 #ifdef __cplusplus
 }
 #endif

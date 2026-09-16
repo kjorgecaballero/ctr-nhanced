@@ -149,7 +149,12 @@ b32 VehPickupItem_MaskBoolGoodGuy(struct Driver *d)
 {
 	s32 charID = data.characterIDs[d->driverID];
 
-	// Crash, Coco, Pura, Polar, Penta
+	
+	/* Custom racers (ID >= 16): consult roster.txt mask= field. */
+	int custom = NativeCustomRacer_GetMaskIsGoodGuy(charID);
+	if (custom >= 0)
+		return (b32)custom;
+// Crash, Coco, Pura, Polar, Penta
 	u32 maskBits = MASK_GOOD_GUY_CHARACTER_BITS;
 
 	return (maskBits >> charID) & 1;

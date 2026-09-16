@@ -45,6 +45,8 @@ def main():
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
     ap.add_argument("--color", default=None,
                     help="optional minimap color #RRGGBB")
+    ap.add_argument("--mask", choices=["good", "bad"], default="good",
+                    help="Aku Aku (good, default) or Uka Uka (bad)")
     args = ap.parse_args()
 
     color = args.color
@@ -103,6 +105,7 @@ def main():
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
     if color is not None:
         new_line += f"\t{color}"
+    new_line += f"\tmask={args.mask}"
     updated = False
     for i, l in enumerate(lines):
         parts = l.split()
