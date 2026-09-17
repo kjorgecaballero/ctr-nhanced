@@ -38,8 +38,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slug",           help="folder name and internal .ctr name, e.g. 'ernest'")
     ap.add_argument("source_mesh",    help="path to source_mesh_<slug>.json")
-    ap.add_argument("page", type=int, help="roster page (>= 1; page 0 = originals)")
-    ap.add_argument("slot", type=int, help="slot within the page (0..15)")
+    ap.add_argument("page", type=int, help="roster page (0 = originals page, slots 16-17 only; 1..8 = custom pages)")
+    ap.add_argument("slot", type=int, help="slot within the page (0..15 for pages 1..8; 16..17 for page 0)")
     ap.add_argument("engine",         choices=sorted(VALID_ENGINES))
     ap.add_argument("display_name",   help="label shown in character select")
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
@@ -50,6 +50,16 @@ def main():
     ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
                     help="wheels visible (default) or hidden (Oxide-style)")
     args = ap.parse_args()
+
+    # Validate arguments before touching the filesystem.
+    if not (0 <= args.page <= 8):
+        sys.exit("ERROR: page must be 0..8")
+    if args.page == 0:
+        if args.slot not in (16, 17):
+            sys.exit("ERROR: page 0 accepts only custom slots 16 and 17")
+    else:
+        if not (0 <= args.slot <= 15):
+            sys.exit("ERROR: slot must be 0..15 for pages 1..8")
 
     color = args.color
     if color is not None:
@@ -66,10 +76,6 @@ def main():
 
     if not src.exists():
         sys.exit(f"ERROR: source_mesh not found: {src}")
-    if args.page < 1:
-        sys.exit("ERROR: page must be >= 1 (page 0 is reserved for originals)")
-    if not (0 <= args.slot <= 15):
-        sys.exit("ERROR: slot must be 0..15")
     if icon and not icon.exists():
         sys.exit(f"ERROR: icon not found: {icon}")
 

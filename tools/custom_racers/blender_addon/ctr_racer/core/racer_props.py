@@ -19,8 +19,8 @@ from ..constants import ENGINES
 class NFR_RacerProps(PropertyGroup):
     is_racer:   BoolProperty(name="Is Racer", default=False)
     slug:       StringProperty(name="Slug", description="Folder name and internal .ctr name")
-    page:       IntProperty(name="Page", default=1, min=1, max=8)
-    slot:       IntProperty(name="Slot", default=0, min=0, max=15)
+    page:       IntProperty(name="Page", default=1, min=0, max=8)
+    slot:       IntProperty(name="Slot", default=0, min=0, max=17)
     engine:     EnumProperty(name="Engine", items=ENGINES, default="BALANCED")
     mask:       EnumProperty(
         name="Mask",
