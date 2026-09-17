@@ -113,6 +113,10 @@ def main():
         print(f"WARNING: no icon.png for '{slug}'; character select will show a blank cell")
 
     # 4. roster.txt
+    # Dedup by (page, slot), NOT by slug. A racer slug may legitimately
+    # live on multiple pages (same mesh exported to page 0 slot 17 AND
+    # page 1 slot 4). Slug-based dedup would silently collapse them into
+    # one entry, orphaning whichever slot lost the race.
     roster_path = RACERS / "roster.txt"
     lines = roster_path.read_text().splitlines()
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
@@ -123,7 +127,14 @@ def main():
     updated = False
     for i, l in enumerate(lines):
         parts = l.split()
-        if len(parts) >= 3 and parts[2] == slug:
+        if len(parts) < 2:
+            continue
+        try:
+            line_page = int(parts[0])
+            line_slot = int(parts[1])
+        except ValueError:
+            continue  # header/comment line
+        if line_page == args.page and line_slot == args.slot:
             lines[i] = new_line
             updated = True
             break

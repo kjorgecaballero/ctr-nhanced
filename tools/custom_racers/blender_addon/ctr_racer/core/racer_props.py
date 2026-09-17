@@ -41,6 +41,11 @@ class NFR_RacerProps(PropertyGroup):
     icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH")
 
     def custom_id(self):
+        # Page 0 slots 16-17 map to the engine's page-0 custom range
+        # (NATIVE_PAGE0_CUSTOM_BASE = 144). The 16+(page-1)*16+slot
+        # formula would return 16 and 17, colliding with page 1 slots 0-1.
+        if self.page == 0:
+            return 144 + (self.slot - 16)
         return 16 + (self.page - 1) * 16 + self.slot
 
 
