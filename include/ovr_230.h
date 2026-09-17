@@ -737,16 +737,16 @@ struct OverlayDATA_230
 	struct CharacterSelectLayoutTables characterSelectLayout;
 
 	// 800b4dcc
-	struct CharacterSelectMeta characterSelectMeta1P2PLimited[0xF];
+	struct CharacterSelectMeta characterSelectMeta1P2PLimited[0x10];
 
 	// 800b4e80
-	struct CharacterSelectMeta characterSelectMeta1P2P[0xF];
+	struct CharacterSelectMeta characterSelectMeta1P2P[0x10];
 
 	// 800b4f34
-	struct CharacterSelectMeta characterSelectMeta3P[0xF];
+	struct CharacterSelectMeta characterSelectMeta3P[0x10];
 
 	// 800b4fe8
-	struct CharacterSelectMeta characterSelectMeta4P[0xF];
+	struct CharacterSelectMeta characterSelectMeta4P[0x10];
 
 	// 800b509C
 	struct CharacterSelectMeta *characterSelectMetaByLayout[6];
@@ -762,24 +762,15 @@ struct OverlayDATA_230
 
 	// 800b50D4
 	// 1P/2P mode
-	struct TransitionMeta characterSelectTransition1P2P[0x15];
-
-	// 0x2 byte padding
-	s16 padding800b51A6;
+	struct TransitionMeta characterSelectTransition1P2P[0x16];
 
 	// 3P mode
 	// 800b51A8
-	struct TransitionMeta characterSelectTransition3P[0x15];
-
-	// 0x2 byte padding
-	s16 padding800B527A;
+	struct TransitionMeta characterSelectTransition3P[0x16];
 
 	// 4P mode
 	// 800b527c
-	struct TransitionMeta characterSelectTransition4P[0x15];
-
-	// 0x2 byte padding
-	s16 padding800B534E;
+	struct TransitionMeta characterSelectTransition4P[0x16];
 
 	// 800B5350
 	struct TransitionMeta *characterSelectTransitionByPlayerCount[4];
@@ -1239,22 +1230,22 @@ CTR_STATIC_ASSERT(sizeof(struct TransitionMeta) == 0xA);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowPos) == 0x860);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowPosByLayout) == 0x894);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta1P2PLimited) == 0x8e8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta1P2P) == 0x99c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta3P) == 0xa50);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta4P) == 0xb04);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMetaByLayout) == 0xbb8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterMenuID) == 0xbd0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition1P2P) == 0xbf0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition3P) == 0xcc4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition4P) == 0xd98);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionByPlayerCount) == 0xe6c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectDriverModel) == 0xe7c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, playerNumberStrings) == 0xe90);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectFallbackDirection1) == 0xea0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectFallbackDirection2) == 0xea4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_Outline) == 0xea8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_NeutralColor) == 0xeac);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_ChosenColor) == 0xeb0);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta1P2P) == 0x9a8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta3P) == 0xa68);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMeta4P) == 0xb28);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMetaByLayout) == 0xbe8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterMenuID) == 0xc00);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition1P2P) == 0xc20);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition3P) == 0xcfc);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransition4P) == 0xdd8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionByPlayerCount) == 0xeb4);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectDriverModel) == 0xec4);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, playerNumberStrings) == 0xed8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectFallbackDirection1) == 0xee8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectFallbackDirection2) == 0xeec);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_Outline) == 0xef0);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_NeutralColor) == 0xef4);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelect_ChosenColor) == 0xef8);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuTransitionDurationFrames) == 0x35c);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuTransitionStep) == 0x360);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMainMenuPos) == 0x364);
@@ -1268,40 +1259,40 @@ CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cheats) == 0x400);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cheatButtonHistory) == 0x820);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupDifficulty) == 0x848);
 CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectLayout) == 0x8ac);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, lapCountByRow) == 0x1090);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, timeTrialStars) == 0x10e0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSelectStars) == 0x1148);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleSetupTables) == 0x13c4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreGhostStars) == 0x1464);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreSelection) == 0x14b4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, trackSelect) == 0x14c0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSelectTransition) == 0x14d8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleTransition) == 0x14de);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreTransition) == 0x14e4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowHeight) == 0x14f8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, desiredMenuIndex) == 0x14fc);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectExitsForward) == 0x1500);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionState) == 0x1524);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, activeCharacterSelectWindowPos) == 0x1528);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectLayoutIndex) == 0x152c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleIntroFrame) == 0x1530);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, activeCharacterSelectMeta) == 0x1534);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuState) == 0x1538);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMenuState) == 0x153c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectModelMoveTimer) == 0x1540);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectRosterExpanded) == 0x1548);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowWidth) == 0x154c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleIntroCameraPath) == 0x1550);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectNameTextY) == 0x1554);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionMeta) == 0x1558);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuTransitionFrame) == 0x155c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionFrame) == 0x1560);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, videoCol) == 0x10dc);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSel_Color) == 0x1158);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponEnabledColor) == 0x13e0);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponDisabledColor) == 0x13e4);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponPanelColor) == 0x13e8);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highscore_iconColor) == 0x146c);
-CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectPlayerState) == 0x1504);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, lapCountByRow) == 0x10d8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, timeTrialStars) == 0x1128);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSelectStars) == 0x1190);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleSetupTables) == 0x140c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreGhostStars) == 0x14ac);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreSelection) == 0x14fc);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, trackSelect) == 0x1508);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSelectTransition) == 0x1520);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleTransition) == 0x1526);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highScoreTransition) == 0x152c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowHeight) == 0x1540);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, desiredMenuIndex) == 0x1544);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectExitsForward) == 0x1548);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionState) == 0x156c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, activeCharacterSelectWindowPos) == 0x1570);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectLayoutIndex) == 0x1574);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleIntroFrame) == 0x1578);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, activeCharacterSelectMeta) == 0x157c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuState) == 0x1580);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectMenuState) == 0x1584);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectModelMoveTimer) == 0x1588);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectRosterExpanded) == 0x1590);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectWindowWidth) == 0x1594);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleIntroCameraPath) == 0x1598);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectNameTextY) == 0x159c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionMeta) == 0x15a0);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, titleMenuTransitionFrame) == 0x15a4);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectTransitionFrame) == 0x15a8);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, videoCol) == 0x1124);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, cupSel_Color) == 0x11a0);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponEnabledColor) == 0x1428);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponDisabledColor) == 0x142c);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, battleWeaponPanelColor) == 0x1430);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, highscore_iconColor) == 0x14b4);
+CTR_STATIC_ASSERT(offsetof(struct OverlayDATA_230, characterSelectPlayerState) == 0x154c);
 
 #endif

@@ -90,6 +90,11 @@ void NativeCustomRacer_DumpVRAMIfRequested(void);
 void  NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model);
 void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
 
+/* Menu preview: real Oxide model (see native_custom_racer.c). */
+void  NativeCustomRacer_ResetOxideMenuModel(void);
+void **NativeCustomRacer_GetOxideMenuModelSlot(void);
+struct Model *NativeCustomRacer_GetOxideMenuModel(void);
+
 /* === Menu preview ===
  * Returns a struct Model* ready for the character-select 3D window.
  * Loads model_p0.ctr on first call and caches it per characterID.

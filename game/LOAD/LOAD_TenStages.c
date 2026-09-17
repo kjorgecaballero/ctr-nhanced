@@ -3,6 +3,10 @@
 
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook};
 
+/* Writes the loaded address into the slot passed to LOAD_AppendQueue.
+ * Same macro that LOAD_Assets.c uses for the race driver models. */
+static void (*const LOAD_OxideMenuModel_SetPointer)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
+
 #ifdef CTR_NATIVE
 enum
 {
@@ -409,6 +413,19 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if (((u32)(levelID - GEM_STONE_VALLEY) < LOAD_PTR_MAP_ADV_LEVEL_COUNT) || ((u32)(levelID - CREDITS_CRASH) < LOAD_PTR_MAP_CREDIT_LEVEL_COUNT))
 		{
 			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
+		}
+
+		/* NITROS_OXIDE isn't in the char-select BSP's model list, but his
+		 * race model is at BI_RACERMODELHI + 15. Queue it whenever we
+		 * load the main menu so MM_Characters_DrawWindows can show the
+		 * real model. DrawWindows still falls back to Fake Crash if the
+		 * load hasn't completed (or failed). */
+		if (levelID == MAIN_MENU_LEVEL)
+		{
+			NativeCustomRacer_ResetOxideMenuModel();
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + NITROS_OXIDE,
+			                 NativeCustomRacer_GetOxideMenuModelSlot(),
+			                 LOAD_OxideMenuModel_SetPointer);
 		}
 		break;
 	}

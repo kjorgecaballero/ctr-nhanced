@@ -714,6 +714,36 @@ void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex)
     return s_playerModelPtr[playerIndex];
 }
 
+/* === Menu preview: real Oxide model =====================================
+ * Oxide has no entry in the char-select level's BSP (retail never made
+ * him selectable), but his race model lives at BI_RACERMODELHI + 15 in
+ * the bigfile. LOAD_TenStages queues it when entering MAIN_MENU_LEVEL,
+ * using the same LT_GETADDR path that LOAD_Assets.c uses in races.
+ * The slot is reset before each queue, so a failed load leaves it NULL
+ * and MM_Characters_DrawWindows falls back to Fake Crash. */
+static void *s_oxideMenuModel = NULL;
+
+void NativeCustomRacer_ResetOxideMenuModel(void)
+{
+    s_oxideMenuModel = NULL;
+}
+
+void **NativeCustomRacer_GetOxideMenuModelSlot(void)
+{
+    return &s_oxideMenuModel;
+}
+
+#ifndef LOAD_MODEL_FILE_HEADER_BYTES
+#define LOAD_MODEL_FILE_HEADER_BYTES 4
+#endif
+
+struct Model *NativeCustomRacer_GetOxideMenuModel(void)
+{
+    if (s_oxideMenuModel == NULL)
+        return NULL;
+    return (struct Model *)((unsigned char *)s_oxideMenuModel + LOAD_MODEL_FILE_HEADER_BYTES);
+}
+
 /* ===================================================================== */
 /* PAGINATION                                                            */
 /* ===================================================================== */

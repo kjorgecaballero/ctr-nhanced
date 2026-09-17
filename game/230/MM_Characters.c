@@ -11,7 +11,7 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
-	MM_CHARACTER_SELECT_ICON_COUNT = 0xf,
+	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
 	MM_CHARACTER_SELECT_MAX_PLAYERS = 4,
@@ -26,8 +26,8 @@ enum
 	MM_CHARACTER_SELECT_LAYOUT_4P = 3,
 	MM_CHARACTER_SELECT_LAYOUT_1P_LIMITED = 4,
 	MM_CHARACTER_SELECT_LAYOUT_2P_LIMITED = 5,
-	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 15,
-	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x10,
+	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 16,
+	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
 	MM_CHARACTER_SELECT_3P_TITLE_X = 0x9c,
 	MM_CHARACTER_SELECT_3P_SELECT_Y = 0x14,
 	MM_CHARACTER_SELECT_3P_CHARACTER_Y = 0x26,
@@ -280,12 +280,30 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
+		/* NITROS_OXIDE's race model uses anim 0 = turning. The other 15
+		 * come pre-baked with anim 0 = idle. Use a different index for
+		 * Oxide so the menu preview shows an idle pose. */
+		if (*currCharacterID == NITROS_OXIDE)
+			driverInst->animIndex = 1;
+
 		s16 _cid = *currCharacterID;
 		struct Model *model;
 		if (_cid >= NATIVE_CUSTOM_ID_BASE)
 			model = NativeCustomRacer_GetMenuModel((int)_cid, (int)playerIndex);
 		else
 			model = MM_Characters_GetModelByName(GET_METADATA((int)_cid)->name_Debug);
+
+		/* NITROS_OXIDE isn't in the char-select level's ptrModelsPtrArray
+		 * (retail never made him selectable). LOAD_TenStages queues the
+		 * real race model (BI_RACERMODELHI + 15) when entering the menu;
+		 * use it if it's already loaded. Until then (or if the load fails)
+		 * fall back to Fake Crash so the window isn't empty. */
+		if (model == NULL && _cid == NITROS_OXIDE)
+		{
+			model = NativeCustomRacer_GetOxideMenuModel();
+			if (model == NULL)
+				model = MM_Characters_GetModelByName(GET_METADATA(FAKE_CRASH)->name_Debug);
+		}
 
 		driverInst->model = model;
 
@@ -294,6 +312,13 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		 * runs every frame. 0xccc == VEH_BIRTH_WHEEL_SIZE. */
 		{
 			int customWheels = NativeCustomRacer_HasWheels((int)_cid);
+
+			/* NITROS_OXIDE is not a custom (HasWheels returns -1) but his
+			 * retail model has no visible tires. Same treatment as
+			 * wheels=no in roster.txt. */
+			if (_cid == NITROS_OXIDE)
+				customWheels = 0;
+
 			gGT->drivers[playerIndex]->wheelSize = (customWheels == 0) ? 0 : 0xccc;
 		}
 
@@ -363,6 +388,11 @@ void MM_Characters_SetMenuLayout(void)
 	for (s32 iconIndex = MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
 		u16 unlocked = D230.characterSelectMeta1P2P[iconIndex].unlockFlags;
+
+		/* UNLOCK_ALWAYS (0xFFFF) is not a valid bit index. Skip it:
+		 * it must not trigger the roster-expanded layout by itself. */
+		if (unlocked == MM_CHARACTER_UNLOCK_ALWAYS)
+			continue;
 
 		if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, unlocked))
 		{
