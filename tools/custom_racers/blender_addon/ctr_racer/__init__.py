@@ -29,7 +29,6 @@ from bpy.props import (
 )
 from bpy.types import Panel, Operator, AddonPreferences, PropertyGroup
 
-
 # =========================================================================
 # MODULE: submodule imports
 # =========================================================================
@@ -41,7 +40,8 @@ from .constants import (
 from . import prefs
 from .prefs import _get_prefs
 from .render.node_setups import NFR_PS1_NODE_SETUPS
-
+from . import state
+from .core.helpers import _redraw_view3d, _find_object_by_slug, _active_racer
 
 # =========================================================================
 # MODULE: render — compat helpers
@@ -54,7 +54,6 @@ def _nfr_ge_4_0():
 
 def _nfr_ge_5_0():
     return bpy.app.version >= (5, 0, 0)
-
 
 # =========================================================================
 # MODULE: render — color attribute helpers
@@ -71,7 +70,6 @@ def _nfr_create_color_attr(obj, target_name="Color"):
     except Exception as e:
         print(f"[NFR] Error creating color attribute for '{obj.name}': {e}")
         return False
-
 
 def _nfr_apply_white_color(obj, attribute_name="Color"):
     mesh = obj.data
@@ -92,13 +90,11 @@ def _nfr_apply_white_color(obj, attribute_name="Color"):
         print(f"[NFR] Error applying white color to '{obj.name}': {e}")
         return False
 
-
 def _nfr_list_color_attrs(obj):
     mesh = obj.data
     if not hasattr(mesh, "color_attributes") or not mesh.color_attributes:
         return []
     return [a.name for a in mesh.color_attributes]
-
 
 def _nfr_rename_color_attr(obj, old_name, new_name):
     mesh = obj.data
@@ -109,7 +105,6 @@ def _nfr_rename_color_attr(obj, old_name, new_name):
             a.name = new_name
             return True
     return False
-
 
 def _nfr_ensure_attribute_exists(obj, target_name="Color"):
     mesh = obj.data
@@ -129,7 +124,6 @@ def _nfr_ensure_attribute_exists(obj, target_name="Color"):
     _nfr_apply_white_color(obj, target_name)
     mesh.update()
     return True
-
 
 def _nfr_ensure_all_objects_have_color_attributes(target_name="Color"):
     created = 0
@@ -151,7 +145,6 @@ def _nfr_ensure_all_objects_have_color_attributes(target_name="Color"):
     except Exception:
         pass
     return created + renamed
-
 
 # =========================================================================
 # MODULE: render — PS1 material setup
@@ -281,7 +274,6 @@ class NFR_PS1MaterialSetup:
             self.mat.use_backface_culling = True
         self.mat.update_tag()
 
-
 class NFR_AdditiveMaterialSetup(NFR_PS1MaterialSetup):
     def apply_setup(self):
         self.clear_existing_nodes()
@@ -294,7 +286,6 @@ class NFR_AdditiveMaterialSetup(NFR_PS1MaterialSetup):
             self.build_setup('ADDITIVE')
         self.apply_blend_mode('ADDITIVE', px, used_at)
         return True
-
 
 class NFR_SubtractiveMaterialSetup(NFR_PS1MaterialSetup):
     def apply_setup(self):
@@ -309,7 +300,6 @@ class NFR_SubtractiveMaterialSetup(NFR_PS1MaterialSetup):
         self.apply_blend_mode('SUBTRACTIVE', px, used_at)
         return True
 
-
 class NFR_HalfTransparentMaterialSetup(NFR_PS1MaterialSetup):
     def apply_setup(self):
         self.clear_existing_nodes()
@@ -323,7 +313,6 @@ class NFR_HalfTransparentMaterialSetup(NFR_PS1MaterialSetup):
         self.apply_blend_mode('HALF_TRANSPARENT', px, used_at)
         return True
 
-
 class NFR_AdditiveTranslucentMaterialSetup(NFR_PS1MaterialSetup):
     def apply_setup(self):
         self.clear_existing_nodes()
@@ -331,7 +320,6 @@ class NFR_AdditiveTranslucentMaterialSetup(NFR_PS1MaterialSetup):
         self.build_setup('ADDITIVE_TRANSLUCENT')
         self.apply_blend_mode('ADDITIVE_TRANSLUCENT', px, True)
         return True
-
 
 class NFR_PS1MaterialFactory:
     @staticmethod
@@ -345,7 +333,6 @@ class NFR_PS1MaterialFactory:
         elif mode == 'ADDITIVE_TRANSLUCENT':
             return NFR_AdditiveTranslucentMaterialSetup(material)
         return NFR_AdditiveMaterialSetup(material)
-
 
 # =========================================================================
 # MODULE: render — property callbacks
@@ -365,7 +352,6 @@ def _nfr_update_ps1_blend_mode(self, context):
         self.nfr_ps1_last_active_mode = self.nfr_ps1_blend_mode
         self.nfr_ps1_show_backface = cur_bf
 
-
 def _nfr_mat_blend_mode_update(self, context):
     v = getattr(self, "nfr_racer_blend_mode", "half")
     if v not in _BLEND_MODE_SET:
@@ -373,7 +359,6 @@ def _nfr_mat_blend_mode_update(self, context):
     current = self.get("blend_mode", "half")
     if current != v:
         self["blend_mode"] = v
-
 
 # =========================================================================
 # MODULE: material helpers
@@ -383,7 +368,6 @@ def _get_blend_mode(mat):
     if value not in _BLEND_MODE_SET:
         return "half"
     return value
-
 
 # =========================================================================
 # MODULE: racer properties
@@ -414,7 +398,6 @@ class NFR_RacerProps(PropertyGroup):
 
     def custom_id(self):
         return 16 + (self.page - 1) * 16 + self.slot
-
 
 # =========================================================================
 # MODULE: roster I/O
@@ -468,7 +451,6 @@ def _parse_roster_line(line):
         "mask": mask, "wheels": wheels,
     }
 
-
 def _read_roster(prefs):
     path = prefs.racers_dir() / "roster.txt"
     if not path.is_file():
@@ -484,13 +466,11 @@ def _read_roster(prefs):
             entries.append(e)
     return entries
 
-
 def _group_by_page(entries):
     pages = {}
     for e in entries:
         pages.setdefault(e["page"], {})[e["slot"]] = e
     return pages
-
 
 def _remove_roster_entry(prefs, page, slot):
     path = prefs.racers_dir() / "roster.txt"
@@ -520,7 +500,6 @@ def _remove_roster_entry(prefs, page, slot):
 
     return (True, removed_slug)
 
-
 # =========================================================================
 # MODULE: icon previews
 # =========================================================================
@@ -528,13 +507,11 @@ _preview_collection = None
 _icon_cache = {}
 _icon_mtimes = {}
 
-
 def _ensure_previews():
     global _preview_collection
     if _preview_collection is None:
         _preview_collection = bpy.utils.previews.new()
     return _preview_collection
-
 
 def _teardown_previews():
     global _preview_collection
@@ -546,7 +523,6 @@ def _teardown_previews():
         _preview_collection = None
     _icon_cache.clear()
     _icon_mtimes.clear()
-
 
 def _get_icon(slug, png_path):
     pc = _ensure_previews()
@@ -571,7 +547,6 @@ def _get_icon(slug, png_path):
     _icon_mtimes[slug] = mtime
     return icon
 
-
 def _image_preview_icon_id(img):
     if img is None:
         return 0
@@ -586,7 +561,6 @@ def _image_preview_icon_id(img):
         return pv.icon_id or 0
     except Exception:
         return 0
-
 
 # =========================================================================
 # MODULE: mesh export
@@ -635,7 +609,6 @@ def validate_racer(obj):
         warnings.append("No icon PNG selected")
 
     return (len(errors) == 0, warnings, errors)
-
 
 def export_mesh_json(obj, out_path):
     m = obj.data
@@ -691,7 +664,6 @@ def export_mesh_json(obj, out_path):
     Path(out_path).write_text(json.dumps(result, separators=(",", ":")),
                               encoding="utf-8")
 
-
 def _do_export(context, obj):
     prev_mode = context.mode
     switched = False
@@ -716,7 +688,6 @@ def _do_export(context, obj):
                 bpy.ops.object.mode_set(mode=prev_mode)
             except Exception:
                 pass
-
 
 def _do_export_body(context, obj):
     prefs = _get_prefs(context)
@@ -759,7 +730,6 @@ def _do_export_body(context, obj):
         raise RuntimeError(
             f"add_racer failed ({res.returncode}):\n{res.stderr[-400:]}")
 
-
 def _racer_objects(context):
     sel = [o for o in context.selected_objects
            if o.type == "MESH" and o.racer.is_racer]
@@ -767,7 +737,6 @@ def _racer_objects(context):
         return sel
     return [o for o in bpy.data.objects
             if o.type == "MESH" and o.racer.is_racer]
-
 
 # =========================================================================
 # MODULE: build & run
@@ -780,7 +749,6 @@ def _kill_running_exe(prefs):
         return res.returncode == 0
     except Exception:
         return False
-
 
 def _build_exe(context):
     prefs = _get_prefs(context)
@@ -811,7 +779,6 @@ def _build_exe(context):
         return (False, f"Build failed (rc={res.returncode}); see {log_path.name}")
     return (True, "Build OK")
 
-
 def _run_game(context):
     prefs = _get_prefs(context)
     repo = Path(prefs.repo_path)
@@ -828,45 +795,6 @@ def _run_game(context):
     except Exception as ex:
         return (False, f"Launch failed: {ex}")
     return (True, f"Launched {exe.name}")
-
-
-# =========================================================================
-# MODULE: helpers
-# =========================================================================
-def _redraw_view3d(context):
-    try:
-        screen = context.screen
-        if screen is None:
-            return
-        for area in screen.areas:
-            if area.type == "VIEW_3D":
-                area.tag_redraw()
-    except Exception:
-        pass
-
-
-def _find_object_by_slug(slug):
-    return next((o for o in bpy.data.objects
-                 if o.type == "MESH"
-                 and hasattr(o, "racer")
-                 and o.racer.slug == slug), None)
-
-
-def _active_racer(context):
-    obj = context.active_object
-    if (obj is None or obj.type != "MESH"
-            or not hasattr(obj, "racer") or not obj.racer.is_racer):
-        return None
-    return obj.racer
-
-
-# =========================================================================
-# MODULE: state (slot + material pagination)
-# =========================================================================
-_slot_view_page = 1
-_slot_sel_page = -1
-_slot_sel_slot = -1
-_mat_view_page = 1
 
 
 def _resolve_cells(page, page_entries, active_racer, active_slug):
@@ -904,7 +832,6 @@ def _resolve_cells(page, page_entries, active_racer, active_slug):
         cells[slot] = ("empty", None)
     return cells
 
-
 # =========================================================================
 # MODULE: operators — racer panel
 # =========================================================================
@@ -925,7 +852,6 @@ class NFR_OT_Validate(Operator):
         if ok:
             self.report({"INFO"}, f"{obj.name}: OK")
         return {"FINISHED"}
-
 
 class NFR_OT_Export(Operator):
     bl_idname = "nfr.export"
@@ -958,7 +884,6 @@ class NFR_OT_Export(Operator):
         _redraw_view3d(context)
         return {"FINISHED"}
 
-
 class NFR_OT_ExportAll(Operator):
     bl_idname = "nfr.export_all"
     bl_label = "Export All"
@@ -990,7 +915,6 @@ class NFR_OT_ExportAll(Operator):
         _redraw_view3d(context)
         return {"FINISHED"}
 
-
 class NFR_OT_SaveSettings(Operator):
     bl_idname = "nfr.save_settings"
     bl_label = "Save Settings JSON"
@@ -1018,7 +942,6 @@ class NFR_OT_SaveSettings(Operator):
         Path(self.filepath).write_text(json.dumps(data, indent=2), encoding="utf-8")
         self.report({"INFO"}, f"Saved {len(data)} racers to {self.filepath}")
         return {"FINISHED"}
-
 
 class NFR_OT_LoadSettings(Operator):
     bl_idname = "nfr.load_settings"
@@ -1054,7 +977,6 @@ class NFR_OT_LoadSettings(Operator):
         self.report({"INFO"}, f"Loaded {loaded} racers from {self.filepath}")
         return {"FINISHED"}
 
-
 class NFR_OT_BuildExe(Operator):
     bl_idname = "nfr.build_exe"
     bl_label = "Build Exe (only, no launch)"
@@ -1065,7 +987,6 @@ class NFR_OT_BuildExe(Operator):
         self.report({"INFO"} if ok else {"ERROR"}, msg)
         return {"FINISHED"} if ok else {"CANCELLED"}
 
-
 class NFR_OT_RunGame(Operator):
     bl_idname = "nfr.run_game"
     bl_label = "Run"
@@ -1075,7 +996,6 @@ class NFR_OT_RunGame(Operator):
         ok, msg = _run_game(context)
         self.report({"INFO"} if ok else {"ERROR"}, msg)
         return {"FINISHED"} if ok else {"CANCELLED"}
-
 
 class NFR_OT_BuildAndRun(Operator):
     bl_idname = "nfr.build_and_run"
@@ -1091,7 +1011,6 @@ class NFR_OT_BuildAndRun(Operator):
         self.report({"INFO"} if ok else {"ERROR"}, msg)
         return {"FINISHED"} if ok else {"CANCELLED"}
 
-
 # =========================================================================
 # MODULE: render — operators
 # =========================================================================
@@ -1104,7 +1023,6 @@ def _nfr_detect_mode_from_suffix(name):
         return 'SUBTRACTIVE'
     return 'ADDITIVE_TRANSLUCENT'
 
-
 def _nfr_save_current_modes():
     count = 0
     for mat in bpy.data.materials:
@@ -1115,7 +1033,6 @@ def _nfr_save_current_modes():
             count += 1
     return count
 
-
 def _nfr_restore_last_modes():
     count = 0
     for mat in bpy.data.materials:
@@ -1125,7 +1042,6 @@ def _nfr_restore_last_modes():
             mat.nfr_ps1_blend_mode = mat.nfr_ps1_last_active_mode
             count += 1
     return count
-
 
 def _nfr_setup_ps1_materials(context):
     _nfr_ensure_all_objects_have_color_attributes("Color")
@@ -1154,7 +1070,6 @@ def _nfr_setup_ps1_materials(context):
                 print(f"[NFR] material setup error on '{mat.name}': {e}")
     context.view_layer.update()
     return count
-
 
 def _nfr_restore_standard_materials(context):
     processed = set()
@@ -1206,7 +1121,6 @@ def _nfr_restore_standard_materials(context):
     context.view_layer.update()
     return count
 
-
 def _nfr_set_interpolation(mode):
     count = 0
     for mat in bpy.data.materials:
@@ -1217,7 +1131,6 @@ def _nfr_set_interpolation(mode):
                         node.interpolation = mode
                         count += 1
     return count
-
 
 class NFR_OT_TogglePS1Render(Operator):
     bl_idname = "nfr.ps1_toggle_render"
@@ -1301,7 +1214,6 @@ class NFR_OT_TogglePS1Render(Operator):
                         f"Render ON. {detected} detected, {restored} restored, {processed} processed.")
         return {'FINISHED'}
 
-
 class NFR_OT_SetBackface(Operator):
     bl_idname = "nfr.ps1_set_backface"
     bl_label = "Set Backface Visibility"
@@ -1350,7 +1262,6 @@ class NFR_OT_SetBackface(Operator):
                     f"Backfaces {'visible' if self.show else 'hidden'} on "
                     f"{len(processed)} material(s)")
         return {'FINISHED'}
-
 
 class NFR_OT_ApplyBlendMode(Operator):
     bl_idname = "nfr.ps1_apply_blend_mode"
@@ -1419,7 +1330,6 @@ class NFR_OT_ApplyBlendMode(Operator):
         self.report({'INFO'}, f"Applied '{mode}' to {applied} material(s).")
         return {'FINISHED'}
 
-
 # =========================================================================
 # MODULE: operators — slot viewer
 # =========================================================================
@@ -1433,15 +1343,14 @@ class NFR_OT_SlotClick(Operator):
     slot: IntProperty()
 
     def execute(self, context):
-        global _slot_sel_page, _slot_sel_slot
         prefs = _get_prefs(context)
         entries = _read_roster(prefs)
         entry = next((x for x in entries
                       if x["page"] == self.page and x["slot"] == self.slot),
                      None)
 
-        _slot_sel_page = self.page
-        _slot_sel_slot = self.slot
+        state._slot_sel_page = self.page
+        state._slot_sel_slot = self.slot
 
         if entry is not None:
             obj = _find_object_by_slug(entry["folder"])
@@ -1458,7 +1367,6 @@ class NFR_OT_SlotClick(Operator):
         _redraw_view3d(context)
         return {"FINISHED"}
 
-
 class NFR_OT_SlotAssignHere(Operator):
     bl_idname = "nfr.slot_assign_here"
     bl_label = "Assign Here"
@@ -1466,7 +1374,7 @@ class NFR_OT_SlotAssignHere(Operator):
                       "cell. roster.txt is not touched until you press Export.")
 
     def execute(self, context):
-        if _slot_sel_page < 0 or _slot_sel_slot < 0:
+        if state._slot_sel_page < 0 or state._slot_sel_slot < 0:
             self.report({"ERROR"}, "Click a slot in the grid first")
             return {"CANCELLED"}
         obj = context.active_object
@@ -1477,24 +1385,23 @@ class NFR_OT_SlotAssignHere(Operator):
         prefs = _get_prefs(context)
         entries = _read_roster(prefs)
         existing = next((x for x in entries
-                         if x["page"] == _slot_sel_page
-                         and x["slot"] == _slot_sel_slot), None)
+                         if x["page"] == state._slot_sel_page
+                         and x["slot"] == state._slot_sel_slot), None)
 
-        obj.racer.page = _slot_sel_page
-        obj.racer.slot = _slot_sel_slot
+        obj.racer.page = state._slot_sel_page
+        obj.racer.slot = state._slot_sel_slot
 
         if existing is not None and existing["folder"] != obj.racer.slug:
             self.report({"WARNING"},
-                f"Slot {_slot_sel_slot} is already taken by "
+                f"Slot {state._slot_sel_slot} is already taken by "
                 f"'{existing['folder']}'. Export will leave two entries "
                 f"at this position.")
         else:
             self.report({"INFO"},
-                f"Assigned {obj.name} to page {_slot_sel_page} "
-                f"slot {_slot_sel_slot}. Press Export to commit.")
+                f"Assigned {obj.name} to page {state._slot_sel_page} "
+                f"slot {state._slot_sel_slot}. Press Export to commit.")
         _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_SlotDelete(Operator):
     bl_idname = "nfr.slot_delete"
@@ -1508,22 +1415,20 @@ class NFR_OT_SlotDelete(Operator):
         return context.window_manager.invoke_confirm(self, event)
 
     def execute(self, context):
-        global _slot_sel_page, _slot_sel_slot
         prefs = _get_prefs(context)
         ok, result = _remove_roster_entry(prefs, self.page, self.slot)
         if not ok:
             self.report({"ERROR"}, result)
             return {"CANCELLED"}
 
-        if _slot_sel_page == self.page and _slot_sel_slot == self.slot:
-            _slot_sel_page = -1
-            _slot_sel_slot = -1
+        if state._slot_sel_page == self.page and state._slot_sel_slot == self.slot:
+            state._slot_sel_page = -1
+            state._slot_sel_slot = -1
 
         self.report({"INFO"},
             f"Removed '{result}' from roster.txt (files kept)")
         _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_SlotRefresh(Operator):
     bl_idname = "nfr.slot_refresh"
@@ -1536,30 +1441,25 @@ class NFR_OT_SlotRefresh(Operator):
         self.report({"INFO"}, "Reloaded roster.txt and icons")
         return {"FINISHED"}
 
-
 class NFR_OT_SlotPrevPage(Operator):
     bl_idname = "nfr.slot_prev_page"
     bl_label = "Previous page"
 
     def execute(self, context):
-        global _slot_view_page
-        if _slot_view_page > 1:
-            _slot_view_page -= 1
+        if state._slot_view_page > 1:
+            state._slot_view_page -= 1
             _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_SlotNextPage(Operator):
     bl_idname = "nfr.slot_next_page"
     bl_label = "Next page"
 
     def execute(self, context):
-        global _slot_view_page
-        if _slot_view_page < MAX_PAGES:
-            _slot_view_page += 1
+        if state._slot_view_page < MAX_PAGES:
+            state._slot_view_page += 1
             _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_SlotLoadToPanel(Operator):
     bl_idname = "nfr.slot_load_to_panel"
@@ -1584,7 +1484,6 @@ class NFR_OT_SlotLoadToPanel(Operator):
         _redraw_view3d(context)
         return {"FINISHED"}
 
-
 # =========================================================================
 # MODULE: operators — materials pagination
 # =========================================================================
@@ -1594,12 +1493,10 @@ class NFR_OT_MatPrevPage(Operator):
     bl_description = "Show the previous page of materials"
 
     def execute(self, context):
-        global _mat_view_page
-        if _mat_view_page > 1:
-            _mat_view_page -= 1
+        if state._mat_view_page > 1:
+            state._mat_view_page -= 1
             _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_MatNextPage(Operator):
     bl_idname = "nfr.mat_next_page"
@@ -1607,11 +1504,9 @@ class NFR_OT_MatNextPage(Operator):
     bl_description = "Show the next page of materials"
 
     def execute(self, context):
-        global _mat_view_page
-        _mat_view_page += 1
+        state._mat_view_page += 1
         _redraw_view3d(context)
         return {"FINISHED"}
-
 
 # =========================================================================
 # MODULE: operators — materials panel
@@ -1639,7 +1534,6 @@ class NFR_OT_ToggleDoubleSided(Operator):
 
         _redraw_view3d(context)
         return {"FINISHED"}
-
 
 class NFR_OT_ApplyRacerBlendMode(Operator):
     bl_idname = "nfr.racer_apply_blend_mode"
@@ -1686,7 +1580,6 @@ class NFR_OT_ApplyRacerBlendMode(Operator):
         _redraw_view3d(context)
         self.report({"INFO"}, f"Applied '{mode}' to '{mat.name}'")
         return {"FINISHED"}
-
 
 # =========================================================================
 # MODULE: panels — single unified panel with sub-tabs
@@ -1815,23 +1708,23 @@ class NFR_PT_Racer(Panel):
 
         row = layout.row(align=True)
         row.operator("nfr.slot_prev_page", text="", icon="TRIA_LEFT")
-        row.label(text=f"Page {_slot_view_page} / {MAX_PAGES}")
+        row.label(text=f"Page {state._slot_view_page} / {MAX_PAGES}")
         row.operator("nfr.slot_next_page", text="", icon="TRIA_RIGHT")
 
         row = layout.row(align=True)
         row.scale_y = 1.2
         row.operator("nfr.slot_refresh", text="Refresh", icon="FILE_REFRESH")
         assign_row = row.row(align=True)
-        assign_row.enabled = (_slot_sel_page == _slot_view_page
-                              and _slot_sel_slot >= 0
+        assign_row.enabled = (state._slot_sel_page == state._slot_view_page
+                              and state._slot_sel_slot >= 0
                               and active_racer is not None)
         assign_row.operator("nfr.slot_assign_here",
                             text="Assign Here", icon="ADD")
 
         entries = _read_roster(prefs)
         pages = _group_by_page(entries)
-        page_entries = pages.get(_slot_view_page, {})
-        cells = _resolve_cells(_slot_view_page, page_entries,
+        page_entries = pages.get(state._slot_view_page, {})
+        cells = _resolve_cells(state._slot_view_page, page_entries,
                                active_racer, active_slug)
 
         occupied = sum(1 for k, _ in cells.values() if k != "empty")
@@ -1855,21 +1748,21 @@ class NFR_PT_Racer(Panel):
                                        text=folder[:6])
             else:
                 op = grid.operator("nfr.slot_click", text=str(slot))
-            op.page = _slot_view_page
+            op.page = state._slot_view_page
             op.slot = slot
 
-        if _slot_sel_page != _slot_view_page or _slot_sel_slot < 0:
+        if state._slot_sel_page != state._slot_view_page or state._slot_sel_slot < 0:
             layout.separator()
             layout.label(text="Click a slot to inspect", icon="INFO")
             return
 
-        kind, data = cells.get(_slot_sel_slot, ("empty", None))
+        kind, data = cells.get(state._slot_sel_slot, ("empty", None))
 
         layout.separator()
         box = layout.box()
 
         if kind == "empty":
-            box.label(text=f"Slot {_slot_sel_slot} — empty", icon="INFO")
+            box.label(text=f"Slot {state._slot_sel_slot} — empty", icon="INFO")
             if active_racer is not None:
                 box.label(text=f"Press 'Assign Here' to place {active_slug}")
             else:
@@ -1886,7 +1779,7 @@ class NFR_PT_Racer(Panel):
 
         info_col = row.column()
         info_col.scale_x = 1.0
-        header = f"Slot {_slot_sel_slot} — {data['folder']}"
+        header = f"Slot {state._slot_sel_slot} — {data['folder']}"
         if kind == "pending":
             header += "  (pending export)"
         info_col.label(text=header)
@@ -1911,8 +1804,8 @@ class NFR_PT_Racer(Panel):
         if kind == "entry":
             op = row.operator("nfr.slot_delete",
                               text="Delete from roster", icon="TRASH")
-            op.page = _slot_sel_page
-            op.slot = _slot_sel_slot
+            op.page = state._slot_sel_page
+            op.slot = state._slot_sel_slot
 
     # ---------------------------------------------------------------------
     # MATERIALS tab
@@ -1949,27 +1842,26 @@ class NFR_PT_Racer(Panel):
 
         total_pages = max(1, (total + MAX_MATS_PER_PAGE - 1) // MAX_MATS_PER_PAGE)
 
-        global _mat_view_page
-        if _mat_view_page < 1:
-            _mat_view_page = 1
-        if _mat_view_page > total_pages:
-            _mat_view_page = total_pages
+        if state._mat_view_page < 1:
+            state._mat_view_page = 1
+        if state._mat_view_page > total_pages:
+            state._mat_view_page = total_pages
 
         # -------- Pagination (only if more than one page) --------
         if total_pages > 1:
             row = layout.row(align=True)
             sub_left = row.row(align=True)
-            sub_left.enabled = _mat_view_page > 1
+            sub_left.enabled = state._mat_view_page > 1
             sub_left.operator("nfr.mat_prev_page", text="", icon="TRIA_LEFT")
             row.label(
-                text=f"Materials  {_mat_view_page} / {total_pages}  ({total} total)"
+                text=f"Materials  {state._mat_view_page} / {total_pages}  ({total} total)"
             )
             sub_right = row.row(align=True)
-            sub_right.enabled = _mat_view_page < total_pages
+            sub_right.enabled = state._mat_view_page < total_pages
             sub_right.operator("nfr.mat_next_page", text="", icon="TRIA_RIGHT")
             layout.separator()
 
-        start = (_mat_view_page - 1) * MAX_MATS_PER_PAGE
+        start = (state._mat_view_page - 1) * MAX_MATS_PER_PAGE
         end = min(start + MAX_MATS_PER_PAGE, total)
         page_mats = mats[start:end]
 
@@ -2026,7 +1918,6 @@ class NFR_PT_Racer(Panel):
             drop = box.row(align=True)
             drop.prop(mat, "nfr_racer_blend_mode", text="")
 
-
 # =========================================================================
 # MODULE: registration
 # =========================================================================
@@ -2058,7 +1949,6 @@ _classes = (
     # panel (single)
     NFR_PT_Racer,
 )
-
 
 def _register_render_props():
     # UI sub-tab
@@ -2140,7 +2030,6 @@ def _register_render_props():
         update=_nfr_mat_blend_mode_update,
     )
 
-
 def _unregister_render_props():
     del bpy.types.Scene.nfr_ui_tab
     del bpy.types.Scene.nfr_ps1_render_state
@@ -2155,14 +2044,12 @@ def _unregister_render_props():
     del bpy.types.Material.nfr_ps1_transparency_overlap_manual
     del bpy.types.Material.nfr_racer_blend_mode
 
-
 def register():
     prefs.register()
     for c in _classes:
         bpy.utils.register_class(c)
     bpy.types.Object.racer = PointerProperty(type=NFR_RacerProps)
     _register_render_props()
-
 
 def unregister():
     _teardown_previews()
@@ -2173,5 +2060,4 @@ def unregister():
         bpy.utils.unregister_class(c)
     prefs.unregister()
     prefs.unregister()
-
 
