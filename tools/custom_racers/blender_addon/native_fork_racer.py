@@ -21,6 +21,7 @@ import time
 import shlex
 import hashlib
 import subprocess
+import numpy as np
 from pathlib import Path
 from bpy.props import (
     StringProperty, IntProperty, BoolProperty, EnumProperty,
@@ -40,15 +41,11 @@ ENGINES = [
 ]
 _ENGINE_SET = {"SPEED", "BALANCED", "ACCEL", "TURN"}
 
-# Per-material blend mode. The string is stored in the Blender custom
-# property mat["blend_mode"] and forwarded verbatim to source_mesh.json;
-# build_character.py maps it to the 2 ABR bits of the tpage word.
-# Keep this list in sync with ABR_MAP in build_character.py.
 BLEND_MODES = [
-    ("half",     "Half",   "50% transparency (default)"),
-    ("add",      "Add",    "Additive blending"),
-    ("subtract", "Sub",    "Subtractive blending"),
-    ("add_25",   "A25",    "Additive at 25%"),
+    ("half",     "Half Transparent",     "50% transparency (default)"),
+    ("add",      "Additive",             "Additive blending"),
+    ("subtract", "Subtractive",          "Subtractive blending"),
+    ("add_25",   "Additive Translucent", "Additive at 25%"),
 ]
 _BLEND_MODE_SET = {m[0] for m in BLEND_MODES}
 
@@ -57,6 +54,490 @@ DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python
 ADDON_ID       = __name__ if __name__ != "__main__" else "native_fork_racer"
 
 MAX_PAGES = 8
+MAX_MATS_PER_PAGE = 10
+
+
+# =========================================================================
+# MODULE: render — compat helpers
+# =========================================================================
+def _nfr_ge_3_5():
+    return bpy.app.version >= (3, 5, 0)
+
+def _nfr_ge_4_0():
+    return bpy.app.version >= (4, 0, 0)
+
+def _nfr_ge_5_0():
+    return bpy.app.version >= (5, 0, 0)
+
+
+# =========================================================================
+# MODULE: render — node setups
+# =========================================================================
+NFR_PS1_NODE_SETUPS = {
+    'ADDITIVE': {
+        'nodes': [
+            ('ShaderNodeOutputMaterial', 'Material Output', (210, 125), 140.0, {'is_active_output': True}),
+            ('ShaderNodeAttribute', 'Attribute', (-800, -150), 140.0, {'attribute_name': 'Color'}),
+            ('ShaderNodeMath', 'Compare Alpha', (-470, 215), 140.0, {'operation': 'LESS_THAN', 'inputs[1].default_value': 0.999}),
+            ('ShaderNodeMixRGB', 'Solid Mix', (-600, -90), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Solid Multiply 4x', (-470, -110), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeInvert', 'Solid Invert', (-470, -45), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeBsdfTransparent', 'Solid Transparent BSDF', (-470, -215), 140.0, {}),
+            ('ShaderNodeMixShader', 'Solid Mix Shader', (-200, -65), 140.0, {}),
+            ('ShaderNodeMixRGB', 'Transp Mix', (-575, 95), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Transp Multiply 4x', (-470, 125), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeInvert', 'Transp Invert', (-470, 20), 140.0, {'inputs[0].default_value': 0.5}),
+            ('ShaderNodeMixShader', 'Transp Mix Shader', (-205, 60), 140.0, {}),
+            ('ShaderNodeBsdfTransparent', 'Transp Transparent 2', (-200, -20), 140.0, {}),
+            ('ShaderNodeAddShader', 'Transp Add Shader', (-85, 65), 140.0, {}),
+            ('ShaderNodeMixShader', 'Final Mix Shader', (100, 115), 140.0, {}),
+            ('ShaderNodeMixRGB', 'Transp Multiply 4x.001', (-325, 125), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeGamma', 'Transp Gamma', (-400, 15), 140.0, {'inputs[1].default_value': 20.0}),
+            ('ShaderNodeBsdfTransparent', 'Transparent BSDF', (-325, 15), 140.0, {})
+        ],
+        'connections': [
+            ('Final Mix Shader', 0, 'Material Output', 0),
+            ('Image Texture', 1, 'Compare Alpha', 0),
+            ('Image Texture', 0, 'Solid Mix', 1),
+            ('Attribute', 0, 'Solid Mix', 2),
+            ('Solid Mix', 0, 'Solid Multiply 4x', 1),
+            ('Image Texture', 1, 'Solid Invert', 1),
+            ('Solid Invert', 0, 'Solid Mix Shader', 0),
+            ('Solid Multiply 4x', 0, 'Solid Mix Shader', 1),
+            ('Solid Transparent BSDF', 0, 'Solid Mix Shader', 2),
+            ('Image Texture', 0, 'Transp Mix', 1),
+            ('Attribute', 0, 'Transp Mix', 2),
+            ('Transp Mix', 0, 'Transp Multiply 4x', 1),
+            ('Image Texture', 1, 'Transp Invert', 1),
+            ('Transp Multiply 4x.001', 0, 'Transp Mix Shader', 1),
+            ('Transparent BSDF', 0, 'Transp Mix Shader', 2),
+            ('Transp Mix Shader', 0, 'Transp Add Shader', 0),
+            ('Transp Transparent 2', 0, 'Transp Add Shader', 1),
+            ('Compare Alpha', 0, 'Final Mix Shader', 0),
+            ('Solid Mix Shader', 0, 'Final Mix Shader', 1),
+            ('Transp Add Shader', 0, 'Final Mix Shader', 2),
+            ('Transp Multiply 4x', 0, 'Transp Multiply 4x.001', 1),
+            ('Transp Invert', 0, 'Transp Gamma', 0),
+            ('Transp Gamma', 0, 'Transparent BSDF', 0)
+        ]
+    },
+    'SUBTRACTIVE': {
+        'nodes': [
+            ('ShaderNodeAttribute', 'Attribute', (-800, -50), 140.0, {'attribute_name': 'Color'}),
+            ('ShaderNodeOutputMaterial', 'Material Output', (230, 30), 140.0, {'is_active_output': True}),
+            ('ShaderNodeMath', 'Compare Alpha', (-650, 100), 140.0, {'operation': 'LESS_THAN', 'inputs[1].default_value': 0.999}),
+            ('ShaderNodeMixShader', 'Final Mix Shader', (-5, 25), 140.0, {}),
+            ('ShaderNodeMixRGB', 'Solid Mix', (-650, -65), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Solid Multiply 4x', (-450, -65), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeInvert', 'Solid Invert', (-450, 55), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeBsdfTransparent', 'Transparent BSDF', (-275, -100), 140.0, {}),
+            ('ShaderNodeMixShader', 'Solid Mix Shader', (-150, -65), 140.0, {}),
+            ('ShaderNodeMixRGB', 'Transp Mix', (-650, 15), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Transp Multiply 4x', (-450, 15), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeBsdfTransparent', 'Transp Transparent', (-150, -30), 140.0, {}),
+            ('ShaderNodeInvert', 'Transp Invert 2', (-350, 15), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeGamma', 'Gamma', (-275, 15), 140.0, {'inputs[1].default_value': 10.0})
+        ],
+        'connections': [
+            ('Final Mix Shader', 0, 'Material Output', 0),
+            ('Image Texture', 1, 'Compare Alpha', 0),
+            ('Compare Alpha', 0, 'Final Mix Shader', 0),
+            ('Image Texture', 0, 'Solid Mix', 1),
+            ('Attribute', 0, 'Solid Mix', 2),
+            ('Solid Mix', 0, 'Solid Multiply 4x', 1),
+            ('Image Texture', 1, 'Solid Invert', 1),
+            ('Solid Invert', 0, 'Solid Mix Shader', 0),
+            ('Solid Multiply 4x', 0, 'Solid Mix Shader', 1),
+            ('Transparent BSDF', 0, 'Solid Mix Shader', 2),
+            ('Solid Mix Shader', 0, 'Final Mix Shader', 1),
+            ('Image Texture', 0, 'Transp Mix', 1),
+            ('Attribute', 0, 'Transp Mix', 2),
+            ('Transp Mix', 0, 'Transp Multiply 4x', 1),
+            ('Transp Multiply 4x', 0, 'Transp Invert 2', 1),
+            ('Transp Invert 2', 0, 'Gamma', 0),
+            ('Gamma', 0, 'Transp Transparent', 0),
+            ('Transp Transparent', 0, 'Final Mix Shader', 2)
+        ]
+    },
+    'HALF_TRANSPARENT': {
+        'nodes': [
+            ('ShaderNodeAttribute', 'Attribute', (-800, -90), 140.0, {'attribute_name': 'Color'}),
+            ('ShaderNodeOutputMaterial', 'Material Output', (170, 105), 140.0, {'is_active_output': True}),
+            ('ShaderNodeMath', 'Compare Alpha', (-465, 120), 140.0, {'operation': 'LESS_THAN', 'inputs[1].default_value': 0.999}),
+            ('ShaderNodeMixShader', 'Final Mix Shader', (40, 110), 140.0, {'inputs[0].default_value': 0.5}),
+            ('ShaderNodeMixRGB', 'Solid Mix', (-615, -95), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Solid Multiply 4x', (-465, -95), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeBsdfTransparent', 'Transparent BSDF', (-320, -80), 140.0, {}),
+            ('ShaderNodeMixShader', 'Solid Mix Shader', (-115, 55), 140.0, {}),
+            ('ShaderNodeMixRGB', 'Transp Mix', (-615, -25), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Transp Multiply 4x', (-465, -25), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0), 'use_clamp': True}),
+            ('ShaderNodeInvert', 'Transp Invert', (-470, 20), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeBsdfTransparent', 'Transp Transparent', (-320, -120), 140.0, {}),
+            ('ShaderNodeMixShader', 'Transp Mix Shader', (-120, -15), 140.0, {})
+        ],
+        'connections': [
+            ('Final Mix Shader', 0, 'Material Output', 0),
+            ('Image Texture', 1, 'Compare Alpha', 0),
+            ('Image Texture', 0, 'Solid Mix', 1),
+            ('Attribute', 0, 'Solid Mix', 2),
+            ('Solid Mix', 0, 'Solid Multiply 4x', 1),
+            ('Compare Alpha', 0, 'Solid Mix Shader', 0),
+            ('Solid Multiply 4x', 0, 'Solid Mix Shader', 1),
+            ('Transparent BSDF', 0, 'Solid Mix Shader', 2),
+            ('Solid Mix Shader', 0, 'Final Mix Shader', 1),
+            ('Image Texture', 0, 'Transp Mix', 1),
+            ('Attribute', 0, 'Transp Mix', 2),
+            ('Transp Mix', 0, 'Transp Multiply 4x', 1),
+            ('Image Texture', 1, 'Transp Invert', 1),
+            ('Transp Invert', 0, 'Transp Mix Shader', 0),
+            ('Transp Multiply 4x', 0, 'Transp Mix Shader', 1),
+            ('Transp Transparent', 0, 'Transp Mix Shader', 2),
+            ('Transp Mix Shader', 0, 'Final Mix Shader', 2)
+        ]
+    },
+    'ADDITIVE_TRANSLUCENT': {
+        'nodes': [
+            ('ShaderNodeAttribute', 'Attribute', (-600, 0), 140.0, {'attribute_name': 'Color'}),
+            ('ShaderNodeOutputMaterial', 'Material Output', (500, 0), 140.0, {'is_active_output': True}),
+            ('ShaderNodeMixRGB', 'Mix Texture Vertex', (-400, 0), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixRGB', 'Multiply 4x', (-200, 0), 140.0, {'blend_type': 'MULTIPLY', 'inputs[0].default_value': 1.0, 'inputs[2].default_value': (4.0, 4.0, 4.0, 1.0)}),
+            ('ShaderNodeBsdfTransparent', 'Transparent BSDF', (0, -120), 140.0, {}),
+            ('ShaderNodeInvert', 'Invert Alpha', (-200, 120), 140.0, {'inputs[0].default_value': 1.0}),
+            ('ShaderNodeMixShader', 'Mix Shader', (200, 0), 140.0, {}),
+            ('ShaderNodeGamma', 'Gamma', (0, 120), 140.0, {'inputs[1].default_value': 10.0})
+        ],
+        'connections': [
+            ('Image Texture', 0, 'Mix Texture Vertex', 1),
+            ('Attribute', 0, 'Mix Texture Vertex', 2),
+            ('Mix Texture Vertex', 0, 'Multiply 4x', 1),
+            ('Multiply 4x', 0, 'Mix Shader', 1),
+            ('Transparent BSDF', 0, 'Mix Shader', 2),
+            ('Mix Shader', 0, 'Material Output', 0),
+            ('Image Texture', 1, 'Invert Alpha', 1),
+            ('Invert Alpha', 0, 'Gamma', 0),
+            ('Gamma', 0, 'Mix Shader', 0)
+        ]
+    }
+}
+
+
+# =========================================================================
+# MODULE: render — color attribute helpers
+# =========================================================================
+def _nfr_create_color_attr(obj, target_name="Color"):
+    mesh = obj.data
+    if not hasattr(mesh, "color_attributes"):
+        return False
+    try:
+        mesh.color_attributes.new(name=target_name, type='BYTE_COLOR', domain='CORNER')
+        _nfr_apply_white_color(obj, target_name)
+        mesh.update()
+        return True
+    except Exception as e:
+        print(f"[NFR] Error creating color attribute for '{obj.name}': {e}")
+        return False
+
+
+def _nfr_apply_white_color(obj, attribute_name="Color"):
+    mesh = obj.data
+    try:
+        import bmesh
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+        layer = bm.loops.layers.color.get(attribute_name) or bm.loops.layers.color.new(attribute_name)
+        white = (1.0, 1.0, 1.0, 1.0)
+        for face in bm.faces:
+            for loop in face.loops:
+                loop[layer] = white
+        bm.to_mesh(mesh)
+        bm.free()
+        mesh.update()
+        return True
+    except Exception as e:
+        print(f"[NFR] Error applying white color to '{obj.name}': {e}")
+        return False
+
+
+def _nfr_list_color_attrs(obj):
+    mesh = obj.data
+    if not hasattr(mesh, "color_attributes") or not mesh.color_attributes:
+        return []
+    return [a.name for a in mesh.color_attributes]
+
+
+def _nfr_rename_color_attr(obj, old_name, new_name):
+    mesh = obj.data
+    if not hasattr(mesh, "color_attributes"):
+        return False
+    for a in mesh.color_attributes:
+        if a.name == old_name:
+            a.name = new_name
+            return True
+    return False
+
+
+def _nfr_ensure_attribute_exists(obj, target_name="Color"):
+    mesh = obj.data
+    if not hasattr(mesh, "color_attributes"):
+        return False
+    if not mesh.color_attributes:
+        return _nfr_create_color_attr(obj, target_name)
+    names = [a.name for a in mesh.color_attributes]
+    if target_name in names:
+        idx = names.index(target_name)
+        mesh.color_attributes.active_color_index = idx
+        mesh.update()
+        return True
+    first = mesh.color_attributes[0]
+    first.name = target_name
+    mesh.color_attributes.active_color_index = 0
+    _nfr_apply_white_color(obj, target_name)
+    mesh.update()
+    return True
+
+
+def _nfr_ensure_all_objects_have_color_attributes(target_name="Color"):
+    created = 0
+    renamed = 0
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+        cur = _nfr_list_color_attrs(obj)
+        if not cur:
+            if _nfr_create_color_attr(obj, target_name):
+                created += 1
+        elif target_name not in cur:
+            if _nfr_rename_color_attr(obj, cur[0], target_name):
+                renamed += 1
+        else:
+            _nfr_ensure_attribute_exists(obj, target_name)
+    try:
+        bpy.context.view_layer.update()
+    except Exception:
+        pass
+    return created + renamed
+
+
+# =========================================================================
+# MODULE: render — PS1 material setup
+# =========================================================================
+class NFR_PS1MaterialSetup:
+    def __init__(self, material):
+        self.mat = material
+        self.mat.use_nodes = True
+        self.nodes = {}
+
+    def clear_existing_nodes(self):
+        self.nodes.clear()
+        for node in self.mat.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                self.nodes['Image Texture'] = node
+                break
+        to_remove = [n for n in self.mat.node_tree.nodes if n.type != 'TEX_IMAGE']
+        for n in to_remove:
+            self.mat.node_tree.nodes.remove(n)
+        if 'Image Texture' not in self.nodes:
+            it = self.mat.node_tree.nodes.new('ShaderNodeTexImage')
+            it.name = "Image Texture"
+            self.nodes['Image Texture'] = it
+        self.nodes['Image Texture'].location = (-1000, 0)
+
+    def build_setup(self, mode):
+        cfg = NFR_PS1_NODE_SETUPS[mode]
+        for node_type, name, location, width, props in cfg['nodes']:
+            node = self.mat.node_tree.nodes.new(node_type)
+            node.name = name
+            node.location = location
+            node.width = width
+            for prop_path, value in props.items():
+                if '.' in prop_path:
+                    parts = prop_path.split('.')
+                    obj = node
+                    for part in parts[:-1]:
+                        if '[' in part and ']' in part:
+                            attr_name = part.split('[')[0]
+                            index = int(part.split('[')[1].split(']')[0])
+                            obj = getattr(obj, attr_name)[index]
+                        else:
+                            obj = getattr(obj, part)
+                    setattr(obj, parts[-1], value)
+                else:
+                    setattr(node, prop_path, value)
+            self.nodes[name] = node
+        for from_name, from_sock, to_name, to_sock in cfg['connections']:
+            try:
+                self.mat.node_tree.links.new(
+                    self.nodes[from_name].outputs[from_sock],
+                    self.nodes[to_name].inputs[to_sock])
+            except Exception as e:
+                print(f"[NFR] connect error {from_name}.{from_sock} -> {to_name}.{to_sock}: {e}")
+
+    def analyze_image_texture(self):
+        img_node = self.nodes.get('Image Texture')
+        if not img_node or not img_node.image:
+            return "NO_IMAGE"
+        try:
+            image = img_node.image
+            if image.size[0] == 0 or image.size[1] == 0 or not image.pixels:
+                return "NO_IMAGE"
+            w, h = image.size
+            pixels = np.array(image.pixels).reshape(h, w, 4)
+            solid = transparent = semi = 0
+            for y in range(h):
+                for x in range(w):
+                    a = pixels[y, x, 3]
+                    if a >= 1.0:
+                        solid += 1
+                    elif a <= 0.01:
+                        transparent += 1
+                    else:
+                        semi += 1
+            total = w * h
+            if semi > 0:
+                return "HAS_SEMI_TRANSPARENT"
+            elif solid == total:
+                return "ALL_SOLID"
+            elif transparent == total:
+                return "ALL_TRANSPARENT"
+            elif solid > 0 and transparent > 0:
+                return "SOLID_AND_TRANSPARENT"
+            return "UNKNOWN"
+        except Exception as e:
+            print(f"[NFR] analyze error: {e}")
+            return "UNKNOWN"
+
+    def apply_blend_mode(self, mode, pixel_type, used_additive_translucent_setup):
+        blend_override = getattr(self.mat, 'nfr_ps1_blend_method_override', 'AUTO')
+        if blend_override != 'AUTO':
+            try:
+                self.mat.blend_method = blend_override
+            except Exception:
+                pass
+        else:
+            if mode == 'ADDITIVE_TRANSLUCENT' and pixel_type == "HAS_SEMI_TRANSPARENT":
+                try:
+                    self.mat.blend_method = 'HASHED'
+                except Exception:
+                    pass
+            else:
+                try:
+                    if pixel_type == "HAS_SEMI_TRANSPARENT":
+                        self.mat.blend_method = 'BLEND'
+                    else:
+                        self.mat.blend_method = 'HASHED'
+                except Exception:
+                    pass
+
+        default_overlap = not used_additive_translucent_setup
+        mode_choice = getattr(self.mat, 'nfr_ps1_transparency_overlap_mode', 'DEFAULT')
+        if mode_choice == 'DEFAULT':
+            final_overlap = default_overlap
+        else:
+            final_overlap = getattr(self.mat, 'nfr_ps1_transparency_overlap_manual', True)
+
+        if hasattr(self.mat, 'use_transparency_overlap'):
+            self.mat.use_transparency_overlap = final_overlap
+        elif hasattr(self.mat, 'show_transparent_back'):
+            self.mat.show_transparent_back = final_overlap
+
+        if hasattr(self.mat, 'nfr_ps1_show_backface'):
+            self.mat.use_backface_culling = not self.mat.nfr_ps1_show_backface
+        else:
+            self.mat.use_backface_culling = True
+        self.mat.update_tag()
+
+
+class NFR_AdditiveMaterialSetup(NFR_PS1MaterialSetup):
+    def apply_setup(self):
+        self.clear_existing_nodes()
+        px = self.analyze_image_texture()
+        used_at = False
+        if px != "HAS_SEMI_TRANSPARENT":
+            self.build_setup('ADDITIVE_TRANSLUCENT')
+            used_at = True
+        else:
+            self.build_setup('ADDITIVE')
+        self.apply_blend_mode('ADDITIVE', px, used_at)
+        return True
+
+
+class NFR_SubtractiveMaterialSetup(NFR_PS1MaterialSetup):
+    def apply_setup(self):
+        self.clear_existing_nodes()
+        px = self.analyze_image_texture()
+        used_at = False
+        if px != "HAS_SEMI_TRANSPARENT":
+            self.build_setup('ADDITIVE_TRANSLUCENT')
+            used_at = True
+        else:
+            self.build_setup('SUBTRACTIVE')
+        self.apply_blend_mode('SUBTRACTIVE', px, used_at)
+        return True
+
+
+class NFR_HalfTransparentMaterialSetup(NFR_PS1MaterialSetup):
+    def apply_setup(self):
+        self.clear_existing_nodes()
+        px = self.analyze_image_texture()
+        used_at = False
+        if px != "HAS_SEMI_TRANSPARENT":
+            self.build_setup('ADDITIVE_TRANSLUCENT')
+            used_at = True
+        else:
+            self.build_setup('HALF_TRANSPARENT')
+        self.apply_blend_mode('HALF_TRANSPARENT', px, used_at)
+        return True
+
+
+class NFR_AdditiveTranslucentMaterialSetup(NFR_PS1MaterialSetup):
+    def apply_setup(self):
+        self.clear_existing_nodes()
+        px = self.analyze_image_texture()
+        self.build_setup('ADDITIVE_TRANSLUCENT')
+        self.apply_blend_mode('ADDITIVE_TRANSLUCENT', px, True)
+        return True
+
+
+class NFR_PS1MaterialFactory:
+    @staticmethod
+    def get_material_setup(material, mode):
+        if mode == 'ADDITIVE':
+            return NFR_AdditiveMaterialSetup(material)
+        elif mode == 'SUBTRACTIVE':
+            return NFR_SubtractiveMaterialSetup(material)
+        elif mode == 'HALF_TRANSPARENT':
+            return NFR_HalfTransparentMaterialSetup(material)
+        elif mode == 'ADDITIVE_TRANSLUCENT':
+            return NFR_AdditiveTranslucentMaterialSetup(material)
+        return NFR_AdditiveMaterialSetup(material)
+
+
+# =========================================================================
+# MODULE: render — property callbacks
+# =========================================================================
+def _nfr_update_ps1_blend_mode(self, context):
+    if getattr(self, 'nfr_ps1_blend_mode', 'NONE') == 'NONE':
+        return
+    cur_bf = getattr(self, 'nfr_ps1_show_backface', False)
+    if context.scene.nfr_ps1_render_active:
+        try:
+            setup = NFR_PS1MaterialFactory.get_material_setup(self, self.nfr_ps1_blend_mode)
+            setup.apply_setup()
+            self.nfr_ps1_show_backface = cur_bf
+        except Exception as e:
+            print(f"[NFR] update blend mode error on '{self.name}': {e}")
+    else:
+        self.nfr_ps1_last_active_mode = self.nfr_ps1_blend_mode
+        self.nfr_ps1_show_backface = cur_bf
+
+
+def _nfr_mat_blend_mode_update(self, context):
+    v = getattr(self, "nfr_racer_blend_mode", "half")
+    if v not in _BLEND_MODE_SET:
+        return
+    current = self.get("blend_mode", "half")
+    if current != v:
+        self["blend_mode"] = v
 
 
 # =========================================================================
@@ -133,8 +614,6 @@ def _get_prefs(context):
 # MODULE: material helpers
 # =========================================================================
 def _get_blend_mode(mat):
-    """Return the material's blend_mode string. Falls back to 'half'
-    when the custom property is absent or has an unknown value."""
     value = mat.get("blend_mode", "half")
     if value not in _BLEND_MODE_SET:
         return "half"
@@ -329,7 +808,6 @@ def _get_icon(slug, png_path):
 
 
 def _image_preview_icon_id(img):
-    """Return the icon_id of an Image datablock's preview thumbnail, or 0."""
     if img is None:
         return 0
     try:
@@ -450,10 +928,6 @@ def export_mesh_json(obj, out_path):
 
 
 def _do_export(context, obj):
-    # calc_loop_triangles() and mesh data access don't work reliably in
-    # Edit Mode; Blender throws "bpy_prop_collection[index]: index out of
-    # range" on the first mesh.loops access. Switch to Object Mode for the
-    # duration and restore the previous mode afterwards.
     prev_mode = context.mode
     switched = False
     if prev_mode != 'OBJECT':
@@ -622,17 +1096,15 @@ def _active_racer(context):
 
 
 # =========================================================================
-# MODULE: slot viewer state
+# MODULE: state (slot + material pagination)
 # =========================================================================
 _slot_view_page = 1
 _slot_sel_page = -1
 _slot_sel_slot = -1
+_mat_view_page = 1
 
 
 def _resolve_cells(page, page_entries, active_racer, active_slug):
-    """Returns { slot: (kind, data) } where kind is 'entry' | 'pending'
-    | 'empty'. 'pending' means the active racer points here but the move
-    has not been committed via Export yet."""
     cells = {}
     for slot in range(16):
         e = page_entries.get(slot)
@@ -641,7 +1113,6 @@ def _resolve_cells(page, page_entries, active_racer, active_slug):
                        and active_racer.slot == slot)
 
         if active_here:
-            # Is roster already showing the same folder here? -> committed
             if e is not None and e["folder"] == active_slug:
                 cells[slot] = ("entry", e)
             else:
@@ -657,9 +1128,6 @@ def _resolve_cells(page, page_entries, active_racer, active_slug):
             continue
 
         if e is not None:
-            # Hide the active racer's stale roster entry so the grid
-            # visually reflects the pending move rather than showing the
-            # old icon in two places.
             if (active_slug is not None and e["folder"] == active_slug
                     and active_racer is not None
                     and (active_racer.page != page or active_racer.slot != slot)):
@@ -860,6 +1328,334 @@ class NFR_OT_BuildAndRun(Operator):
 
 
 # =========================================================================
+# MODULE: render — operators
+# =========================================================================
+def _nfr_detect_mode_from_suffix(name):
+    if name.endswith("_0"):
+        return 'HALF_TRANSPARENT'
+    elif name.endswith("_1"):
+        return 'ADDITIVE'
+    elif name.endswith("_2"):
+        return 'SUBTRACTIVE'
+    return 'ADDITIVE_TRANSLUCENT'
+
+
+def _nfr_save_current_modes():
+    count = 0
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        if hasattr(mat, 'nfr_ps1_blend_mode') and mat.nfr_ps1_blend_mode != 'NONE':
+            mat.nfr_ps1_last_active_mode = mat.nfr_ps1_blend_mode
+            count += 1
+    return count
+
+
+def _nfr_restore_last_modes():
+    count = 0
+    for mat in bpy.data.materials:
+        if not mat.use_nodes:
+            continue
+        if hasattr(mat, 'nfr_ps1_last_active_mode') and mat.nfr_ps1_last_active_mode != 'NONE':
+            mat.nfr_ps1_blend_mode = mat.nfr_ps1_last_active_mode
+            count += 1
+    return count
+
+
+def _nfr_setup_ps1_materials(context):
+    _nfr_ensure_all_objects_have_color_attributes("Color")
+    processed = set()
+    count = 0
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat or not mat.use_nodes or not mat.node_tree:
+                continue
+            if mat in processed:
+                continue
+            processed.add(mat)
+            if hasattr(mat, 'nfr_ps1_blend_mode') and mat.nfr_ps1_blend_mode != 'NONE':
+                mode = mat.nfr_ps1_blend_mode
+            else:
+                mode = 'ADDITIVE_TRANSLUCENT'
+                mat.nfr_ps1_blend_mode = mode
+            try:
+                setup = NFR_PS1MaterialFactory.get_material_setup(mat, mode)
+                if setup.apply_setup():
+                    count += 1
+            except Exception as e:
+                print(f"[NFR] material setup error on '{mat.name}': {e}")
+    context.view_layer.update()
+    return count
+
+
+def _nfr_restore_standard_materials(context):
+    processed = set()
+    count = 0
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat or not mat.use_nodes or not mat.node_tree:
+                continue
+            if mat in processed:
+                continue
+            processed.add(mat)
+
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+
+            img_node = next((n for n in nodes if n.type == 'TEX_IMAGE'), None)
+            out_node = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
+            if not out_node:
+                continue
+
+            for n in list(nodes):
+                if n not in [img_node, out_node]:
+                    nodes.remove(n)
+
+            if img_node:
+                principled = nodes.new(type='ShaderNodeBsdfPrincipled')
+                principled.location = (0, 0)
+                try:
+                    if 'Specular' in principled.inputs:
+                        principled.inputs['Specular'].default_value = 0.0
+                except Exception:
+                    pass
+                try:
+                    links.new(img_node.outputs['Color'], principled.inputs['Base Color'])
+                    links.new(principled.outputs['BSDF'], out_node.inputs['Surface'])
+                except Exception as e:
+                    print(f"[NFR] restore link warning '{mat.name}': {e}")
+
+            try:
+                mat.blend_method = 'OPAQUE'
+            except Exception:
+                pass
+            mat.use_backface_culling = False
+            count += 1
+
+    context.view_layer.update()
+    return count
+
+
+def _nfr_set_interpolation(mode):
+    count = 0
+    for mat in bpy.data.materials:
+        if mat.use_nodes and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    if node.interpolation != mode:
+                        node.interpolation = mode
+                        count += 1
+    return count
+
+
+class NFR_OT_TogglePS1Render(Operator):
+    bl_idname = "nfr.ps1_toggle_render"
+    bl_label = "Toggle Render"
+    bl_description = ("Activate/deactivate PS1-style material override, "
+                      "vertex color attributes, closest interpolation and "
+                      "color management")
+
+    def execute(self, context):
+        scene = context.scene
+        if scene.nfr_ps1_render_active:
+            # ---- OFF ----
+            _nfr_save_current_modes()
+            processed = _nfr_restore_standard_materials(context)
+            _nfr_set_interpolation('Linear')
+            if hasattr(scene, 'eevee') and hasattr(scene.eevee, 'use_shadows'):
+                scene.eevee.use_shadows = scene.nfr_ps1_prev_shadow_state
+            scene.nfr_ps1_render_active = False
+            scene.nfr_ps1_render_state = False
+            scene.view_settings.view_transform = 'Standard'
+            scene.view_settings.look = 'None'
+
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    obj.data.update_tag()
+            for mat in bpy.data.materials:
+                if mat.use_nodes and mat.node_tree:
+                    mat.node_tree.update_tag()
+            bpy.context.view_layer.update()
+            try:
+                bpy.context.evaluated_depsgraph_get().update()
+            except Exception:
+                pass
+            _redraw_view3d(context)
+
+            self.report({'INFO'},
+                        f"Render OFF. {processed} materials restored.")
+        else:
+            # ---- ON ----
+            detected = 0
+            for mat in bpy.data.materials:
+                if hasattr(mat, 'nfr_ps1_blend_mode') and mat.nfr_ps1_blend_mode == 'NONE':
+                    suffix_mode = _nfr_detect_mode_from_suffix(mat.name)
+                    if suffix_mode != 'ADDITIVE_TRANSLUCENT':
+                        mat.nfr_ps1_blend_mode = suffix_mode
+                        detected += 1
+            restored = _nfr_restore_last_modes()
+            processed = _nfr_setup_ps1_materials(context)
+            _nfr_set_interpolation('Closest')
+
+            scene.view_settings.view_transform = 'Standard'
+            scene.view_settings.look = 'None'
+
+            if hasattr(scene, 'eevee') and hasattr(scene.eevee, 'use_shadows'):
+                scene.nfr_ps1_prev_shadow_state = scene.eevee.use_shadows
+                scene.eevee.use_shadows = False
+
+            if context.area and context.area.type == 'VIEW_3D':
+                for space in context.area.spaces:
+                    if space.type == 'VIEW_3D':
+                        space.shading.type = 'RENDERED'
+                        space.overlay.show_overlays = False
+
+            scene.nfr_ps1_render_active = True
+            scene.nfr_ps1_render_state = True
+
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    obj.data.update_tag()
+            for mat in bpy.data.materials:
+                if mat.use_nodes and mat.node_tree:
+                    mat.node_tree.update_tag()
+            bpy.context.view_layer.update()
+            try:
+                bpy.context.evaluated_depsgraph_get().update()
+            except Exception:
+                pass
+            _redraw_view3d(context)
+
+            self.report({'INFO'},
+                        f"Render ON. {detected} detected, {restored} restored, {processed} processed.")
+        return {'FINISHED'}
+
+
+class NFR_OT_SetBackface(Operator):
+    bl_idname = "nfr.ps1_set_backface"
+    bl_label = "Set Backface Visibility"
+    bl_description = "Show or hide backfaces on selected materials"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    show: BoolProperty(name="Show Backfaces", default=True)
+
+    def execute(self, context):
+        import bmesh
+        processed = set()
+
+        if context.mode == 'EDIT_MESH' and context.tool_settings.mesh_select_mode[2]:
+            has_sel = False
+            for edit_obj in context.objects_in_mode:
+                if edit_obj.type != 'MESH':
+                    continue
+                bm = bmesh.from_edit_mesh(edit_obj.data)
+                sel_faces = [f for f in bm.faces if f.select]
+                if sel_faces:
+                    has_sel = True
+                    mat_idxs = set(f.material_index for f in sel_faces)
+                    for idx in mat_idxs:
+                        if idx < len(edit_obj.material_slots):
+                            mat = edit_obj.material_slots[idx].material
+                            if mat and mat not in processed:
+                                mat.nfr_ps1_show_backface = self.show
+                                mat.use_backface_culling = not self.show
+                                processed.add(mat)
+            if not has_sel:
+                self.report({'INFO'}, "No faces selected in edit mode")
+                return {'CANCELLED'}
+        else:
+            for sel_obj in context.selected_objects:
+                if sel_obj.type != 'MESH':
+                    continue
+                for slot in sel_obj.material_slots:
+                    mat = slot.material
+                    if mat and mat not in processed:
+                        mat.nfr_ps1_show_backface = self.show
+                        mat.use_backface_culling = not self.show
+                        processed.add(mat)
+
+        context.view_layer.update()
+        self.report({'INFO'},
+                    f"Backfaces {'visible' if self.show else 'hidden'} on "
+                    f"{len(processed)} material(s)")
+        return {'FINISHED'}
+
+
+class NFR_OT_ApplyBlendMode(Operator):
+    bl_idname = "nfr.ps1_apply_blend_mode"
+    bl_label = "Apply Blend Mode"
+    bl_description = "Apply selected blend mode to selected materials"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        import bmesh
+        scene = context.scene
+        mode = scene.nfr_ps1_blend_mode
+        obj = context.active_object
+
+        selected_names = set()
+
+        if context.mode == 'EDIT_MESH' and obj and obj.type == 'MESH':
+            bm = bmesh.from_edit_mesh(obj.data)
+            sel_faces = [f for f in bm.faces if f.select]
+            if not sel_faces:
+                self.report({'WARNING'}, "No faces selected.")
+                return {'CANCELLED'}
+            mat_idxs = set(f.material_index for f in sel_faces)
+            for idx in mat_idxs:
+                if idx < len(obj.material_slots):
+                    mat = obj.material_slots[idx].material
+                    if mat:
+                        selected_names.add(mat.name)
+            if not selected_names:
+                self.report({'WARNING'}, "Selected faces have no materials.")
+                return {'CANCELLED'}
+        else:
+            for mat in bpy.data.materials:
+                if hasattr(mat, 'select_get') and mat.select_get():
+                    selected_names.add(mat.name)
+            if not selected_names:
+                for obj_sel in context.selected_objects:
+                    if obj_sel.type == 'MESH' and obj_sel.active_material:
+                        selected_names.add(obj_sel.active_material.name)
+            if not selected_names and context.active_object and context.active_object.active_material:
+                selected_names.add(context.active_object.active_material.name)
+            if not selected_names:
+                self.report({'WARNING'}, "No materials selected.")
+                return {'CANCELLED'}
+
+        applied = 0
+        for mat_name in selected_names:
+            material = bpy.data.materials.get(mat_name)
+            if not material or not material.use_nodes:
+                continue
+            cur_bf = getattr(material, 'nfr_ps1_show_backface', False)
+            material.nfr_ps1_blend_mode = mode
+            material.nfr_ps1_show_backface = cur_bf
+            if scene.nfr_ps1_render_active:
+                try:
+                    setup = NFR_PS1MaterialFactory.get_material_setup(material, mode)
+                    setup.apply_setup()
+                except Exception as e:
+                    self.report({'WARNING'}, f"Material '{material.name}': {e}")
+                    continue
+            applied += 1
+
+        if context.active_object and context.active_object.type == 'MESH':
+            _nfr_ensure_attribute_exists(context.active_object, "Color")
+
+        context.view_layer.update()
+        self.report({'INFO'}, f"Applied '{mode}' to {applied} material(s).")
+        return {'FINISHED'}
+
+
+# =========================================================================
 # MODULE: operators — slot viewer
 # =========================================================================
 class NFR_OT_SlotClick(Operator):
@@ -1025,13 +1821,41 @@ class NFR_OT_SlotLoadToPanel(Operator):
 
 
 # =========================================================================
+# MODULE: operators — materials pagination
+# =========================================================================
+class NFR_OT_MatPrevPage(Operator):
+    bl_idname = "nfr.mat_prev_page"
+    bl_label = "Previous materials page"
+    bl_description = "Show the previous page of materials"
+
+    def execute(self, context):
+        global _mat_view_page
+        if _mat_view_page > 1:
+            _mat_view_page -= 1
+            _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+class NFR_OT_MatNextPage(Operator):
+    bl_idname = "nfr.mat_next_page"
+    bl_label = "Next materials page"
+    bl_description = "Show the next page of materials"
+
+    def execute(self, context):
+        global _mat_view_page
+        _mat_view_page += 1
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+# =========================================================================
 # MODULE: operators — materials panel
 # =========================================================================
 class NFR_OT_ToggleDoubleSided(Operator):
     bl_idname = "nfr.toggle_double_sided"
-    bl_label = "Toggle double-sided"
-    bl_description = ("Toggle Material.use_backface_culling. Off = visible "
-                      "from both sides (double-sided) on export.")
+    bl_label = "Show/Hide Backface"
+    bl_description = ("Toggle backface visibility for this material only. "
+                      "Hidden = cull backfaces; Shown = double-sided.")
 
     material_name: StringProperty()
 
@@ -1043,20 +1867,22 @@ class NFR_OT_ToggleDoubleSided(Operator):
         if mat is None:
             self.report({"WARNING"}, f"Material '{self.material_name}' not found")
             return {"CANCELLED"}
-        mat.use_backface_culling = not mat.use_backface_culling
+
+        new_show = not getattr(mat, 'nfr_ps1_show_backface', False)
+        mat.nfr_ps1_show_backface = new_show
+        mat.use_backface_culling = not new_show
+
         _redraw_view3d(context)
         return {"FINISHED"}
 
 
-class NFR_OT_SetBlendMode(Operator):
-    bl_idname = "nfr.set_blend_mode"
-    bl_label = "Set blend mode"
-    bl_description = ("Per-material blend mode. Stored in the Blender custom "
-                      "property mat['blend_mode'] and forwarded to "
-                      "source_mesh.json.")
+class NFR_OT_ApplyRacerBlendMode(Operator):
+    bl_idname = "nfr.racer_apply_blend_mode"
+    bl_label = "Apply"
+    bl_description = ("Apply the selected racer blend mode to this material. "
+                      "If Render is active, also rebuild the PS1 shader.")
 
     material_name: StringProperty()
-    mode: StringProperty()
 
     def execute(self, context):
         obj = context.active_object
@@ -1066,16 +1892,39 @@ class NFR_OT_SetBlendMode(Operator):
         if mat is None:
             self.report({"WARNING"}, f"Material '{self.material_name}' not found")
             return {"CANCELLED"}
-        if self.mode not in _BLEND_MODE_SET:
-            self.report({"WARNING"}, f"Unknown blend mode '{self.mode}'")
-            return {"CANCELLED"}
-        mat["blend_mode"] = self.mode
+
+        mode = getattr(mat, "nfr_racer_blend_mode", "half")
+        if mode not in _BLEND_MODE_SET:
+            mode = "half"
+        if mat.get("blend_mode") != mode:
+            mat["blend_mode"] = mode
+
+        scene = context.scene
+        if scene.nfr_ps1_render_active:
+            mode_map = {
+                'half':     'HALF_TRANSPARENT',
+                'add':      'ADDITIVE',
+                'subtract': 'SUBTRACTIVE',
+                'add_25':   'ADDITIVE_TRANSLUCENT',
+            }
+            ps1_mode = mode_map.get(mode, 'ADDITIVE_TRANSLUCENT')
+            cur_bf = getattr(mat, 'nfr_ps1_show_backface', False)
+            mat.nfr_ps1_blend_mode = ps1_mode
+            mat.nfr_ps1_show_backface = cur_bf
+            try:
+                setup = NFR_PS1MaterialFactory.get_material_setup(mat, ps1_mode)
+                setup.apply_setup()
+            except Exception as e:
+                self.report({"WARNING"}, f"Material '{mat.name}': {e}")
+                return {"CANCELLED"}
+
         _redraw_view3d(context)
+        self.report({"INFO"}, f"Applied '{mode}' to '{mat.name}'")
         return {"FINISHED"}
 
 
 # =========================================================================
-# MODULE: panels
+# MODULE: panels — single unified panel with sub-tabs
 # =========================================================================
 class NFR_PT_Racer(Panel):
     bl_label = "CTR Racer"
@@ -1083,17 +1932,58 @@ class NFR_PT_Racer(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Racer"
-    bl_order = 0
 
+    # ---------------------------------------------------------------------
+    # Dispatch based on scene.nfr_ui_tab
+    # ---------------------------------------------------------------------
     def draw(self, context):
         layout = self.layout
+        scene = context.scene
+
+        # Sub-tab selector — full-width segmented buttons
+        row = layout.row(align=True)
+        row.scale_y = 1.4
+        row.prop(scene, "nfr_ui_tab", expand=True)
+
+        layout.separator()
+
+        tab = scene.nfr_ui_tab
+        if tab == 'SETTINGS':
+            self._draw_settings(context, layout)
+        elif tab == 'SLOTS':
+            self._draw_slots(context, layout)
+        elif tab == 'MATERIALS':
+            self._draw_materials(context, layout)
+
+    # ---------------------------------------------------------------------
+    # SETTINGS tab
+    # ---------------------------------------------------------------------
+    def _draw_settings(self, context, layout):
         obj = context.active_object
         if obj is None or obj.type != "MESH":
             layout.label(text="Select a mesh object", icon="INFO")
             return
 
         r = obj.racer
-        layout.prop(r, "is_racer")
+
+        # -------- Row: Is Racer checkbox + Validate icon --------
+        row = layout.row(align=True)
+        row.prop(r, "is_racer")
+
+        if r.is_racer:
+            # Small inline validate button (icon only). Turns red if invalid.
+            try:
+                ok, _warns, _errs = validate_racer(obj)
+            except Exception:
+                ok = False
+
+            sub = row.row(align=True)
+            sub.alert = not ok
+            sub.operator(
+                "nfr.validate",
+                text="",
+                icon='CHECKMARK' if ok else 'ERROR',
+            )
 
         if not r.is_racer:
             layout.label(text="Check 'Is Racer' to configure", icon="INFO")
@@ -1107,7 +1997,7 @@ class NFR_PT_Racer(Panel):
         info.label(text=f"Page {r.page}", icon="INFO")
         info.label(text=f"Slot {r.slot}")
         info.label(text=f"ID {r.custom_id()}")
-        col.label(text="Set position via the Slots grid",
+        col.label(text="Set position via the Slots tab",
                   icon="RESTRICT_SELECT_OFF")
 
         col.separator()
@@ -1120,43 +2010,40 @@ class NFR_PT_Racer(Panel):
         col.prop(r, "short_name")
 
         col.separator()
-        col.prop(r, "color")
+        color_row = col.row(align=True)
+        color_row.label(text="Minimap Color:")
+        color_row.prop(r, "color", text="")
         col.prop(r, "icon_path")
 
-        layout.separator()
-        row = layout.row(align=True)
-        row.operator("nfr.validate", icon="CHECKMARK")
-        row.operator("nfr.export", icon="EXPORT")
-        layout.operator("nfr.export_all", icon="FILE_TICK")
-
+        # -------- Dev Tools --------
         layout.separator()
         layout.label(text="Dev Tools:", icon="TOOL_SETTINGS")
+
+        row = layout.row(align=True)
+        row.scale_y = 1.3
+        row.operator("nfr.export", text="Export", icon="EXPORT")
+        row.operator("nfr.export_all", text="Export All", icon="FILE_TICK")
+
         row = layout.row(align=True)
         row.scale_y = 1.3
         row.operator("nfr.run_game", text="Run", icon="PLAY")
-        row.operator("nfr.build_and_run", text="Build & Run",
-                     icon="FILE_REFRESH")
+        row.operator("nfr.build_and_run", text="Build & Run", icon="FILE_REFRESH")
 
         layout.separator()
         if ADDON_ID in context.preferences.addons:
-            layout.label(text="Preferences for paths:", icon="PREFERENCES")
-            layout.operator("preferences.addon_show",
-                            text="Open Preferences").module = ADDON_ID
+            layout.operator(
+                "preferences.addon_show",
+                text="Open Preferences",
+                icon="PREFERENCES",
+            ).module = ADDON_ID
         else:
             layout.label(text="Script mode — edit DEFAULT_REPO", icon="INFO")
             layout.label(text=f"repo: {DEFAULT_REPO}")
 
-
-class NFR_PT_Slots(Panel):
-    bl_label = "Slots"
-    bl_idname = "NFR_PT_slots"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Racer"
-    bl_order = 10
-
-    def draw(self, context):
-        layout = self.layout
+    # ---------------------------------------------------------------------
+    # SLOTS tab
+    # ---------------------------------------------------------------------
+    def _draw_slots(self, context, layout):
         prefs = _get_prefs(context)
         active_racer = _active_racer(context)
         active_slug = active_racer.slug if active_racer else None
@@ -1224,8 +2111,6 @@ class NFR_PT_Slots(Panel):
                 box.label(text="Select a racer mesh, then Assign Here")
             return
 
-        # Both "entry" and "pending" render the same detail block; a
-        # pending cell is labelled so the user knows Export is required.
         row = box.row(align=True)
         preview_col = row.column()
         preview_col.scale_x = 1.0
@@ -1264,38 +2149,75 @@ class NFR_PT_Slots(Panel):
             op.page = _slot_sel_page
             op.slot = _slot_sel_slot
 
-
-class NFR_PT_Materials(Panel):
-    bl_label = "Materials"
-    bl_idname = "NFR_PT_materials"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Racer"
-    bl_order = 20
-
-    @classmethod
-    def poll(cls, context):
+    # ---------------------------------------------------------------------
+    # MATERIALS tab
+    # ---------------------------------------------------------------------
+    def _draw_materials(self, context, layout):
+        scene = context.scene
         obj = context.active_object
-        return (obj is not None and obj.type == "MESH"
-                and hasattr(obj, "racer") and obj.racer.is_racer)
+        if obj is None or obj.type != "MESH":
+            layout.label(text="Select a mesh object", icon="INFO")
+            return
 
-    def draw(self, context):
-        layout = self.layout
-        obj = context.active_object
         m = obj.data
+
+        # -------- Render ON/OFF (top of tab) --------
+        top = layout.row(align=True)
+        top.scale_y = 1.4
+        toggle_icon = 'RADIOBUT_ON' if scene.nfr_ps1_render_state else 'RADIOBUT_OFF'
+        top.operator(
+            "nfr.ps1_toggle_render",
+            text="Render: ON" if scene.nfr_ps1_render_state else "Render: OFF",
+            icon=toggle_icon,
+        )
+        layout.separator()
 
         if not m.materials:
             layout.label(text="No materials on this mesh", icon="INFO")
             return
 
-        for mat in m.materials:
-            if mat is None:
-                continue
+        mats = [mat for mat in m.materials if mat is not None]
+        total = len(mats)
+        if total == 0:
+            layout.label(text="No materials on this mesh", icon="INFO")
+            return
+
+        total_pages = max(1, (total + MAX_MATS_PER_PAGE - 1) // MAX_MATS_PER_PAGE)
+
+        global _mat_view_page
+        if _mat_view_page < 1:
+            _mat_view_page = 1
+        if _mat_view_page > total_pages:
+            _mat_view_page = total_pages
+
+        # -------- Pagination (only if more than one page) --------
+        if total_pages > 1:
+            row = layout.row(align=True)
+            sub_left = row.row(align=True)
+            sub_left.enabled = _mat_view_page > 1
+            sub_left.operator("nfr.mat_prev_page", text="", icon="TRIA_LEFT")
+            row.label(
+                text=f"Materials  {_mat_view_page} / {total_pages}  ({total} total)"
+            )
+            sub_right = row.row(align=True)
+            sub_right.enabled = _mat_view_page < total_pages
+            sub_right.operator("nfr.mat_next_page", text="", icon="TRIA_RIGHT")
+            layout.separator()
+
+        start = (_mat_view_page - 1) * MAX_MATS_PER_PAGE
+        end = min(start + MAX_MATS_PER_PAGE, total)
+        page_mats = mats[start:end]
+
+        # -------- Per material --------
+        for mat in page_mats:
+            stored = mat.get("blend_mode", "half")
+            if stored not in _BLEND_MODE_SET:
+                stored = "half"
+            if getattr(mat, "nfr_racer_blend_mode", "half") != stored:
+                mat.nfr_racer_blend_mode = stored
 
             box = layout.box()
-            box.label(text=mat.name, icon="MATERIAL")
 
-            # Find the single texture image (validator already enforces <= 1).
             img = None
             if mat.use_nodes and mat.node_tree:
                 for n in mat.node_tree.nodes:
@@ -1303,34 +2225,41 @@ class NFR_PT_Materials(Panel):
                         img = n.image
                         break
 
+            # Row 1: thumb | info | eye | apply
             row = box.row(align=True)
+
             icon_id = _image_preview_icon_id(img)
             if icon_id:
                 row.template_icon(icon_value=icon_id, scale=2.0)
             else:
                 row.label(text="", icon="IMAGE_DATA")
 
-            info = row.column()
-            info.label(text=img.name if img else "(no image)")
+            info = row.column(align=True)
+            info.label(text=mat.name, icon="MATERIAL")
+            if img:
+                info.label(text=img.name, icon="IMAGE_DATA")
+            else:
+                info.label(text="(no image)", icon="ERROR")
 
-            is_double = not mat.use_backface_culling
-            icon_name = "CHECKBOX_HLT" if is_double else "CHECKBOX_DEHLT"
-            op = info.operator("nfr.toggle_double_sided",
-                               text="Double-sided", icon=icon_name)
-            op.material_name = mat.name
+            is_showing = getattr(mat, 'nfr_ps1_show_backface', False)
+            toggle_op = row.operator(
+                "nfr.toggle_double_sided",
+                text="",
+                icon='HIDE_OFF' if is_showing else 'HIDE_ON',
+                depress=is_showing,
+            )
+            toggle_op.material_name = mat.name
 
-            # Blend mode: 4-button segmented control, active one depressed.
-            current_mode = _get_blend_mode(mat)
-            blend_row = box.row(align=True)
-            blend_row.label(text="Blend:")
-            for mode_key, mode_label, _tip in BLEND_MODES:
-                is_active = (current_mode == mode_key)
-                bop = blend_row.operator(
-                    "nfr.set_blend_mode",
-                    text=mode_label,
-                    depress=is_active)
-                bop.material_name = mat.name
-                bop.mode = mode_key
+            apply_op = row.operator(
+                "nfr.racer_apply_blend_mode",
+                text="",
+                icon='CHECKMARK',
+            )
+            apply_op.material_name = mat.name
+
+            # Row 2: blend mode dropdown
+            drop = box.row(align=True)
+            drop.prop(mat, "nfr_racer_blend_mode", text="")
 
 
 # =========================================================================
@@ -1354,22 +2283,125 @@ _classes = (
     NFR_OT_SlotPrevPage,
     NFR_OT_SlotNextPage,
     NFR_OT_SlotLoadToPanel,
+    NFR_OT_MatPrevPage,
+    NFR_OT_MatNextPage,
     NFR_OT_ToggleDoubleSided,
-    NFR_OT_SetBlendMode,
+    NFR_OT_ApplyRacerBlendMode,
+    # render
+    NFR_OT_TogglePS1Render,
+    NFR_OT_SetBackface,
+    NFR_OT_ApplyBlendMode,
+    # panel (single)
     NFR_PT_Racer,
-    NFR_PT_Slots,
-    NFR_PT_Materials,
 )
+
+
+def _register_render_props():
+    # UI sub-tab
+    bpy.types.Scene.nfr_ui_tab = EnumProperty(
+        name="Tab",
+        description="Section to display in the CTR Racer panel",
+        items=[
+            ('SETTINGS',  "Settings",  "Racer settings and dev tools"),
+            ('SLOTS',     "Slots",     "Page/slot grid and roster"),
+            ('MATERIALS', "Materials", "Per-material render settings"),
+        ],
+        default='SETTINGS',
+    )
+
+    # Scene
+    bpy.types.Scene.nfr_ps1_render_state = BoolProperty(default=False)
+    bpy.types.Scene.nfr_ps1_render_active = BoolProperty(default=False)
+    bpy.types.Scene.nfr_ps1_prev_shadow_state = BoolProperty(default=True)
+    bpy.types.Scene.nfr_ps1_blend_mode = EnumProperty(
+        items=[
+            ('HALF_TRANSPARENT', "Half Transparent", ""),
+            ('ADDITIVE', "Additive", ""),
+            ('SUBTRACTIVE', "Subtractive", ""),
+            ('ADDITIVE_TRANSLUCENT', "Additive Translucent", ""),
+        ],
+        default='HALF_TRANSPARENT',
+    )
+
+    # Material — PS1 render
+    bpy.types.Material.nfr_ps1_blend_mode = EnumProperty(
+        items=[
+            ('NONE', "None", ""),
+            ('ADDITIVE', "Additive", ""),
+            ('SUBTRACTIVE', "Subtractive", ""),
+            ('HALF_TRANSPARENT', "Half Transparent", ""),
+            ('ADDITIVE_TRANSLUCENT', "Additive Translucent", ""),
+        ],
+        default='NONE',
+        update=_nfr_update_ps1_blend_mode,
+    )
+    bpy.types.Material.nfr_ps1_last_active_mode = EnumProperty(
+        items=[
+            ('NONE', "None", ""),
+            ('ADDITIVE', "Additive", ""),
+            ('SUBTRACTIVE', "Subtractive", ""),
+            ('HALF_TRANSPARENT', "Half Transparent", ""),
+            ('ADDITIVE_TRANSLUCENT', "Additive Translucent", ""),
+        ],
+        default='NONE',
+    )
+    bpy.types.Material.nfr_ps1_show_backface = BoolProperty(default=False)
+    bpy.types.Material.nfr_ps1_blend_method_override = EnumProperty(
+        items=[
+            ('AUTO', "Auto", ""),
+            ('OPAQUE', "Opaque", ""),
+            ('CLIP', "Clip", ""),
+            ('HASHED', "Hashed", ""),
+            ('BLEND', "Blend", ""),
+        ],
+        default='AUTO',
+    )
+    bpy.types.Material.nfr_ps1_transparency_overlap_mode = EnumProperty(
+        items=[
+            ('DEFAULT', "Default", ""),
+            ('MANUAL', "Manual", ""),
+        ],
+        default='DEFAULT',
+    )
+    bpy.types.Material.nfr_ps1_transparency_overlap_manual = BoolProperty(
+        default=True,
+    )
+
+    # Material — racer blend mode
+    bpy.types.Material.nfr_racer_blend_mode = EnumProperty(
+        name="Blend Mode",
+        description="Per-material blend mode forwarded to source_mesh.json",
+        items=BLEND_MODES,
+        default="half",
+        update=_nfr_mat_blend_mode_update,
+    )
+
+
+def _unregister_render_props():
+    del bpy.types.Scene.nfr_ui_tab
+    del bpy.types.Scene.nfr_ps1_render_state
+    del bpy.types.Scene.nfr_ps1_render_active
+    del bpy.types.Scene.nfr_ps1_prev_shadow_state
+    del bpy.types.Scene.nfr_ps1_blend_mode
+    del bpy.types.Material.nfr_ps1_blend_mode
+    del bpy.types.Material.nfr_ps1_last_active_mode
+    del bpy.types.Material.nfr_ps1_show_backface
+    del bpy.types.Material.nfr_ps1_blend_method_override
+    del bpy.types.Material.nfr_ps1_transparency_overlap_mode
+    del bpy.types.Material.nfr_ps1_transparency_overlap_manual
+    del bpy.types.Material.nfr_racer_blend_mode
 
 
 def register():
     for c in _classes:
         bpy.utils.register_class(c)
     bpy.types.Object.racer = PointerProperty(type=NFR_RacerProps)
+    _register_render_props()
 
 
 def unregister():
     _teardown_previews()
+    _unregister_render_props()
     if hasattr(bpy.types.Object, "racer"):
         del bpy.types.Object.racer
     for c in reversed(_classes):
