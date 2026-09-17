@@ -31,30 +31,15 @@ from bpy.types import Panel, Operator, AddonPreferences, PropertyGroup
 
 
 # =========================================================================
-# MODULE: constants
+# MODULE: submodule imports
 # =========================================================================
-ENGINES = [
-    ("SPEED",    "Speed",    ""),
-    ("BALANCED", "Balanced", ""),
-    ("ACCEL",    "Accel",    ""),
-    ("TURN",     "Turn",     ""),
-]
-_ENGINE_SET = {"SPEED", "BALANCED", "ACCEL", "TURN"}
-
-BLEND_MODES = [
-    ("half",     "Half Transparent",     "50% transparency (default)"),
-    ("add",      "Additive",             "Additive blending"),
-    ("subtract", "Subtractive",          "Subtractive blending"),
-    ("add_25",   "Additive Translucent", "Additive at 25%"),
-]
-_BLEND_MODE_SET = {m[0] for m in BLEND_MODES}
-
-DEFAULT_REPO   = r"C:\Users\Kevin\Desktop\Kevin\CTR\native_fork\nhanced"
-DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python.exe"
-ADDON_ID       = __name__  # "ctr_racer" when installed as a package
-
-MAX_PAGES = 8
-MAX_MATS_PER_PAGE = 10
+from .constants import (
+    ENGINES, _ENGINE_SET, BLEND_MODES, _BLEND_MODE_SET,
+    DEFAULT_REPO, DEFAULT_PYTHON, ADDON_ID,
+    MAX_PAGES, MAX_MATS_PER_PAGE,
+)
+from . import prefs
+from .prefs import _get_prefs
 
 
 # =========================================================================
@@ -538,50 +523,6 @@ def _nfr_mat_blend_mode_update(self, context):
     current = self.get("blend_mode", "half")
     if current != v:
         self["blend_mode"] = v
-
-
-# =========================================================================
-# MODULE: preferences
-# =========================================================================
-class NFR_Preferences(AddonPreferences):
-    bl_idname = ADDON_ID
-
-    repo_path:  StringProperty(name="Repo Path", default=DEFAULT_REPO, subtype="DIR_PATH")
-    python_exe: StringProperty(name="Python Exe", default=DEFAULT_PYTHON, subtype="FILE_PATH")
-    build_dir:  StringProperty(
-        name="Build Dir",
-        description="Relative to Repo Path (MSVC out-of-source build folder)",
-        default="build-msvc-x86")
-    exe_name:   StringProperty(name="Exe Name", default="ctr_native.exe")
-
-    def racers_dir(self):
-        return Path(self.repo_path) / "assets" / "mods" / "racers"
-
-    def build_path(self):
-        return Path(self.repo_path) / self.build_dir
-
-    def exe_path(self):
-        return Path(self.repo_path) / self.exe_name
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "repo_path")
-        layout.prop(self, "python_exe")
-        layout.separator()
-        layout.label(text="Build / Run:")
-        layout.prop(self, "build_dir")
-        layout.prop(self, "exe_name")
-        layout.separator()
-        layout.label(text="Export target (derived from Repo Path):", icon="INFO")
-        layout.label(text=str(self.racers_dir()))
-        layout.separator()
-        row = layout.row(align=True)
-        row.operator("nfr.save_settings", text="Save Settings JSON")
-        row.operator("nfr.load_settings", text="Load Settings JSON")
-
-
-def _get_prefs(context):
-    return context.preferences.addons[ADDON_ID].preferences
 
 
 # =========================================================================
@@ -2241,7 +2182,6 @@ class NFR_PT_Racer(Panel):
 # =========================================================================
 _classes = (
     NFR_RacerProps,
-    NFR_Preferences,
     NFR_OT_Validate,
     NFR_OT_Export,
     NFR_OT_ExportAll,
@@ -2367,6 +2307,7 @@ def _unregister_render_props():
 
 
 def register():
+    prefs.register()
     for c in _classes:
         bpy.utils.register_class(c)
     bpy.types.Object.racer = PointerProperty(type=NFR_RacerProps)
@@ -2380,5 +2321,7 @@ def unregister():
         del bpy.types.Object.racer
     for c in reversed(_classes):
         bpy.utils.unregister_class(c)
+    prefs.unregister()
+    prefs.unregister()
 
 
