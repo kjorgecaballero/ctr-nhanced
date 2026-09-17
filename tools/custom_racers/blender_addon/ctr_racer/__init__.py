@@ -42,6 +42,14 @@ from .prefs import _get_prefs
 from .render.node_setups import NFR_PS1_NODE_SETUPS
 from . import state
 from .core.helpers import _redraw_view3d, _find_object_by_slug, _active_racer
+from .core.roster import (
+    _parse_roster_line, _read_roster, _group_by_page, _remove_roster_entry,
+)
+from .core.icons import (
+    _ensure_previews, _teardown_previews, _get_icon, _image_preview_icon_id,
+)
+from .core.validate import validate_racer
+from . import core
 
 # =========================================================================
 # MODULE: render — compat helpers
@@ -370,245 +378,8 @@ def _get_blend_mode(mat):
     return value
 
 # =========================================================================
-# MODULE: racer properties
-# =========================================================================
-class NFR_RacerProps(PropertyGroup):
-    is_racer:   BoolProperty(name="Is Racer", default=False)
-    slug:       StringProperty(name="Slug", description="Folder name and internal .ctr name")
-    page:       IntProperty(name="Page", default=1, min=1, max=8)
-    slot:       IntProperty(name="Slot", default=0, min=0, max=15)
-    engine:     EnumProperty(name="Engine", items=ENGINES, default="BALANCED")
-    mask:       EnumProperty(
-        name="Mask",
-        description="Which mask this racer receives from item boxes",
-        items=[("good", "Good (Aku Aku)", ""),
-               ("bad",  "Bad (Uka Uka)",  "")],
-        default="good")
-    wheels:     EnumProperty(
-        name="Wheels",
-        description="Tire sprite visibility (Oxide-style hidden tires)",
-        items=[("yes", "Visible",             ""),
-               ("no",  "Hidden (Oxide-style)", "")],
-        default="yes")
-    long_name:  StringProperty(name="Long Name")
-    short_name: StringProperty(name="Short Name")
-    color:      FloatVectorProperty(name="Minimap Color", subtype="COLOR",
-                                    default=(1.0, 1.0, 1.0), min=0.0, max=1.0)
-    icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH")
-
-    def custom_id(self):
-        return 16 + (self.page - 1) * 16 + self.slot
-
-# =========================================================================
-# MODULE: roster I/O
-# =========================================================================
-def _parse_roster_line(line):
-    s = line.strip()
-    if not s or s.startswith("#"):
-        return None
-    try:
-        toks = shlex.split(s)
-    except ValueError:
-        return None
-    if len(toks) < 3:
-        return None
-    try:
-        page = int(toks[0])
-        slot = int(toks[1])
-    except ValueError:
-        return None
-    folder = toks[2]
-    rest = toks[3:]
-
-    engine = "BALANCED"
-    if rest and rest[0] in _ENGINE_SET:
-        engine = rest[0]
-        rest = rest[1:]
-
-    name = ""
-    color = None
-    mask = "good"
-    wheels = "yes"
-    for tok in rest:
-        if tok.startswith("mask="):
-            v = tok[5:]
-            if v in ("good", "bad"):
-                mask = v
-        elif tok.startswith("wheels="):
-            v = tok[7:]
-            if v in ("yes", "no"):
-                wheels = v
-        elif tok.startswith("#"):
-            color = tok
-        elif len(tok) == 6 and all(c in "0123456789abcdefABCDEF" for c in tok):
-            color = "#" + tok
-        elif not name:
-            name = tok
-
-    return {
-        "page": page, "slot": slot, "folder": folder,
-        "engine": engine, "name": name or folder, "color": color,
-        "mask": mask, "wheels": wheels,
-    }
-
-def _read_roster(prefs):
-    path = prefs.racers_dir() / "roster.txt"
-    if not path.is_file():
-        return []
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except Exception:
-        return []
-    entries = []
-    for line in text.splitlines():
-        e = _parse_roster_line(line)
-        if e is not None:
-            entries.append(e)
-    return entries
-
-def _group_by_page(entries):
-    pages = {}
-    for e in entries:
-        pages.setdefault(e["page"], {})[e["slot"]] = e
-    return pages
-
-def _remove_roster_entry(prefs, page, slot):
-    path = prefs.racers_dir() / "roster.txt"
-    if not path.is_file():
-        return (False, "roster.txt not found")
-    try:
-        text = path.read_text(encoding="utf-8")
-    except Exception as ex:
-        return (False, f"Read failed: {ex}")
-
-    new_lines = []
-    removed_slug = None
-    for line in text.splitlines():
-        e = _parse_roster_line(line)
-        if e is not None and e["page"] == page and e["slot"] == slot:
-            removed_slug = e["folder"]
-            continue
-        new_lines.append(line)
-
-    if removed_slug is None:
-        return (False, "No entry at that slot")
-
-    try:
-        path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-    except Exception as ex:
-        return (False, f"Write failed: {ex}")
-
-    return (True, removed_slug)
-
-# =========================================================================
-# MODULE: icon previews
-# =========================================================================
-_preview_collection = None
-_icon_cache = {}
-_icon_mtimes = {}
-
-def _ensure_previews():
-    global _preview_collection
-    if _preview_collection is None:
-        _preview_collection = bpy.utils.previews.new()
-    return _preview_collection
-
-def _teardown_previews():
-    global _preview_collection
-    if _preview_collection is not None:
-        try:
-            bpy.utils.previews.remove(_preview_collection)
-        except Exception:
-            pass
-        _preview_collection = None
-    _icon_cache.clear()
-    _icon_mtimes.clear()
-
-def _get_icon(slug, png_path):
-    pc = _ensure_previews()
-    try:
-        mtime = png_path.stat().st_mtime
-    except OSError:
-        return None
-    if slug in _icon_cache and _icon_mtimes.get(slug) == mtime:
-        return _icon_cache[slug]
-    if slug in _icon_cache:
-        try:
-            pc.remove(slug)
-        except Exception:
-            pass
-        del _icon_cache[slug]
-    try:
-        icon = pc.load(slug, str(png_path), "IMAGE")
-    except Exception:
-        _icon_mtimes.pop(slug, None)
-        return None
-    _icon_cache[slug] = icon
-    _icon_mtimes[slug] = mtime
-    return icon
-
-def _image_preview_icon_id(img):
-    if img is None:
-        return 0
-    try:
-        img.preview_ensure()
-    except Exception:
-        return 0
-    pv = getattr(img, "preview", None)
-    if pv is None:
-        return 0
-    try:
-        return pv.icon_id or 0
-    except Exception:
-        return 0
-
-# =========================================================================
 # MODULE: mesh export
 # =========================================================================
-def validate_racer(obj):
-    errors = []
-    warnings = []
-    props = obj.racer
-
-    if not props.slug:
-        errors.append("Slug is empty")
-    if not props.long_name:
-        warnings.append("Long Name is empty (will fall back to slug)")
-
-    m = obj.data
-    if m.shape_keys is None or "Basis" not in m.shape_keys.key_blocks:
-        errors.append("No 'Basis' shape key")
-    if m.uv_layers.active is None:
-        errors.append("No active UV layer")
-    if "Color" not in m.color_attributes:
-        errors.append("No 'Color' color attribute")
-
-    for mat in m.materials:
-        if mat is None:
-            continue
-        if not mat.use_nodes:
-            warnings.append(f"Material '{mat.name}' has no nodes")
-            continue
-        imgs = [n.image for n in mat.node_tree.nodes
-                if n.type == "TEX_IMAGE" and n.image]
-        if len(imgs) > 1:
-            errors.append(f"Material '{mat.name}' has {len(imgs)} images (max 1)")
-        for im in imgs:
-            if im.packed_file is None:
-                errors.append(f"Image '{im.name}' is NOT packed into the .blend")
-            else:
-                warnings.append(f"Image '{im.name}': {im.size[0]}x{im.size[1]} packed")
-
-    if props.icon_path:
-        resolved = bpy.path.abspath(props.icon_path)
-        if not os.path.isfile(resolved):
-            errors.append(
-                f"Icon file not found: {props.icon_path} "
-                f"(resolved to: {resolved})")
-    else:
-        warnings.append("No icon PNG selected")
-
-    return (len(errors) == 0, warnings, errors)
 
 def export_mesh_json(obj, out_path):
     m = obj.data
@@ -795,7 +566,6 @@ def _run_game(context):
     except Exception as ex:
         return (False, f"Launch failed: {ex}")
     return (True, f"Launched {exe.name}")
-
 
 def _resolve_cells(page, page_entries, active_racer, active_slug):
     cells = {}
@@ -1922,7 +1692,6 @@ class NFR_PT_Racer(Panel):
 # MODULE: registration
 # =========================================================================
 _classes = (
-    NFR_RacerProps,
     NFR_OT_Validate,
     NFR_OT_Export,
     NFR_OT_ExportAll,
@@ -2046,18 +1815,16 @@ def _unregister_render_props():
 
 def register():
     prefs.register()
+    core.register()
     for c in _classes:
         bpy.utils.register_class(c)
-    bpy.types.Object.racer = PointerProperty(type=NFR_RacerProps)
     _register_render_props()
 
 def unregister():
     _teardown_previews()
     _unregister_render_props()
-    if hasattr(bpy.types.Object, "racer"):
-        del bpy.types.Object.racer
     for c in reversed(_classes):
         bpy.utils.unregister_class(c)
-    prefs.unregister()
+    core.unregister()
     prefs.unregister()
 
