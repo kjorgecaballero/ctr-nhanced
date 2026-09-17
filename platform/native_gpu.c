@@ -35,7 +35,7 @@ extern int g_dbg_polygonSelected;
 
 // Sentinel CLUT: bit 15 of a primitive's clut flags a custom GL texture
 // instead of VRAM. Index into s_gpu.customTextures[] is clut & 0x7FFF.
-#define NATIVE_GPU_MAX_CUSTOM_TEXTURES 128
+#define NATIVE_GPU_MAX_CUSTOM_TEXTURES 132
 #define NATIVE_GPU_CLUT_SENTINEL       0x8000
 
 #define GET_TPAGE_BLEND(tpage)     ((BlendMode)(((tpage >> 5) & 3) + 1))

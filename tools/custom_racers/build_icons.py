@@ -60,6 +60,8 @@ SLOTS = {
     12: (907, 192, 32, 253),
     13: (960, 216, 48, 248),
     14: (971, 216, 48, 249),
+    16: (960, 245, 48, 250),
+    17: (971, 245, 48, 251),
 }
 
 
@@ -227,7 +229,10 @@ def build_page(page_num, slots):
         print(f"  page_{page_num}.vrm: 0 blocks - not written")
         return
 
-    dst = RACERS / f"page_{page_num}.vrm"
+    if page_num == 0:
+        dst = RACERS / "page_0_custom.vrm"
+    else:
+        dst = RACERS / f"page_{page_num}.vrm"
     size = write_vrm(dst, blocks)
     print(f"  {dst.name}: {len(blocks) // 2} icons "
           f"({len(blocks)} blocks), {size} bytes")
@@ -246,7 +251,9 @@ def main():
 
     for page_num, slots in sorted(pages.items()):
         if page_num == 0:
-            continue
+            slots = {s: f for s, f in slots.items() if s >= 16}
+            if not slots:
+                continue
         if args.page is not None and args.page != page_num:
             continue
         build_page(page_num, slots)

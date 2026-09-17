@@ -16,7 +16,12 @@ extern "C" {
  *   IDs 16+   -> s_customMeta.
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
-#define NATIVE_CUSTOM_COUNT   128
+#define NATIVE_CUSTOM_COUNT   130
+
+/* Page 0 grid slots 16 and 17 are custom. Their customIDs are the
+ * last two of the custom ID space (see GET_MPK_ID). */
+#define NATIVE_PAGE0_CUSTOM_BASE  144
+#define NATIVE_PAGE0_CUSTOM_COUNT 2
 #define NATIVE_PAGE_SIZE      16
 
 extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
@@ -32,17 +37,20 @@ extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
  * game/230/D230.c characterSelectMeta1P2P, which is how the game maps
  * character-select cells to the enum-ordered arrays (voice banks,
  * dance models, kart colors, TNT height, BI_*PACK ranges). */
-extern const u8 s_gridToCharID[16];
+extern const u8 s_gridToCharID[NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT];
 
 
 /* Maps a character ID to an enum Characters index (0..15) for use as an
  * index into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only
  * have 16 entries. Custom IDs 16+ wrap to their page slot, then through
  * s_gridToCharID. Originals pass through unchanged. */
-#define GET_MPK_ID(id)                                                        \
-    (((id) >= NATIVE_CUSTOM_ID_BASE)                                          \
-        ? s_gridToCharID[((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE]   \
-        : (id))
+#define GET_MPK_ID(id)                                                       \
+    (((id) >= NATIVE_PAGE0_CUSTOM_BASE &&                                    \
+      (id) <  NATIVE_PAGE0_CUSTOM_BASE + NATIVE_PAGE0_CUSTOM_COUNT)          \
+        ? s_gridToCharID[NATIVE_PAGE_SIZE + ((id) - NATIVE_PAGE0_CUSTOM_BASE)] \
+        : ((id) >= NATIVE_CUSTOM_ID_BASE)                                    \
+            ? s_gridToCharID[((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE] \
+            : (id))
 
 /* Initializes the custom racer subsystem. Reads roster.txt on first call. */
 void NativeCustomRacer_Init(void);

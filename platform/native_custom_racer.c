@@ -36,7 +36,7 @@ static void Log(const char *fmt, ...)
 /* Grid slot (0..15) -> enum Characters. Must match the permutation in
  * game/230/D230.c characterSelectMeta1P2P. Exposed via native_custom_racer.h
  * for GET_MPK_ID. */
-const u8 s_gridToCharID[16] = {
+const u8 s_gridToCharID[18] = {
     CRASH_BANDICOOT,   /* grid 0  */
     NEO_CORTEX,        /* grid 1  */
     TINY_TIGER,        /* grid 2  */
@@ -53,6 +53,8 @@ const u8 s_gridToCharID[16] = {
     PENTA_PENGUIN,     /* grid 13 */
     FAKE_CRASH,        /* grid 14 */
     NITROS_OXIDE,      /* grid 15 */
+    N_TROPY,           /* grid 16 - page 0 slot 16 default */
+    RIPPER_ROO,        /* grid 17 - page 0 slot 17 default */
 };
 
 typedef struct
@@ -102,7 +104,7 @@ static char s_customDisplayName[NATIVE_CUSTOM_COUNT][64];
 
 /* Phase 2: copy of the menu meta array with custom slots patched to
  * characterID 16+. Filled on demand by NativeCustomRacer_GetPageMeta. */
-static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE];
+static struct CharacterSelectMeta s_pageMeta[NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT];
 
 /* Per-custom minimap color (roster.txt optional #RRGGBB field). */
 static u32 s_customColor[NATIVE_CUSTOM_COUNT][4];
@@ -311,12 +313,20 @@ void NativeCustomRacer_ReloadRoster(void)
             maxPage = e.page;
 
         /* Phase 1: populate parallel table for IDs 16+.
-         * customID = 16 + (page-1)*16 + slot */
-        if (e.page > 0)
+         * pages >= 1: customID = 16 + (page-1)*16 + slot.
+         * page 0, slots >= 16: customID = NATIVE_PAGE0_CUSTOM_BASE + (slot - 16). */
         {
-            int customID = NATIVE_CUSTOM_ID_BASE
+            int customID = -1;
+            if (e.page > 0)
+            {
+                customID = NATIVE_CUSTOM_ID_BASE
                          + (e.page - 1) * NATIVE_PAGE_SIZE
                          + e.slot;
+            }
+            else if (e.page == 0 && e.slot >= NATIVE_PAGE_SIZE)
+            {
+                customID = NATIVE_PAGE0_CUSTOM_BASE + (e.slot - NATIVE_PAGE_SIZE);
+            }
             if (customID >= NATIVE_CUSTOM_ID_BASE &&
                 customID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
             {
@@ -763,7 +773,7 @@ static void EnsureMetaBackup(void)
  * (0..12; 13-15 unused by the original engine). */
 static const struct {
     u16 px_x, px_y, clut_x, clut_y;
-} s_iconSlotRects[16] = {
+} s_iconSlotRects[18] = {
     {368, 216,  16, 251},  /* 0: crash     */
     {256, 216,  16, 252},  /* 1: cortex    */
     {267, 216,  16, 253},  /* 2: tiny      */
@@ -780,11 +790,13 @@ static const struct {
     {960, 216,  48, 248},  /* 13: synthetic (Sentinel only) */
     {971, 216,  48, 249},  /* 14: synthetic (Sentinel only) */
     {0, 0, 0, 0},          /* 15: reserved (Oxide) */
+    {960, 245,  48, 250},  /* 16: page-0 custom slot 16 */
+    {971, 245,  48, 251},  /* 17: page-0 custom slot 17 */
 };
 
 /* Per-VRAM-slot page tracker. -1 = unknown, 0 = original atlas,
  * N>0 = custom page N. */
-static s16 s_iconSlotLoadedPage[16] = {
+static s16 s_iconSlotLoadedPage[18] = {
     -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1
 };
@@ -976,10 +988,18 @@ void NativeCustomRacer_EnsureIconForChar(int characterID)
     if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
         return;
 
-    page = 1 + (characterID - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE;
-    slot = (characterID - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE;
+    if (characterID >= NATIVE_PAGE0_CUSTOM_BASE)
+    {
+        page = 0;
+        slot = NATIVE_PAGE_SIZE + (characterID - NATIVE_PAGE0_CUSTOM_BASE);
+    }
+    else
+    {
+        page = 1 + (characterID - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE;
+        slot = (characterID - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE;
+    }
 
-    if (slot >= 16)
+    if (slot >= NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
         return;
     if (s_iconSlotRects[slot].px_x == 0)
         return;
@@ -1056,14 +1076,32 @@ struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
 
     if (base == NULL || count <= 0)
         return base;
-    if (count > NATIVE_PAGE_SIZE)
-        count = NATIVE_PAGE_SIZE;
-
-    if (s_page == 0)
-        return base;
+    if (count > NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
+        count = NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT;
 
     for (int i = 0; i < count; i++)
         s_pageMeta[i] = base[i];
+
+    if (s_page == 0)
+    {
+        for (int i = 0; i < s_pageEntryCount; i++)
+        {
+            PageEntry *e = &s_pageEntries[i];
+            if (e->page != 0)
+                continue;
+            if (e->slot < NATIVE_PAGE_SIZE)
+                continue;
+            if (e->slot >= NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
+                continue;
+            if (e->slot >= count)
+                continue;
+
+            int customID = NATIVE_PAGE0_CUSTOM_BASE
+                         + (e->slot - NATIVE_PAGE_SIZE);
+            s_pageMeta[e->slot].characterID = (s16)customID;
+        }
+        return s_pageMeta;
+    }
 
     for (int i = 0; i < s_pageEntryCount; i++)
     {
@@ -1154,12 +1192,25 @@ static void RegisterCustomIconTexture(int idx, int charID)
     if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT || s_customIconAttempted[idx]) return;
     s_customIconAttempted[idx] = 1;
 
-    int page = 1 + idx / NATIVE_PAGE_SIZE;
-    int slot = idx % NATIVE_PAGE_SIZE;
-    if (slot >= 16 || s_iconSlotRects[slot].px_x == 0) return;
+    int page, slot;
+    if (idx >= NATIVE_CUSTOM_COUNT - NATIVE_PAGE0_CUSTOM_COUNT)
+    {
+        page = 0;
+        slot = NATIVE_PAGE_SIZE + (idx - (NATIVE_CUSTOM_COUNT - NATIVE_PAGE0_CUSTOM_COUNT));
+    }
+    else
+    {
+        page = 1 + idx / NATIVE_PAGE_SIZE;
+        slot = idx % NATIVE_PAGE_SIZE;
+    }
+    if (slot >= NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT) return;
+    if (s_iconSlotRects[slot].px_x == 0) return;
 
     char path[256];
-    snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
+    if (page == 0)
+        snprintf(path, sizeof(path), "assets/mods/racers/page_0_custom.vrm");
+    else
+        snprintf(path, sizeof(path), "assets/mods/racers/page_%d.vrm", page);
     long size = 0;
     unsigned char *buf = LoadFileToMemory(path, NATIVE_VRM_MAX_BYTES, &size);
     if (buf == NULL) return;
