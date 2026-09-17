@@ -11,7 +11,7 @@ enum
 	MM_CHARACTER_SELECT_MODEL_MOVE_FP_SHIFT = 0xc,
 	MM_CHARACTER_SELECT_MODEL_MOVE_NEXT = 1,
 	MM_CHARACTER_SELECT_MODEL_MOVE_PREV = -1,
-	MM_CHARACTER_SELECT_ICON_COUNT = 0x10,
+	MM_CHARACTER_SELECT_ICON_COUNT = 0x12,
 	MM_CHARACTER_SELECT_EXPANSION_ICON_FIRST = 0xc,
 	MM_CHARACTER_SELECT_DEFAULT_DRIVER_COUNT = 8,
 	MM_CHARACTER_SELECT_MAX_PLAYERS = 4,
@@ -26,8 +26,8 @@ enum
 	MM_CHARACTER_SELECT_LAYOUT_4P = 3,
 	MM_CHARACTER_SELECT_LAYOUT_1P_LIMITED = 4,
 	MM_CHARACTER_SELECT_LAYOUT_2P_LIMITED = 5,
-	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 16,
-	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x11,
+	MM_CHARACTER_SELECT_TITLE_TRANSITION_INDEX = 18,
+	MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST = 0x13,
 	MM_CHARACTER_SELECT_3P_TITLE_X = 0x9c,
 	MM_CHARACTER_SELECT_3P_SELECT_Y = 0x14,
 	MM_CHARACTER_SELECT_3P_CHARACTER_Y = 0x26,
@@ -114,6 +114,9 @@ int MM_Characters_GetNextDriver(s16 direction, s16 characterID)
 
 	s16 newDriver = nextIcon;
 
+	if (D230.activeCharacterSelectMeta[(s32)newDriver].characterID < 0)
+		newDriver = characterID;
+
 	if (
 	    (unlocked != MM_CHARACTER_UNLOCK_ALWAYS) &&
 	    !CHECK_ADV_BIT(sdata->gameProgress.unlocks, unlocked))
@@ -144,6 +147,7 @@ static s16 MM_Characters_FindFreeIcon(s16 player)
 	{
 		s32 tentative = ((s32)player + i) % MM_CHARACTER_SELECT_ICON_COUNT;
 		s16 candidateCharID = D230.activeCharacterSelectMeta[tentative].characterID;
+		if (candidateCharID < 0) continue;
 		if (!MM_Characters_CharIDInUse(candidateCharID, player))
 			return (s16)tentative;
 	}
@@ -155,6 +159,7 @@ b32 MM_Characters_boolIsInvalid(s16 *unused, s16 candidateIcon, s16 player)
 {
 	(void)unused;
 	s16 candidateCharID = D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID;
+	if (candidateCharID < 0) return 1;
 	return MM_Characters_CharIDInUse(candidateCharID, player);
 }
 
@@ -1002,6 +1007,8 @@ dontDrawSelectCharacter:
 
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
+		if (iconDrawMeta->characterID < 0) { iconDrawMeta++; continue; }
+
 		s16 unlockRequirement = iconDrawMeta->unlockFlags;
 		if (
 		    (unlockRequirement == MM_CHARACTER_UNLOCK_ALWAYS) ||
@@ -1131,6 +1138,8 @@ dontDrawSelectCharacter:
 
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
+		if (activeCharacterSelectMeta[iconIndex].characterID < 0) continue;
+
 		s16 unlockRequirement = activeCharacterSelectMeta[iconIndex].unlockFlags;
 
 		if (
