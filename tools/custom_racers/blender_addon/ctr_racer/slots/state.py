@@ -11,7 +11,8 @@ the slots view and the materials view.
 
 def _resolve_cells(page, page_entries, active_racer, active_slug):
     cells = {}
-    for slot in range(16):
+    n = 18 if page == 0 else 16
+    for slot in range(n):
         e = page_entries.get(slot)
         active_here = (active_racer is not None
                        and active_racer.page == page

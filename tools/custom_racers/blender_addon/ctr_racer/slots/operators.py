@@ -136,7 +136,7 @@ class NFR_OT_SlotPrevPage(Operator):
     bl_label = "Previous page"
 
     def execute(self, context):
-        if state._slot_view_page > 1:
+        if state._slot_view_page > 0:
             state._slot_view_page -= 1
             _redraw_view3d(context)
         return {"FINISHED"}

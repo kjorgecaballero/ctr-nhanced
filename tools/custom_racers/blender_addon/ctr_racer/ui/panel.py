@@ -165,14 +165,15 @@ class NFR_PT_Racer(Panel):
         cells = _resolve_cells(state._slot_view_page, page_entries,
                                active_racer, active_slug)
 
+        n = 18 if state._slot_view_page == 0 else 16
         occupied = sum(1 for k, _ in cells.values() if k != "empty")
-        layout.label(text=f"{occupied}/16 slots occupied")
+        layout.label(text=f"{occupied}/{n} slots occupied")
 
         grid = layout.grid_flow(
-            row_major=True, columns=4,
+            row_major=True, columns=6 if n == 18 else 4,
             even_columns=True, even_rows=True, align=True)
 
-        for slot in range(16):
+        for slot in range(n):
             kind, data = cells[slot]
             if kind in ("entry", "pending"):
                 folder = data["folder"]
