@@ -6,6 +6,7 @@
 Owns: PS1 node setups, material setup, color attribute helpers,
 property registration and render operators.
 
-Placeholder for now. register()/unregister() are added in a later
-batch once the submodule has its own classes and props.
+register()/unregister() will be added in a later batch, once the
+submodule owns its own Blender classes and Material props
+(render/props.py).
 """
