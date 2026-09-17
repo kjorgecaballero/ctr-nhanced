@@ -2,9 +2,9 @@
 # MODULE: bl_info
 # =========================================================================
 bl_info = {
-    "name": "CTR NHanced Racer Export",
+    "name": "CTR Racer",
     "author": "kjorgecaballero",
-    "version": (1, 8, 0),
+    "version": (2, 0, 0),
     "blender": (3, 2, 0),
     "location": "View3D > N > Racer",
     "description": "Configure and export custom CTR racers",
@@ -51,7 +51,7 @@ _BLEND_MODE_SET = {m[0] for m in BLEND_MODES}
 
 DEFAULT_REPO   = r"C:\Users\Kevin\Desktop\Kevin\CTR\native_fork\nhanced"
 DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python.exe"
-ADDON_ID       = __name__ if __name__ != "__main__" else "native_fork_racer"
+ADDON_ID       = __name__  # "ctr_racer" when installed as a package
 
 MAX_PAGES = 8
 MAX_MATS_PER_PAGE = 10
@@ -580,34 +580,8 @@ class NFR_Preferences(AddonPreferences):
         row.operator("nfr.load_settings", text="Load Settings JSON")
 
 
-class _FallbackPrefs:
-    def __init__(self):
-        self.repo_path = DEFAULT_REPO
-        self.python_exe = DEFAULT_PYTHON
-        self.build_dir = "build-msvc-x86"
-        self.exe_name = "ctr_native.exe"
-
-    def racers_dir(self):
-        return Path(self.repo_path) / "assets" / "mods" / "racers"
-
-    def build_path(self):
-        return Path(self.repo_path) / self.build_dir
-
-    def exe_path(self):
-        return Path(self.repo_path) / self.exe_name
-
-
-_fallback_prefs_instance = None
-
-
 def _get_prefs(context):
-    global _fallback_prefs_instance
-    entry = context.preferences.addons.get(ADDON_ID)
-    if entry is not None:
-        return entry.preferences
-    if _fallback_prefs_instance is None:
-        _fallback_prefs_instance = _FallbackPrefs()
-    return _fallback_prefs_instance
+    return context.preferences.addons[ADDON_ID].preferences
 
 
 # =========================================================================
@@ -2408,5 +2382,3 @@ def unregister():
         bpy.utils.unregister_class(c)
 
 
-if __name__ == "__main__":
-    register()
