@@ -1,25 +1,7 @@
 # =========================================================================
 # MODULE: kart — importer
 # =========================================================================
-"""Kart template importer.
-
-Reproduces the exact node graph of the original standalone script
-(tools/custom_racers/blender_addon/kart_editor.py), but:
-  - paths come from the bundled assets, not from C:\\Users\\...
-  - the 4 RGB nodes are tagged so the panel can edit them
-  - reimporting is idempotent (wipes the previous kart first)
-  - texture nodes use Closest interpolation (pixel-perfect PS1 look)
-
-The graph is:
-    image[atlas]  -> overlay[atlas]  <- rgb[atlas]   -> mix[atlas]   (Fac=0.0)
-    image[pipes]  -> overlay[pipes]  <- rgb[pipes]   -> mix[pipes]   (Fac=0.0)
-    image[extra1] -> overlay[extra1] <- rgb[extra1]  -> mix[extra1]  (Fac=0.3)
-    image[extra2] -> overlay[extra2] <- rgb[extra2]  -> mix[extra2]  (Fac=0.3)
-
-    add1 = mix[atlas]  + mix[pipes]
-    add3 = mix[extra1] + mix[extra2]
-    out  = add1 + add3 -> Material Output
-"""
+"""Kart template importer."""
 import bpy
 from pathlib import Path
 
@@ -35,10 +17,6 @@ def _load_png(png_name):
 
 
 def _wipe_previous_kart(material_prefix):
-    """Remove any mesh object that owns a material matching the
-    template prefix, then purge orphaned materials that carry the
-    same prefix. Keeps the scene idempotent across reimports and
-    avoids `.001` suffixes on the FBX import."""
     to_remove = []
     for obj in list(bpy.context.scene.objects):
         if obj.type != 'MESH':
@@ -68,11 +46,6 @@ def _find_template_material(material_prefix):
 
 
 def _build_graph(material, images_by_slot):
-    """Rebuild the kart node graph verbatim.
-
-    Returns a list of (slot_name, rgb_node) in graph order, so the
-    caller can tag/restore colors on the correct nodes.
-    """
     nodes = material.node_tree.nodes
     links = material.node_tree.links
 
@@ -90,7 +63,7 @@ def _build_graph(material, images_by_slot):
         tex = nodes.new('ShaderNodeTexImage')
         tex.location = (-800, y)
         tex.image = images_by_slot[slot]
-        tex.interpolation = 'Closest'   # pixel-perfect, matches PS1 look
+        tex.interpolation = 'Closest'
         tex_nodes[slot] = tex
 
         rgb = nodes.new('ShaderNodeRGB')
@@ -159,10 +132,8 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
             self.report({'ERROR'}, f"Unknown variant: {variant}")
             return {'CANCELLED'}
 
-        # Preserve existing colors across reimports.
         prev_colors = {z.display_name: tuple(z.color) for z in state.zones}
 
-        # --- 1. Idempotent import ----------------------------------
         _wipe_previous_kart(tpl["material_prefix"])
         bpy.ops.import_scene.fbx(filepath=str(fbx_path))
 
@@ -173,12 +144,10 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
                         f"found after import")
             return {'CANCELLED'}
 
-        # --- 2. Rebuild the node graph -----------------------------
         material.use_nodes = True
         images_by_slot = {slot: _load_png(png) for slot, png in tex_map.items()}
         rgb_nodes_in_order = _build_graph(material, images_by_slot)
 
-        # --- 3. Rebuild the zone list, restoring colors ------------
         state.zones.clear()
         for (zone_name, slot_name), (slot, rgb_node) in zip(
                 tpl["zones"], rgb_nodes_in_order):

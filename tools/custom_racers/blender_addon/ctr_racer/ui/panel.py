@@ -3,16 +3,17 @@
 # =========================================================================
 """NFR_PT_Racer: the single unified panel with sub-tabs.
 
-Dispatches to one of four draw methods based on scene.nfr_ui_tab.
+Dispatches to one of five draw methods based on scene.nfr_ui_tab.
 Pure UI: no persistent state, no operators owned here.
 """
 import bpy
+from pathlib import Path
 from bpy.types import Panel
 
 from .. import state
 from ..constants import (
     ADDON_ID, DEFAULT_REPO,
-    MAX_PAGES, MAX_MATS_PER_PAGE, _BLEND_MODE_SET,
+    MAX_PAGES, MAX_MATS_PER_PAGE, MAX_PRESETS_PER_PAGE, _BLEND_MODE_SET,
 )
 from ..prefs import _get_prefs
 from ..core.helpers import _find_object_by_slug, _active_racer
@@ -21,6 +22,7 @@ from ..core.icons import _get_icon, _get_original_icon, _image_preview_icon_id
 from ..core.validate import validate_racer
 from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
+from ..kart.presets import scan_presets
 
 
 class NFR_PT_Racer(Panel):
@@ -53,6 +55,8 @@ class NFR_PT_Racer(Panel):
             self._draw_materials(context, layout)
         elif tab == 'KART':
             self._draw_kart(context, layout)
+        elif tab == 'PRESETS':
+            self._draw_presets(context, layout)
 
     # ---------------------------------------------------------------------
     # SETTINGS tab
@@ -454,6 +458,102 @@ class NFR_PT_Racer(Panel):
         bake_row.enabled = bool(root_str) and bool(st.preset_name.strip())
         bake_row.operator("nfr.kart_bake_and_export",
                           text="Bake & Export", icon="RENDER_STILL")
+
+    # ---------------------------------------------------------------------
+    # PRESETS tab
+    # ---------------------------------------------------------------------
+    def _draw_presets(self, context, layout):
+        prefs = _get_prefs(context)
+        st = context.scene.kart_state
+
+        root_str = getattr(prefs, "kart_presets_root", "") or ""
+        if not root_str:
+            warn = layout.box()
+            warn.label(text="Set 'Kart presets folder' in", icon="ERROR")
+            warn.label(text="addon preferences first")
+            return
+
+        root = Path(root_str)
+        if not root.is_dir():
+            warn = layout.box()
+            warn.label(text="Folder not found:", icon="ERROR")
+            warn.label(text=root_str)
+            return
+
+        # Header row
+        row = layout.row(align=True)
+        row.label(text="Preset Browser", icon="FILE_FOLDER")
+        row.operator("nfr.kart_open_presets_folder", text="", icon="FILEBROWSER")
+
+        # Target info
+        obj = context.active_object
+        can_apply = (obj is not None and obj.type == 'MESH'
+                     and obj.racer.is_racer)
+        if can_apply:
+            layout.label(text=f"Target: {obj.name}", icon="OBJECT_DATA")
+            layout.label(text=f"slug: {obj.racer.slug}")
+        else:
+            layout.label(text="Select a racer mesh to enable Apply",
+                         icon="INFO")
+
+        # Filter row: Kart / Gold / Silver
+        layout.separator()
+        filter_row = layout.row(align=True)
+        filter_row.scale_y = 1.3
+        filter_row.prop(st, "preset_filter", expand=True)
+        layout.separator()
+
+        # Pick the current variant's items
+        filter_to_dir = {'KART': 'kart', 'GOLD': 'gold', 'SILVER': 'silver'}
+        variant_dir = filter_to_dir.get(st.preset_filter, 'kart')
+        all_presets = scan_presets(root)
+        items = all_presets.get(variant_dir, [])
+
+        if not items:
+            layout.label(text=f"No presets in '{variant_dir}/' yet.",
+                         icon="INFO")
+            return
+
+        # Pagination
+        total = len(items)
+        total_pages = max(1, (total + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
+        if st.preset_page < 1:
+            st.preset_page = 1
+        if st.preset_page > total_pages:
+            st.preset_page = total_pages
+
+        if total_pages > 1:
+            prow = layout.row(align=True)
+            left = prow.row(align=True)
+            left.enabled = st.preset_page > 1
+            left.operator("nfr.kart_preset_prev_page", text="", icon="TRIA_LEFT")
+            prow.label(text=f"Page {st.preset_page} / {total_pages}  ({total} total)")
+            right = prow.row(align=True)
+            right.enabled = st.preset_page < total_pages
+            right.operator("nfr.kart_preset_next_page", text="", icon="TRIA_RIGHT")
+
+        start = (st.preset_page - 1) * MAX_PRESETS_PER_PAGE
+        end = min(start + MAX_PRESETS_PER_PAGE, total)
+        page_items = items[start:end]
+
+        for name, path in page_items:
+            row = layout.row(align=True)
+
+            icon_png = path / "kart_00.png"
+            icon_key = f"__preset__{variant_dir}__{name}"
+            icon = _get_icon(icon_key, icon_png) if icon_png.is_file() else None
+            if icon is not None:
+                row.template_icon(icon_value=icon.icon_id, scale=1.4)
+            else:
+                row.label(text="", icon="IMAGE_DATA")
+
+            row.label(text=name)
+
+            sub = row.row(align=True)
+            sub.enabled = can_apply
+            op = sub.operator("nfr.kart_apply_preset",
+                              text="Apply", icon="CHECKMARK")
+            op.preset_dir = str(path)
 
 
 _classes = (NFR_PT_Racer,)

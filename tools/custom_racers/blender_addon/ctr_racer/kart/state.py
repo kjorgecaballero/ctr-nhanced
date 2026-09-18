@@ -4,15 +4,18 @@
 """PropertyGroups for the kart editor.
 
 `Scene.kart_state` holds everything: which template, which variant,
-the list of editable color zones, the name of the material that
-owns the tagged RGB nodes, and the preset name to write to on bake.
+the list of editable color zones, the material that owns the tagged
+RGB nodes, the preset name, and the preset browser state.
 
-The color picker update callback writes to the bound RGB node's
-output socket. If anything is missing (material renamed, node
-deleted), the callback silently no-ops.
+Color uses FloatVectorProperty(subtype='COLOR_GAMMA') with an update
+callback that writes directly to the bound RGB node output.
 
-Note on the color property: size=3 (RGB). The RGB node expects a
-4-component vector, so the callback pads with alpha=1.0.
+Known limitation: Blender's color picker popup freezes if the user
+drags the Value bar to exactly pure black (V=0) or pure white
+(V=1, S=0), because the widget's internal HSV conversion is singular
+at those points and the depsgraph update triggered by the callback
+kills the popup's internal state. Workaround: click Reset Colors to
+unstick.
 """
 import bpy
 
@@ -35,12 +38,16 @@ def _zone_color_update(self, context):
     node.outputs[0].default_value = (c[0], c[1], c[2], 1.0)
 
 
+def _preset_filter_update(self, context):
+    self.preset_page = 1
+
+
 class NFR_KartZone(bpy.types.PropertyGroup):
     display_name: bpy.props.StringProperty()
     node_name:    bpy.props.StringProperty()
     color: bpy.props.FloatVectorProperty(
         name="Color",
-        subtype='COLOR',
+        subtype='COLOR_GAMMA',
         size=3,
         default=(1.0, 1.0, 1.0),
         update=_zone_color_update,
@@ -66,6 +73,22 @@ class NFR_KartState(bpy.types.PropertyGroup):
         name="Preset Name",
         description="Folder name to write the baked PNGs into",
         default="",
+    )
+    preset_filter: bpy.props.EnumProperty(
+        name="Variant",
+        description="Which preset variant to show in the browser",
+        items=[
+            ('KART',   "Kart",   "Standard kart presets"),
+            ('GOLD',   "Gold",   "Gold pipe presets"),
+            ('SILVER', "Silver", "Silver pipe presets"),
+        ],
+        default='KART',
+        update=_preset_filter_update,
+    )
+    preset_page: bpy.props.IntProperty(
+        name="Page",
+        default=1,
+        min=1,
     )
     is_imported:   bpy.props.BoolProperty(default=False)
     material_name: bpy.props.StringProperty(default="")
