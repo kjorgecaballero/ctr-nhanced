@@ -4,20 +4,15 @@
 """PropertyGroups for the kart editor.
 
 `Scene.kart_state` holds everything: which template, which variant,
-the list of editable color zones, and the name of the material that
-owns the tagged RGB nodes.
+the list of editable color zones, the name of the material that
+owns the tagged RGB nodes, and the preset name to write to on bake.
 
 The color picker update callback writes to the bound RGB node's
-output socket. The node lives inside the material named by
-`scene.kart_state.material_name`. If anything is missing (material
-renamed, node deleted), the callback silently no-ops -- the panel
-keeps the stored value, it just doesn't push it.
+output socket. If anything is missing (material renamed, node
+deleted), the callback silently no-ops.
 
 Note on the color property: size=3 (RGB). The RGB node expects a
-4-component vector, so the callback pads with alpha=1.0. Using
-size=3 instead of size=4 avoids a rendering glitch in the color
-picker popup on some Blender builds (the picker would open with a
-black canvas that still responded to the mouse).
+4-component vector, so the callback pads with alpha=1.0.
 """
 import bpy
 
@@ -66,6 +61,11 @@ class NFR_KartState(bpy.types.PropertyGroup):
             ('SILVER_PIPES', "Silver Pipes", "Silver pipes"),
         ],
         default='DEFAULT',
+    )
+    preset_name: bpy.props.StringProperty(
+        name="Preset Name",
+        description="Folder name to write the baked PNGs into",
+        default="",
     )
     is_imported:   bpy.props.BoolProperty(default=False)
     material_name: bpy.props.StringProperty(default="")
