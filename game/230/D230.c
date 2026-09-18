@@ -436,7 +436,7 @@ struct OverlayDATA_230 D230 =
              // Tiny
              {0xA0, 0x47, {14, 6, 1, 3}, 2, 0xFFFF},
              // Coco
-             {0xE0, 0x47, {14, 7, 2, 3}, 3, 0xFFFF},
+             {0xE0, 0x47, {15, 7, 2, 3}, 3, 0xFFFF},
              // N. Gin
              {0x20, 0x6E, {0, 8, 4, 5}, 4, 0xFFFF},
              // Dingo
@@ -454,13 +454,13 @@ struct OverlayDATA_230 D230 =
              // Papu
              {0xE0, 0x95, {7, 11, 10, 11}, 9, 0x8},
              // Komodo Joe
-             {0x40, 0x20, {12, 1, 12, 13}, 11, 0x9},
+             {0x20, 0x20, {12, 0, 12, 13}, 11, 0x9},
              // Penta
-             {0x80, 0x20, {13, 2, 12, 14}, 13, 0x6},
+             {0x60, 0x20, {13, 1, 12, 14}, 13, 0x6},
              // Fake Crash
-             {0xC0, 0x20, {14, 3, 13, 15}, 14, 0xB},
+             {0xA0, 0x20, {14, 2, 13, 15}, 14, 0xB},
              // Oxide
-             {0x100, 0x20, {15, 15, 14, 15}, 15, 0xFFFF},
+             {0xE0, 0x20, {15, 3, 14, 15}, 15, 0xFFFF},
              // slot 16 (off-screen in 3P)
              {0, 0x200, {16, 16, 16, 16}, -1, 0xFFFF},
              // slot 17 (off-screen in 3P)
@@ -472,7 +472,7 @@ struct OverlayDATA_230 D230 =
              // Cortex
              {0xC0, 0x47, {14, 5, 0, 2}, 1, 0xFFFF},
              // Tiny
-             {0x100, 0x47, {14, 6, 1, 3}, 2, 0xFFFF},
+             {0x100, 0x47, {15, 6, 1, 3}, 2, 0xFFFF},
              // Coco
              {0x140, 0x47, {3, 7, 2, 11}, 3, 0xFFFF},
              // N. Gin
@@ -486,7 +486,7 @@ struct OverlayDATA_230 D230 =
              // N. Tropy
              {0xC0, 0x95, {5, 8, 8, 9}, 12, 0x5},
              // Fake Crash
-             {0x100, 0x95, {6, 9, 8, 15}, 14, 0xB},
+             {0x100, 0x95, {6, 9, 8, 9}, 14, 0xB},
              // Roo
              {0x40, 0x47, {10, 12, 10, 0}, 10, 0x7},
              // Papu
@@ -496,9 +496,9 @@ struct OverlayDATA_230 D230 =
              // Pinstripe
              {0x180, 0x6E, {11, 13, 7, 13}, 8, 0xA},
              // Penta
-             {0xE0, 0x20, {14, 1, 14, 14}, 13, 0x6},
+             {0xC0, 0x20, {14, 1, 14, 15}, 13, 0x6},
              // Oxide
-             {0x140, 0x95, {15, 15, 9, 15}, 15, 0xFFFF},
+             {0x100, 0x20, {15, 2, 14, 15}, 15, 0xFFFF},
              // slot 16 (off-screen in 4P)
              {0, 0x200, {16, 16, 16, 16}, -1, 0xFFFF},
              // slot 17 (off-screen in 4P)

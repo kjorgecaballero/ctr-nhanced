@@ -1121,6 +1121,8 @@ struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
                 continue;
             if (e->slot >= count)
                 continue;
+            if (s_pageMeta[e->slot].posY >= 0x200)   /* off-screen in 3P/4P */
+                continue;
 
             int customID = NATIVE_PAGE0_CUSTOM_BASE
                          + (e->slot - NATIVE_PAGE_SIZE);
@@ -1135,6 +1137,8 @@ struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
         if (e->page != s_page)
             continue;
         if (e->slot < 0 || e->slot >= count)
+            continue;
+        if (s_pageMeta[e->slot].posY >= 0x200)   /* off-screen in 3P/4P */
             continue;
 
         int customID = -1;
