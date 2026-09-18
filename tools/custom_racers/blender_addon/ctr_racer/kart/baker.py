@@ -12,6 +12,13 @@ Output layout:
 
 The node graph is untouched: a temporary Image Texture node is added
 only for the duration of the bake and removed afterwards.
+
+Coordinate convention:
+    The cutter coords in templates.py are in GIMP convention
+    (top-left origin), which is the same as PIL's crop system. No
+    Y-flip is applied. Blender's image.pixels uses bottom-left origin,
+    but we never touch that API here -- we save the bake to a PNG and
+    let PIL do the crop.
 """
 import os
 import tempfile
@@ -76,7 +83,6 @@ def _bake_to_image(context, material, width, height):
     prev_device   = scene.cycles.device
     prev_samples  = scene.cycles.samples
     prev_active   = context.view_layer.objects.active
-    prev_mode     = context.mode
 
     try:
         # Object mode is required by bpy.ops.object.bake.
@@ -107,12 +113,17 @@ def _bake_to_image(context, material, width, height):
     return baked
 
 
-def _cut_quantize_save(baked_img, cutter, out_dir, image_height):
+def _cut_quantize_save(baked_img, cutter, out_dir):
     """Save `baked_img` to a temp PNG, cut it, quantize, write each
     piece to `out_dir/<name>.png`. Returns the number of pieces.
 
-    Note: `cutter` coords are in GIMP convention (top-left origin),
-    which is the same as PIL's. No Y-flip is applied.
+    Coordinate convention: PIL and GIMP both use top-left origin, so
+    the cutter coords are used as-is (no Y-flip).
+
+    Quantization: convert to RGB first (drop alpha) so PIL doesn't
+    reserve a palette slot for transparency, and use dither=NONE so
+    the palette stays strictly at 16 entries. Matches the behaviour
+    of the original 16_color_reset.py.
     """
     if PIL_Image is None:
         raise RuntimeError("Pillow (PIL) is required for the kart baker")
@@ -127,12 +138,19 @@ def _cut_quantize_save(baked_img, cutter, out_dir, image_height):
         baked_img.file_format = 'PNG'
         baked_img.save()
 
-        full = PIL_Image.open(tmp_path).convert("RGBA")
+        # Force RGB (drop alpha channel entirely). The kart has no
+        # transparency, and keeping RGBA would make PIL reserve one
+        # of the 16 palette slots for the alpha marker.
+        full = PIL_Image.open(tmp_path).convert("RGB")
 
         for out_name, (xmin, ymin, xmax, ymax) in cutter:
-            # PIL and GIMP both use top-left origin.
             piece = full.crop((xmin, ymin, xmax, ymax))
-            piece = piece.convert("P", palette=PIL_Image.ADAPTIVE, colors=16)
+            piece = piece.convert(
+                "P",
+                palette=PIL_Image.ADAPTIVE,
+                colors=16,
+                dither=PIL_Image.NONE,
+            )
             piece.save(out_dir / f"{out_name}.png")
 
         return len(cutter)
@@ -204,8 +222,7 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
         # --- Cut + quantize + save ---------------------------------
         out_dir = root / variant_dir / preset_name
         try:
-            n = _cut_quantize_save(baked, tpl["cutter"], out_dir,
-                                   tpl["bake_size"][1])
+            n = _cut_quantize_save(baked, tpl["cutter"], out_dir)
         except Exception as e:
             self.report({'ERROR'}, f"Save failed: {e}")
             bpy.data.images.remove(baked)
