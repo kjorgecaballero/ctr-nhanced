@@ -799,7 +799,7 @@ static const struct {
     {907, 192,  32, 253},  /* 12: joe      */
     {960, 216,  48, 248},  /* 13: synthetic (Sentinel only) */
     {971, 216,  48, 249},  /* 14: synthetic (Sentinel only) */
-    {0, 0, 0, 0},          /* 15: reserved (Oxide) */
+    {982, 216,  48, 252},  /* 15: synthetic (Sentinel only) */
     {960, 245,  48, 250},  /* 16: page-0 custom slot 16 */
     {971, 245,  48, 251},  /* 17: page-0 custom slot 17 */
 };

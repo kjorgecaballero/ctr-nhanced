@@ -19,6 +19,7 @@ VRAM coordinates per slot (extracted from the engine's Icon data):
   slot 10 (roo):       px(942,144) clut(32,251)
   slot 11 (papu):      px(896,192) clut(32,252)
   slot 12 (joe):       px(907,192) clut(32,253)
+  slot 13-17:          synthetic (Sentinel only, no real VRAM)
 
 Usage:
     python build_icons.py
@@ -60,6 +61,7 @@ SLOTS = {
     12: (907, 192, 32, 253),
     13: (960, 216, 48, 248),
     14: (971, 216, 48, 249),
+    15: (982, 216, 48, 252),
     16: (960, 245, 48, 250),
     17: (971, 245, 48, 251),
 }
