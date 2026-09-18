@@ -16,12 +16,19 @@ extern "C" {
  *   IDs 16+   -> s_customMeta.
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
-#define NATIVE_CUSTOM_COUNT   130
+#define NATIVE_CUSTOM_COUNT   146   /* 128 (pages 1-8, slots 0-15)
+                                     * + 2 (page 0, slots 16-17)
+                                     * + 16 (pages 1-8, slots 16-17) */
 
 /* Page 0 grid slots 16 and 17 are custom. Their customIDs are the
  * last two of the custom ID space (see GET_MPK_ID). */
 #define NATIVE_PAGE0_CUSTOM_BASE  144
 #define NATIVE_PAGE0_CUSTOM_COUNT 2
+
+/* Pages 1-8 grid slots 16-17. IDs 146-161 (8 pages x 2 slots). */
+#define NATIVE_EXT_CUSTOM_BASE   146
+#define NATIVE_EXT_CUSTOM_COUNT  16
+
 #define NATIVE_PAGE_SIZE      16
 
 extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
@@ -42,15 +49,29 @@ extern const u8 s_gridToCharID[NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT];
 
 /* Maps a character ID to an enum Characters index (0..15) for use as an
  * index into the BI_*PACK / BI_RACERMODELHI bigfile ranges, which only
- * have 16 entries. Custom IDs 16+ wrap to their page slot, then through
- * s_gridToCharID. Originals pass through unchanged. */
-#define GET_MPK_ID(id)                                                       \
-    (((id) >= NATIVE_PAGE0_CUSTOM_BASE &&                                    \
-      (id) <  NATIVE_PAGE0_CUSTOM_BASE + NATIVE_PAGE0_CUSTOM_COUNT)          \
-        ? s_gridToCharID[NATIVE_PAGE_SIZE + ((id) - NATIVE_PAGE0_CUSTOM_BASE)] \
-        : ((id) >= NATIVE_CUSTOM_ID_BASE)                                    \
-            ? s_gridToCharID[((id) - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE] \
-            : (id))
+ * have 16 entries. Custom IDs wrap to their page slot, then through
+ * s_gridToCharID. Originals pass through unchanged.
+ *
+ * ID ranges:
+ *   16..143   pages 1-8, slots 0-15
+ *   144..145  page 0, slots 16-17
+ *   146..161  pages 1-8, slots 16-17
+ *
+ * Was a macro; converted to static inline to (a) keep the 3-way branch
+ * readable and (b) avoid evaluating the argument multiple times. */
+static inline int GET_MPK_ID(int id)
+{
+    if (id < NATIVE_CUSTOM_ID_BASE)
+        return id;
+    if (id < NATIVE_PAGE0_CUSTOM_BASE)
+        return s_gridToCharID[(id - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE];
+    if (id < NATIVE_EXT_CUSTOM_BASE)
+        return s_gridToCharID[NATIVE_PAGE_SIZE + (id - NATIVE_PAGE0_CUSTOM_BASE)];
+    if (id < NATIVE_EXT_CUSTOM_BASE + NATIVE_EXT_CUSTOM_COUNT)
+        return s_gridToCharID[NATIVE_PAGE_SIZE
+                            + ((id - NATIVE_EXT_CUSTOM_BASE) % NATIVE_PAGE0_CUSTOM_COUNT)];
+    return id;
+}
 
 /* Initializes the custom racer subsystem. Reads roster.txt on first call. */
 void NativeCustomRacer_Init(void);

@@ -58,8 +58,8 @@ def main():
         if args.slot not in (16, 17):
             sys.exit("ERROR: page 0 accepts only custom slots 16 and 17")
     else:
-        if not (0 <= args.slot <= 15):
-            sys.exit("ERROR: slot must be 0..15 for pages 1..8")
+        if not (0 <= args.slot <= 17):
+            sys.exit("ERROR: slot must be 0..17 for pages 1..8")
 
     color = args.color
     if color is not None:

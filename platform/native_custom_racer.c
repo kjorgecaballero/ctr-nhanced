@@ -10,7 +10,7 @@
 #include <platform/native_glad.h>
 #include <ovr_230.h>
 
-#define NATIVE_ROSTER_MAX   128
+#define NATIVE_ROSTER_MAX   160
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
 
@@ -313,15 +313,25 @@ void NativeCustomRacer_ReloadRoster(void)
             maxPage = e.page;
 
         /* Phase 1: populate parallel table for IDs 16+.
-         * pages >= 1: customID = 16 + (page-1)*16 + slot.
-         * page 0, slots >= 16: customID = NATIVE_PAGE0_CUSTOM_BASE + (slot - 16). */
+         * pages >= 1, slots 0-15:  customID = 16  + (page-1)*16 + slot.
+         * pages >= 1, slots 16-17: customID = 146 + (page-1)*2  + (slot-16).
+         * page 0,     slots >= 16: customID = NATIVE_PAGE0_CUSTOM_BASE + (slot-16). */
         {
             int customID = -1;
             if (e.page > 0)
             {
-                customID = NATIVE_CUSTOM_ID_BASE
-                         + (e.page - 1) * NATIVE_PAGE_SIZE
-                         + e.slot;
+                if (e.slot < NATIVE_PAGE_SIZE)
+                {
+                    customID = NATIVE_CUSTOM_ID_BASE
+                             + (e.page - 1) * NATIVE_PAGE_SIZE
+                             + e.slot;
+                }
+                else if (e.slot < NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
+                {
+                    customID = NATIVE_EXT_CUSTOM_BASE
+                             + (e.page - 1) * NATIVE_PAGE0_CUSTOM_COUNT
+                             + (e.slot - NATIVE_PAGE_SIZE);
+                }
             }
             else if (e.page == 0 && e.slot >= NATIVE_PAGE_SIZE)
             {
@@ -798,12 +808,13 @@ static const struct {
  * N>0 = custom page N. */
 static s16 s_iconSlotLoadedPage[18] = {
     -1, -1, -1, -1, -1, -1, -1, -1,
-    -1, -1, -1, -1, -1, -1, -1, -1
+    -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1
 };
 
 static void IconSlot_InvalidateAll(void)
 {
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 18; i++)
         s_iconSlotLoadedPage[i] = -1;
 }
 
@@ -965,6 +976,30 @@ static int VRM_ApplyBuffer_Filtered(const unsigned char *buf, int size,
     return applied;
 }
 
+/* Inverse of the custom-ID formula in the parser. Used by
+ * EnsureIconForChar and RegisterCustomIconTexture to recover
+ * (page, slot) from a custom character ID. */
+static void CustomID_ToPageSlot(int charID, int *outPage, int *outSlot)
+{
+    if (charID >= NATIVE_EXT_CUSTOM_BASE)
+    {
+        int off = charID - NATIVE_EXT_CUSTOM_BASE;
+        *outPage = 1 + off / NATIVE_PAGE0_CUSTOM_COUNT;
+        *outSlot = NATIVE_PAGE_SIZE + (off % NATIVE_PAGE0_CUSTOM_COUNT);
+    }
+    else if (charID >= NATIVE_PAGE0_CUSTOM_BASE)
+    {
+        *outPage = 0;
+        *outSlot = NATIVE_PAGE_SIZE + (charID - NATIVE_PAGE0_CUSTOM_BASE);
+    }
+    else
+    {
+        int id = charID - NATIVE_CUSTOM_ID_BASE;
+        *outPage = 1 + id / NATIVE_PAGE_SIZE;
+        *outSlot = id % NATIVE_PAGE_SIZE;
+    }
+}
+
 void NativeCustomRacer_EnsureIconForChar(int characterID)
 {
     int page, slot;
@@ -988,16 +1023,7 @@ void NativeCustomRacer_EnsureIconForChar(int characterID)
     if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
         return;
 
-    if (characterID >= NATIVE_PAGE0_CUSTOM_BASE)
-    {
-        page = 0;
-        slot = NATIVE_PAGE_SIZE + (characterID - NATIVE_PAGE0_CUSTOM_BASE);
-    }
-    else
-    {
-        page = 1 + (characterID - NATIVE_CUSTOM_ID_BASE) / NATIVE_PAGE_SIZE;
-        slot = (characterID - NATIVE_CUSTOM_ID_BASE) % NATIVE_PAGE_SIZE;
-    }
+    CustomID_ToPageSlot(characterID, &page, &slot);
 
     if (slot >= NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
         return;
@@ -1045,7 +1071,7 @@ static void ApplyPageIcons(int page)
     /* BUG-ICON-01: bulk upload bypasses the per-slot tracker. Page 0 is
      * the full original atlas, so all slots end up correct. Page N>0
      * touches an arbitrary subset, so mark all as unknown. */
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 18; i++)
         s_iconSlotLoadedPage[i] = (page == 0) ? 0 : -1;
 }
 
@@ -1111,9 +1137,16 @@ struct CharacterSelectMeta *NativeCustomRacer_GetPageMeta(
         if (e->slot < 0 || e->slot >= count)
             continue;
 
-        int customID = NATIVE_CUSTOM_ID_BASE
+        int customID = -1;
+        if (e->slot < NATIVE_PAGE_SIZE)
+            customID = NATIVE_CUSTOM_ID_BASE
                      + (e->page - 1) * NATIVE_PAGE_SIZE
                      + e->slot;
+        else if (e->slot < NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
+            customID = NATIVE_EXT_CUSTOM_BASE
+                     + (e->page - 1) * NATIVE_PAGE0_CUSTOM_COUNT
+                     + (e->slot - NATIVE_PAGE_SIZE);
+        if (customID < 0) continue;
         s_pageMeta[e->slot].characterID = (s16)customID;
     }
 
@@ -1193,16 +1226,7 @@ static void RegisterCustomIconTexture(int idx, int charID)
     s_customIconAttempted[idx] = 1;
 
     int page, slot;
-    if (idx >= NATIVE_CUSTOM_COUNT - NATIVE_PAGE0_CUSTOM_COUNT)
-    {
-        page = 0;
-        slot = NATIVE_PAGE_SIZE + (idx - (NATIVE_CUSTOM_COUNT - NATIVE_PAGE0_CUSTOM_COUNT));
-    }
-    else
-    {
-        page = 1 + idx / NATIVE_PAGE_SIZE;
-        slot = idx % NATIVE_PAGE_SIZE;
-    }
+    CustomID_ToPageSlot(charID, &page, &slot);
     if (slot >= NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT) return;
     if (s_iconSlotRects[slot].px_x == 0) return;
 
