@@ -31,6 +31,13 @@ class NFR_Preferences(AddonPreferences):
                     "doesn't leave the old entry orphaned. A slug can still "
                     "live on multiple pages (page 0 + page 1)",
         default=True)
+    sentinel_models: BoolProperty(
+        name="Use Sentinel model textures",
+        description="Export customs with Sentinel CLUT textures instead of "
+                    "the VRAM atlas + textures.vrm. Textures are full-res "
+                    "up to 256x256 (u8 UV limit). Requires the C-side "
+                    "runtime to support sentinel_00.bin (commit 95cf1cf70+)",
+        default=False)
     kart_presets_root: StringProperty(
         name="Kart presets folder",
         description="Where baked kart presets are written. The addon creates "
@@ -59,6 +66,7 @@ class NFR_Preferences(AddonPreferences):
         layout.separator()
         layout.label(text="Export behavior:")
         layout.prop(self, "clean_stale_on_export")
+        layout.prop(self, "sentinel_models")
         layout.separator()
         layout.label(text="Kart Editor:")
         layout.prop(self, "kart_presets_root")

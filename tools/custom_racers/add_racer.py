@@ -53,6 +53,11 @@ def main():
                     help="keep same-slug entries on other slots of the same page "
                          "(default: remove them, so moving a racer to a new slot "
                          "does not leave the old entry orphaned)")
+    ap.add_argument("--sentinel", action="store_true",
+                    help="emit Sentinel CLUT textures instead of the VRAM "
+                         "atlas. Skips textures.vrm and copies sentinel_NN.bin "
+                         "into the racer folder. Requires the C-side runtime "
+                         "to support sentinel_00.bin (commit 95cf1cf70+)")
     args = ap.parse_args()
 
     # Validate arguments before touching the filesystem.
@@ -90,19 +95,42 @@ def main():
     print()
 
     # 1. Build 4 .ctr files
+    # Clear sentinel side-cars from any previous build in TOOLS. Both
+    # branches need this: sentinel mode copies the .bin to dest, VRM
+    # mode regenerates textures.vrm and would otherwise let TOOLS
+    # accumulate orphan .png files from the last sentinel run.
+    for stale in list(TOOLS.glob("sentinel_*.bin")) + \
+                 list(TOOLS.glob("sentinel_*.png")):
+        stale.unlink()
     for s in range(4):
         out_name = f"model_p{s}.ctr"
-        run([sys.executable, TOOLS / "build_character.py",
-             src, slug, out_name, "--player_slot", str(s)])
+        cmd = [sys.executable, TOOLS / "build_character.py",
+               src, slug, out_name, "--player_slot", str(s)]
+        if args.sentinel:
+            cmd.append("--sentinel")
+        run(cmd)
         shutil.copy(TOOLS / out_name, dest / out_name)
 
-    # 2. Regenerate base p0 + textures.vrm
-    print("--- building textures.vrm ---")
-    run([sys.executable, TOOLS / "build_character.py",
-         src, slug, "model_p0.ctr", "--player_slot", "0"], quiet=True)
-    run([sys.executable, TOOLS / "make_racer_vrm.py",
-         TOOLS / "texture_uploads.json", TOOLS / "textures.vrm"])
-    shutil.copy(TOOLS / "textures.vrm", dest / "textures.vrm")
+    # 2. VRM path (default) OR Sentinel side-car copy. Never both.
+    if args.sentinel:
+        print("--- sentinel mode: textures.vrm skipped ---")
+        for stale in list(dest.glob("sentinel_*.bin")) + \
+                     list(dest.glob("sentinel_*.png")):
+            stale.unlink()
+        bins = sorted(TOOLS.glob("sentinel_*.bin"))
+        for b in bins:
+            shutil.copy(b, dest / b.name)
+        print(f"  copied {len(bins)} sentinel_*.bin -> {dest}")
+    else:
+        print("--- building textures.vrm ---")
+        for stale in list(dest.glob("sentinel_*.bin")) + \
+                     list(dest.glob("sentinel_*.png")):
+            stale.unlink()
+        run([sys.executable, TOOLS / "build_character.py",
+             src, slug, "model_p0.ctr", "--player_slot", "0"], quiet=True)
+        run([sys.executable, TOOLS / "make_racer_vrm.py",
+             TOOLS / "texture_uploads.json", TOOLS / "textures.vrm"])
+        shutil.copy(TOOLS / "textures.vrm", dest / "textures.vrm")
 
     # 3. Icon
     if icon:

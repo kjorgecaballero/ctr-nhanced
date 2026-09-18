@@ -118,6 +118,13 @@ class NFR_PT_Racer(Panel):
         color_row.prop(r, "color", text="")
         col.prop(r, "icon_path")
 
+        # -------- Export behavior (mirror of the prefs toggle) --------
+        layout.separator()
+        prefs = _get_prefs(context)
+        box = layout.box()
+        box.label(text="Export behavior", icon="PREFERENCES")
+        box.prop(prefs, "sentinel_models")
+
         # -------- Dev Tools --------
         layout.separator()
         layout.label(text="Dev Tools:", icon="TOOL_SETTINGS")

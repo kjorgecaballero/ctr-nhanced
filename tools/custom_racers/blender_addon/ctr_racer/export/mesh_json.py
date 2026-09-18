@@ -138,6 +138,9 @@ def _do_export_body(context, obj):
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]
 
+    if prefs.sentinel_models:
+        cmd.append("--sentinel")
+
     if tuple(r.color[:3]) != (1.0, 1.0, 1.0):
         hexcol = "#{:02X}{:02X}{:02X}".format(
             int(r.color[0] * 255), int(r.color[1] * 255), int(r.color[2] * 255))

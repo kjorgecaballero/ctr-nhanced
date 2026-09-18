@@ -66,6 +66,18 @@ for i, a in enumerate(argv):
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
 
+# Resolve the output path once at import time, so the .ctr and the
+# Sentinel side-car files (sentinel_NN.bin/.png) always land next to
+# each other. Bare filenames (the way add_racer.py invokes us) go
+# into ROOT/TOOLS so the existing shutil.copy(TOOLS / out_name, ...)
+# keeps working. Paths with a separator are cwd-relative.
+OUT_PATH = Path(OUT_FILE)
+if not OUT_PATH.is_absolute():
+    if ("/" in OUT_FILE) or ("\\" in OUT_FILE):
+        OUT_PATH = Path.cwd() / OUT_PATH
+    else:
+        OUT_PATH = ROOT / OUT_PATH
+
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
@@ -219,7 +231,7 @@ def prepare_textures(mesh):
 
     # ---- Sentinel mode: write per-material PNG + BIN, skip atlas ----
     if SENTINEL_MODE:
-        out_dir = Path(OUT_FILE).parent
+        out_dir = OUT_PATH.parent
         out_dir.mkdir(parents=True, exist_ok=True)
         sentinel = {}
         for idx, (name, w, h, rgba) in enumerate(
@@ -555,14 +567,8 @@ def build():
     assert len(data) < 0x10000
 
     blob = pack_container(data, patches)
-    out_path = Path(OUT_FILE)
-    if not out_path.is_absolute():
-        if ("/" in OUT_FILE) or ("\\" in OUT_FILE):
-            out_path = Path.cwd() / out_path
-        else:
-            out_path = ROOT / out_path
-    out_path.write_bytes(blob)
-    print(f"Written: {out_path} ({len(blob)} bytes, player slot {PLAYER_SLOT})")
+    OUT_PATH.write_bytes(blob)
+    print(f"Written: {OUT_PATH} ({len(blob)} bytes, player slot {PLAYER_SLOT})")
 
 
 if __name__ == '__main__':
