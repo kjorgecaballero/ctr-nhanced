@@ -31,3 +31,4 @@ DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python
 
 MAX_PAGES = 8
 MAX_MATS_PER_PAGE = 10
+MAX_PRESETS_PER_PAGE = 10

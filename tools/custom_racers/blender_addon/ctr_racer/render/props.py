@@ -58,6 +58,7 @@ def register():
             ('SLOTS',     "Slots",     "Page/slot grid and roster"),
             ('MATERIALS', "Materials", "Per-material render settings"),
             ('KART',      "Kart",      "Kart template editor"),
+            ('PRESETS',   "Presets",   "Apply saved kart presets to racers"),
         ],
         default='SETTINGS',
     )
