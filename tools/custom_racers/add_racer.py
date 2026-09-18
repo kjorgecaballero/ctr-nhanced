@@ -39,7 +39,7 @@ def main():
     ap.add_argument("slug",           help="folder name and internal .ctr name, e.g. 'ernest'")
     ap.add_argument("source_mesh",    help="path to source_mesh_<slug>.json")
     ap.add_argument("page", type=int, help="roster page (0 = originals page, slots 16-17 only; 1..8 = custom pages)")
-    ap.add_argument("slot", type=int, help="slot within the page (0..15 for pages 1..8; 16..17 for page 0)")
+    ap.add_argument("slot", type=int, help="slot within the page (0..17 for pages 1..8; 16..17 for page 0)")
     ap.add_argument("engine",         choices=sorted(VALID_ENGINES))
     ap.add_argument("display_name",   help="label shown in character select")
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
@@ -49,6 +49,10 @@ def main():
                     help="Aku Aku (good, default) or Uka Uka (bad)")
     ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
                     help="wheels visible (default) or hidden (Oxide-style)")
+    ap.add_argument("--no-clean-stale", action="store_true",
+                    help="keep same-slug entries on other slots of the same page "
+                         "(default: remove them, so moving a racer to a new slot "
+                         "does not leave the old entry orphaned)")
     args = ap.parse_args()
 
     # Validate arguments before touching the filesystem.
@@ -113,10 +117,14 @@ def main():
         print(f"WARNING: no icon.png for '{slug}'; character select will show a blank cell")
 
     # 4. roster.txt
-    # Dedup by (page, slot), NOT by slug. A racer slug may legitimately
-    # live on multiple pages (same mesh exported to page 0 slot 17 AND
-    # page 1 slot 4). Slug-based dedup would silently collapse them into
-    # one entry, orphaning whichever slot lost the race.
+    # Two dedup rules, applied in order:
+    #   (a) (page, slot): the target slot is replaced in place, regardless
+    #       of the previous slug — a different custom can take over a slot.
+    #   (b) (slug, page): any OTHER slot on the same page that had this
+    #       slug is removed, so moving a racer to a new slot doesn't leave
+    #       the old entry orphaned. Controlled by --no-clean-stale.
+    # A slug may still live on multiple PAGES (page 0 + page 1) because
+    # rule (b) is scoped to a single page.
     roster_path = RACERS / "roster.txt"
     lines = roster_path.read_text().splitlines()
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
@@ -124,23 +132,37 @@ def main():
         new_line += f"\t{color}"
     new_line += f"\tmask={args.mask}"
     new_line += f"\twheels={args.wheels}"
-    updated = False
-    for i, l in enumerate(lines):
-        parts = l.split()
-        if len(parts) < 2:
-            continue
+
+    def _parse_ps(line):
+        parts = line.split()
+        if len(parts) < 3:
+            return None
         try:
-            line_page = int(parts[0])
-            line_slot = int(parts[1])
+            return int(parts[0]), int(parts[1]), parts[2]
         except ValueError:
-            continue  # header/comment line
+            return None
+
+    cleaned = []
+    updated = False
+    for l in lines:
+        ps = _parse_ps(l)
+        if ps is None:
+            cleaned.append(l)
+            continue
+        line_page, line_slot, line_slug = ps
+        # Rule (a): replace the target slot in place.
         if line_page == args.page and line_slot == args.slot:
-            lines[i] = new_line
+            cleaned.append(new_line)
             updated = True
-            break
+            continue
+        # Rule (b): drop stale same-slug entries on the same page.
+        if (not args.no_clean_stale) and line_page == args.page and line_slug == slug:
+            print(f"  removing stale entry: page {line_page} slot {line_slot} ({line_slug})")
+            continue
+        cleaned.append(l)
     if not updated:
-        lines.append(new_line)
-    roster_path.write_text("\n".join(lines) + "\n")
+        cleaned.append(new_line)
+    roster_path.write_text("\n".join(cleaned) + "\n")
     print(f"roster.txt {'updated' if updated else 'appended'}: {slug}")
 
     # 5. Regenerate page icons
