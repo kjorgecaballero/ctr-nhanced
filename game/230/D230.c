@@ -378,17 +378,17 @@ struct OverlayDATA_230 D230 =
              // Papu
              {0x180, 0xA7, {9, 11, 7, 11}, 9, 0x8},
              // Komodo Joe
-             {0xA0, 0xCE, {4, 12, 16, 13}, 11, 0x9},
+             {0x80, 0xCE, {4, 12, 16, 13}, 11, 0x9},
              // Penta
-             {0xE0, 0xCE, {5, 13, 12, 14}, 13, 0x6},
+             {0xC0, 0xCE, {5, 13, 12, 14}, 13, 0x6},
              // Fake Crash
-             {0x120, 0xCE, {6, 14, 13, 15}, 14, 0xB},
+             {0x100, 0xCE, {6, 14, 13, 15}, 14, 0xB},
              // Oxide
-             {0x160, 0xCE, {7, 15, 14, 17}, 15, 0xFFFF},
+             {0x140, 0xCE, {7, 15, 14, 17}, 15, 0xFFFF},
              // slot 16 (page-0 custom only)
-             {0x60, 0xCE, {10, 16, 16, 12}, -1, 0xFFFF},
+             {0x40, 0xCE, {10, 16, 16, 12}, -1, 0xFFFF},
              // slot 17 (page-0 custom only)
-             {0x1A0, 0xCE, {9, 17, 15, 17}, -1, 0xFFFF}},
+             {0x180, 0xCE, {9, 17, 15, 17}, -1, 0xFFFF}},
 
         .characterSelectMeta1P2P =
             {// Crash
@@ -416,17 +416,17 @@ struct OverlayDATA_230 D230 =
              // Papu
              {0x180, 0x87, {9, 11, 7, 11}, 9, 0x8},
              // Komodo Joe
-             {0xA0, 0xAE, {4, 12, 16, 13}, 11, 0x9},
+             {0x80, 0xAE, {4, 12, 16, 13}, 11, 0x9},
              // Penta
-             {0xE0, 0xAE, {5, 13, 12, 14}, 13, 0x6},
+             {0xC0, 0xAE, {5, 13, 12, 14}, 13, 0x6},
              // Fake Crash
-             {0x120, 0xAE, {6, 14, 13, 15}, 14, 0xB},
+             {0x100, 0xAE, {6, 14, 13, 15}, 14, 0xB},
              // Oxide
-             {0x160, 0xAE, {7, 15, 14, 17}, 15, 0xFFFF},
+             {0x140, 0xAE, {7, 15, 14, 17}, 15, 0xFFFF},
              // slot 16 (page-0 custom only)
-             {0x60, 0xAE, {10, 16, 16, 12}, -1, 0xFFFF},
+             {0x40, 0xAE, {10, 16, 16, 12}, -1, 0xFFFF},
              // slot 17 (page-0 custom only)
-             {0x1A0, 0xAE, {9, 17, 15, 17}, -1, 0xFFFF}},
+             {0x180, 0xAE, {9, 17, 15, 17}, -1, 0xFFFF}},
 
         .characterSelectMeta3P =
             {// Crash
