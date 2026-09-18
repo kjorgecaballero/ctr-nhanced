@@ -398,11 +398,12 @@ class NFR_PT_Racer(Panel):
             drop = box.row(align=True)
             drop.prop(mat, "nfr_racer_blend_mode", text="")
 
-       # ---------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     # KART tab
     # ---------------------------------------------------------------------
     def _draw_kart(self, context, layout):
         st = context.scene.kart_state
+        prefs = _get_prefs(context)
 
         layout.label(text="Kart Editor", icon="MESH_DATA")
 
@@ -422,7 +423,6 @@ class NFR_PT_Racer(Panel):
 
         layout.separator()
 
-        # Reset button above the color list.
         reset_row = layout.row(align=True)
         reset_row.scale_y = 1.2
         reset_row.operator("nfr.kart_reset_colors", icon="LOOP_BACK")
@@ -430,13 +430,30 @@ class NFR_PT_Racer(Panel):
         box = layout.box()
         box.label(text="Colors", icon="COLOR")
         for z in st.zones:
-            # split() gives the swatch a proper slice of the row instead
-            # of squeezing it against the label (which on some Blender
-            # builds rendered as an empty/black rectangle).
             r = box.row()
             split = r.split(factor=0.4)
             split.label(text=z.display_name)
             split.prop(z, "color", text="")
+
+        # -------- Bake & Export --------
+        layout.separator()
+        layout.label(text="Save Preset:", icon="FILE_TICK")
+        layout.prop(st, "preset_name", text="")
+
+        root_str = getattr(prefs, "kart_presets_root", "") or ""
+        if not root_str:
+            warn = layout.box()
+            warn.label(text="Set 'Kart presets folder' in",
+                       icon="ERROR")
+            warn.label(text="addon preferences first")
+        else:
+            layout.label(text=f"→ {root_str}", icon="FILE_FOLDER")
+
+        bake_row = layout.row(align=True)
+        bake_row.scale_y = 1.4
+        bake_row.enabled = bool(root_str) and bool(st.preset_name.strip())
+        bake_row.operator("nfr.kart_bake_and_export",
+                          text="Bake & Export", icon="RENDER_STILL")
 
 
 _classes = (NFR_PT_Racer,)

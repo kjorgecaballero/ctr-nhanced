@@ -31,6 +31,13 @@ class NFR_Preferences(AddonPreferences):
                     "doesn't leave the old entry orphaned. A slug can still "
                     "live on multiple pages (page 0 + page 1)",
         default=True)
+    kart_presets_root: StringProperty(
+        name="Kart presets folder",
+        description="Where baked kart presets are written. The addon creates "
+                    "subfolders per variant (kart/ gold/ silver/) and per "
+                    "preset name inside this folder",
+        subtype="DIR_PATH",
+        default="")
 
     def racers_dir(self):
         return Path(self.repo_path) / "assets" / "mods" / "racers"
@@ -52,6 +59,9 @@ class NFR_Preferences(AddonPreferences):
         layout.separator()
         layout.label(text="Export behavior:")
         layout.prop(self, "clean_stale_on_export")
+        layout.separator()
+        layout.label(text="Kart Editor:")
+        layout.prop(self, "kart_presets_root")
         layout.separator()
         layout.label(text="Export target (derived from Repo Path):", icon="INFO")
         layout.label(text=str(self.racers_dir()))
