@@ -173,7 +173,17 @@ class NFR_PT_Racer(Panel):
             row_major=True, columns=6,
             even_columns=True, even_rows=True, align=True)
 
-        for slot in range(n):
+        # Mirror the in-game page-0 grid: slot 16 is the leftmost cell of
+        # row 3 and slot 17 the rightmost, with slots 12-15 in between.
+        # Rows 1-2 keep their natural order. This is a DISPLAY order — the
+        # click handler still reports the real slot number.
+        DISPLAY_ORDER = [
+            0, 1, 2, 3, 4, 5,
+            6, 7, 8, 9, 10, 11,
+            16, 12, 13, 14, 15, 17,
+        ]
+
+        for slot in DISPLAY_ORDER:
             kind, data = cells[slot]
             if kind in ("entry", "pending"):
                 folder = data["folder"]
