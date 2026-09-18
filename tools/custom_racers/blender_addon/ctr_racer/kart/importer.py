@@ -8,6 +8,7 @@ Reproduces the exact node graph of the original standalone script
   - paths come from the bundled assets, not from C:\\Users\\...
   - the 4 RGB nodes are tagged so the panel can edit them
   - reimporting is idempotent (wipes the previous kart first)
+  - texture nodes use Closest interpolation (pixel-perfect PS1 look)
 
 The graph is:
     image[atlas]  -> overlay[atlas]  <- rgb[atlas]   -> mix[atlas]   (Fac=0.0)
@@ -35,9 +36,9 @@ def _load_png(png_name):
 
 def _wipe_previous_kart(material_prefix):
     """Remove any mesh object that owns a material matching the
-    template prefix, then purge orphaned materials and images that
-    carry the same prefix. Keeps the scene idempotent across
-    reimports and avoids `.001` suffixes on the FBX import."""
+    template prefix, then purge orphaned materials that carry the
+    same prefix. Keeps the scene idempotent across reimports and
+    avoids `.001` suffixes on the FBX import."""
     to_remove = []
     for obj in list(bpy.context.scene.objects):
         if obj.type != 'MESH':
@@ -50,7 +51,6 @@ def _wipe_previous_kart(material_prefix):
     for obj in to_remove:
         bpy.data.objects.remove(obj, do_unlink=True)
 
-    # Purge orphaned materials matching the prefix.
     for mat in list(bpy.data.materials):
         if mat.name.startswith(material_prefix) and mat.users == 0:
             bpy.data.materials.remove(mat, do_unlink=True)
@@ -80,8 +80,6 @@ def _build_graph(material, images_by_slot):
         nodes.remove(n)
 
     slot_order = ["atlas", "pipes", "extra1", "extra2"]
-    # MixShader Fac per slot: 0.0 for the two solid zones, 0.3 for the
-    # two tint zones (verbatim from kart_editor.py).
     mix_fac = {"atlas": 0.0, "pipes": 0.0, "extra1": 0.3, "extra2": 0.3}
 
     tex_nodes, rgb_nodes, overlay_nodes, mix_nodes = {}, {}, {}, {}
@@ -92,6 +90,7 @@ def _build_graph(material, images_by_slot):
         tex = nodes.new('ShaderNodeTexImage')
         tex.location = (-800, y)
         tex.image = images_by_slot[slot]
+        tex.interpolation = 'Closest'   # pixel-perfect, matches PS1 look
         tex_nodes[slot] = tex
 
         rgb = nodes.new('ShaderNodeRGB')
@@ -113,7 +112,6 @@ def _build_graph(material, images_by_slot):
         links.new(ov.outputs['Color'], mix.inputs[1])
         mix_nodes[slot] = mix
 
-    # Add shader tree (verbatim).
     add1 = nodes.new('ShaderNodeAddShader')
     add1.location = (400, 200)
     links.new(mix_nodes["atlas"].outputs['Shader'], add1.inputs[0])
@@ -190,10 +188,9 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
             z = state.zones.add()
             z.display_name = zone_name
             z.node_name    = rgb_node.name
-            z.color        = prev_colors.get(zone_name, (1.0, 1.0, 1.0, 1.0))
-            # Apply manually -- update callbacks don't fire reliably
-            # during initial assignment.
-            rgb_node.outputs[0].default_value = tuple(z.color)
+            z.color        = prev_colors.get(zone_name, (1.0, 1.0, 1.0))
+            c = z.color
+            rgb_node.outputs[0].default_value = (c[0], c[1], c[2], 1.0)
 
         state.material_name = material.name
         state.is_imported   = True
@@ -204,7 +201,23 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
         return {'FINISHED'}
 
 
-_classes = (NFR_OT_KartImportTemplate,)
+class NFR_OT_KartResetColors(bpy.types.Operator):
+    bl_idname = "nfr.kart_reset_colors"
+    bl_label = "Reset Colors"
+    bl_description = "Reset all zone color pickers to white"
+
+    def execute(self, context):
+        state = context.scene.kart_state
+        if not state.is_imported:
+            return {'CANCELLED'}
+        for z in state.zones:
+            z.color = (1.0, 1.0, 1.0)
+        _redraw_view3d(context)
+        self.report({'INFO'}, "All kart colors reset to white")
+        return {'FINISHED'}
+
+
+_classes = (NFR_OT_KartImportTemplate, NFR_OT_KartResetColors)
 
 
 def register():

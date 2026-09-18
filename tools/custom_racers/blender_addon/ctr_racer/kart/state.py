@@ -12,12 +12,18 @@ output socket. The node lives inside the material named by
 `scene.kart_state.material_name`. If anything is missing (material
 renamed, node deleted), the callback silently no-ops -- the panel
 keeps the stored value, it just doesn't push it.
+
+Note on the color property: size=3 (RGB). The RGB node expects a
+4-component vector, so the callback pads with alpha=1.0. Using
+size=3 instead of size=4 avoids a rendering glitch in the color
+picker popup on some Blender builds (the picker would open with a
+black canvas that still responded to the mouse).
 """
 import bpy
 
 
 def _zone_color_update(self, context):
-    """Push self.color -> RGB node's output socket."""
+    """Push self.color -> RGB node's output socket (padded to RGBA)."""
     scene = getattr(context, "scene", None)
     if scene is None:
         return
@@ -30,7 +36,8 @@ def _zone_color_update(self, context):
     node = mat.node_tree.nodes.get(self.node_name)
     if node is None or node.type != 'RGB':
         return
-    node.outputs[0].default_value = tuple(self.color)
+    c = self.color
+    node.outputs[0].default_value = (c[0], c[1], c[2], 1.0)
 
 
 class NFR_KartZone(bpy.types.PropertyGroup):
@@ -39,9 +46,8 @@ class NFR_KartZone(bpy.types.PropertyGroup):
     color: bpy.props.FloatVectorProperty(
         name="Color",
         subtype='COLOR',
-        size=4,
-        min=0.0, max=1.0,
-        default=(1.0, 1.0, 1.0, 1.0),
+        size=3,
+        default=(1.0, 1.0, 1.0),
         update=_zone_color_update,
     )
 
@@ -61,10 +67,8 @@ class NFR_KartState(bpy.types.PropertyGroup):
         ],
         default='DEFAULT',
     )
-    # Internal bookkeeping -- set by the importer.
     is_imported:   bpy.props.BoolProperty(default=False)
     material_name: bpy.props.StringProperty(default="")
-    # Editable zones.
     zones: bpy.props.CollectionProperty(type=NFR_KartZone)
 
 

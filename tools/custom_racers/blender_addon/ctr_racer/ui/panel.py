@@ -398,7 +398,7 @@ class NFR_PT_Racer(Panel):
             drop = box.row(align=True)
             drop.prop(mat, "nfr_racer_blend_mode", text="")
 
-    # ---------------------------------------------------------------------
+       # ---------------------------------------------------------------------
     # KART tab
     # ---------------------------------------------------------------------
     def _draw_kart(self, context, layout):
@@ -421,12 +421,22 @@ class NFR_PT_Racer(Panel):
             return
 
         layout.separator()
+
+        # Reset button above the color list.
+        reset_row = layout.row(align=True)
+        reset_row.scale_y = 1.2
+        reset_row.operator("nfr.kart_reset_colors", icon="LOOP_BACK")
+
         box = layout.box()
         box.label(text="Colors", icon="COLOR")
         for z in st.zones:
-            r = box.row(align=True)
-            r.label(text=z.display_name)
-            r.prop(z, "color", text="")
+            # split() gives the swatch a proper slice of the row instead
+            # of squeezing it against the label (which on some Blender
+            # builds rendered as an empty/black rectangle).
+            r = box.row()
+            split = r.split(factor=0.4)
+            split.label(text=z.display_name)
+            split.prop(z, "color", text="")
 
 
 _classes = (NFR_PT_Racer,)
