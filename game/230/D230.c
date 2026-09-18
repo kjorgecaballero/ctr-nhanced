@@ -368,15 +368,15 @@ struct OverlayDATA_230 D230 =
              // Polar
              {0x100, 0xA7, {2, 14, 5, 7}, 6, 0xFFFF},
              // Pura
-             {0x140, 0xA7, {3, 14, 6, 11}, 7, 0xFFFF},
+             {0x140, 0xA7, {3, 15, 6, 11}, 7, 0xFFFF},
              // N. Tropy
              {0x40, 0x80, {8, 10, 8, 0}, 12, 0x5},
              // Pinstripe
              {0x180, 0x80, {9, 11, 3, 9}, 8, 0xA},
              // Roo
-             {0x40, 0xA7, {8, 10, 10, 4}, 10, 0x7},
+             {0x40, 0xA7, {8, 16, 10, 4}, 10, 0x7},
              // Papu
-             {0x180, 0xA7, {9, 11, 7, 11}, 9, 0x8},
+             {0x180, 0xA7, {9, 17, 7, 11}, 9, 0x8},
              // Komodo Joe
              {0x80, 0xCE, {4, 12, 16, 13}, 11, 0x9},
              // Penta
@@ -388,7 +388,7 @@ struct OverlayDATA_230 D230 =
              // slot 16 (page-0 custom only)
              {0x40, 0xCE, {10, 16, 16, 12}, -1, 0xFFFF},
              // slot 17 (page-0 custom only)
-             {0x180, 0xCE, {9, 17, 15, 17}, -1, 0xFFFF}},
+             {0x180, 0xCE, {11, 17, 15, 17}, -1, 0xFFFF}},
 
         .characterSelectMeta1P2P =
             {// Crash
@@ -406,15 +406,15 @@ struct OverlayDATA_230 D230 =
              // Polar
              {0x100, 0x87, {2, 14, 5, 7}, 6, 0xFFFF},
              // Pura
-             {0x140, 0x87, {3, 14, 6, 11}, 7, 0xFFFF},
+             {0x140, 0x87, {3, 15, 6, 11}, 7, 0xFFFF},
              // N. Tropy
              {0x40, 0x60, {8, 10, 8, 0}, 12, 0x5},
              // Pinstripe
              {0x180, 0x60, {9, 11, 3, 9}, 8, 0xA},
              // Roo
-             {0x40, 0x87, {8, 10, 10, 4}, 10, 0x7},
+             {0x40, 0x87, {8, 16, 10, 4}, 10, 0x7},
              // Papu
-             {0x180, 0x87, {9, 11, 7, 11}, 9, 0x8},
+             {0x180, 0x87, {9, 17, 7, 11}, 9, 0x8},
              // Komodo Joe
              {0x80, 0xAE, {4, 12, 16, 13}, 11, 0x9},
              // Penta
@@ -426,7 +426,7 @@ struct OverlayDATA_230 D230 =
              // slot 16 (page-0 custom only)
              {0x40, 0xAE, {10, 16, 16, 12}, -1, 0xFFFF},
              // slot 17 (page-0 custom only)
-             {0x180, 0xAE, {9, 17, 15, 17}, -1, 0xFFFF}},
+             {0x180, 0xAE, {11, 17, 15, 17}, -1, 0xFFFF}},
 
         .characterSelectMeta3P =
             {// Crash
