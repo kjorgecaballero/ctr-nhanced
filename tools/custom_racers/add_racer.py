@@ -121,6 +121,12 @@ def main():
         for b in bins:
             shutil.copy(b, dest / b.name)
         print(f"  copied {len(bins)} sentinel_*.bin -> {dest}")
+        # Cleanup: canonical copies are already in dest/. Wipe the
+        # TOOLS working files (bins + debug PNGs) so they don't
+        # accumulate between exports.
+        for stale in list(TOOLS.glob("sentinel_*.bin")) + \
+                     list(TOOLS.glob("sentinel_*.png")):
+            stale.unlink()
     else:
         print("--- building textures.vrm ---")
         for stale in list(dest.glob("sentinel_*.bin")) + \
