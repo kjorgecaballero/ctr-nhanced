@@ -42,6 +42,11 @@ from collections import Counter
 from pathlib import Path
 from ctr_animation_codec import encode_animation, pack_delta
 
+try:
+    from PIL import Image as PIL_Image
+except ImportError:
+    PIL_Image = None
+
 ROOT = Path(__file__).parent
 
 # --- Command-line arguments ---
@@ -51,9 +56,15 @@ SLOT_NAME = argv[1] if len(argv) > 1 else 'tiny'
 OUT_FILE = argv[2] if len(argv) > 2 else 'tiny.ctr'
 
 PLAYER_SLOT = 0
+SENTINEL_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
+    elif a == '--sentinel':
+        SENTINEL_MODE = True
+
+if SENTINEL_MODE and PIL_Image is None:
+    raise RuntimeError("Pillow is required for --sentinel mode")
 
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
@@ -187,18 +198,44 @@ def prepare_textures(mesh):
     images = []
     for name, item in mesh['images'].items():
         w, h = item['size']
-        w2 = max(4, w // SCALE)
-        h2 = max(4, h // SCALE)
+        if SENTINEL_MODE:
+            scale = 1
+            while (w // scale) > 256 or (h // scale) > 256:
+                scale += 1
+        else:
+            scale = SCALE
+        w2 = max(4, w // scale)
+        h2 = max(4, h // scale)
         pix = item['pixels_rgba']
         rgba = []
         for y in range(h2):
             for x in range(w2):
-                sx = min(w-1, x*SCALE)
-                sy = min(h-1, y*SCALE)
+                sx = min(w-1, x*scale)
+                sy = min(h-1, y*scale)
                 py = h-1-sy
                 idx = 4*(py*w+sx)
                 rgba.append(tuple(pix[idx+j] for j in range(4)))
         images.append((name, w2, h2, rgba))
+
+    # ---- Sentinel mode: write per-material PNG + BIN, skip atlas ----
+    if SENTINEL_MODE:
+        out_dir = Path(OUT_FILE).parent
+        out_dir.mkdir(parents=True, exist_ok=True)
+        sentinel = {}
+        for idx, (name, w, h, rgba) in enumerate(
+                sorted(images, key=lambda a: a[0])):
+            bytes_rgba = bytes(
+                max(0, min(255, int(round(v * 255.0))))
+                for px in rgba for v in px)
+            PIL_Image.frombytes('RGBA', (w, h), bytes_rgba).save(
+                out_dir / f'sentinel_{idx:02d}.png')
+            (out_dir / f'sentinel_{idx:02d}.bin').write_bytes(
+                struct.pack('<II', w, h) + bytes_rgba)
+            sentinel[name] = {'localIdx': idx, 'w': w, 'h': h}
+            print(f"  sentinel_{idx:02d}: {name} {w}x{h}")
+        print(f"Sentinel mode: {len(sentinel)} textures emitted")
+        return sentinel
+    # ---------------------------------------------------------------
 
     cells = [[[False] * SUBPAGE_W for _ in range(TEXTURE_ROWS)]
              for _ in range(NUM_SUBPAGES)]
@@ -382,32 +419,42 @@ def build():
         corners = [face['corners'][i] for i in (0, 2, 1)]
         ti = 0
         if material['image']:
-            tex = textures[material['image']]; w, h = tex['size']
-            coords = []
-            for c in corners:
-                corner_u = max(0, min(w-1, round(c['uv'][0] * (w-1))))
-                corner_v = max(0, min(h-1, round((1 - c['uv'][1]) * (h-1))))
-                cu = tex['u'] + corner_u
-                cv = tex['v'] + corner_v
-                if cu > 255:
-                    raise AssertionError(
-                        f'u overflow for {material["image"]}: '
-                        f'tex_u={tex["u"]} corner_u={corner_u} cu={cu}')
-                if cv > 255:
-                    raise AssertionError(
-                        f'v overflow for {material["image"]}: '
-                        f'tex_v={tex["v"]} corner_v={corner_v} cv={cv}')
-                coords.append((cu, cv))
+            if SENTINEL_MODE:
+                tex = textures[material['image']]
+                w, h = tex['w'], tex['h']
+                coords = []
+                for c in corners:
+                    u = max(0, min(255, round(c['uv'][0] * (w-1))))
+                    v = max(0, min(255, round((1 - c['uv'][1]) * (h-1))))
+                    coords.append((u, v))
+                layout = struct.pack('<BBHBBHBBBB',
+                    *coords[0], 0x8000 | tex['localIdx'],
+                    *coords[1], 0,
+                    *coords[2], *coords[2])
+                ti = get_index(layouts, layout, True)
+            else:
+                tex = textures[material['image']]; w, h = tex['size']
+                coords = []
+                for c in corners:
+                    corner_u = max(0, min(w-1, round(c['uv'][0] * (w-1))))
+                    corner_v = max(0, min(h-1, round((1 - c['uv'][1]) * (h-1))))
+                    cu = tex['u'] + corner_u
+                    cv = tex['v'] + corner_v
+                    if cu > 255:
+                        raise AssertionError(
+                            f'u overflow for {material["image"]}: '
+                            f'tex_u={tex["u"]} corner_u={corner_u} cu={cu}')
+                    if cv > 255:
+                        raise AssertionError(
+                            f'v overflow for {material["image"]}: '
+                            f'tex_v={tex["v"]} corner_v={corner_v} cv={cv}')
+                    coords.append((cu, cv))
 
-            # Per-material blend mode -> 2 ABR bits in tpage (bits 5-6).
-            # Two materials sharing the same image but using different
-            # blend modes end up with distinct layouts because the cache
-            # key includes the full packed struct.
-            abr = ABR_MAP.get(material.get('blend_mode', 'half'), 0)
-            layout = struct.pack('<BBHBBHBBBB', *coords[0], tex['clut'],
-                                 *coords[1], tex['page'] | (abr << 5),
-                                 *coords[2], *coords[2])
-            ti = get_index(layouts, layout, True)
+                abr = ABR_MAP.get(material.get('blend_mode', 'half'), 0)
+                layout = struct.pack('<BBHBBHBBBB', *coords[0], tex['clut'],
+                                     *coords[1], tex['page'] | (abr << 5),
+                                     *coords[2], *coords[2])
+                ti = get_index(layouts, layout, True)
 
         double_sided = bool(material.get('double_sided', False))
         if double_sided:
@@ -508,8 +555,14 @@ def build():
     assert len(data) < 0x10000
 
     blob = pack_container(data, patches)
-    (ROOT / OUT_FILE).write_bytes(blob)
-    print(f"Written: {OUT_FILE} ({len(blob)} bytes, player slot {PLAYER_SLOT})")
+    out_path = Path(OUT_FILE)
+    if not out_path.is_absolute():
+        if ("/" in OUT_FILE) or ("\\" in OUT_FILE):
+            out_path = Path.cwd() / out_path
+        else:
+            out_path = ROOT / out_path
+    out_path.write_bytes(blob)
+    print(f"Written: {out_path} ({len(blob)} bytes, player slot {PLAYER_SLOT})")
 
 
 if __name__ == '__main__':

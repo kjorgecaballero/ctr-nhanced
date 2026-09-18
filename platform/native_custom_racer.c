@@ -14,6 +14,17 @@
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
 
+/* === Sentinel model textures =========================================
+ * Build_character.py --sentinel emits one BIN per unique texture in the
+ * racer's folder (sentinel_NN.bin). Each model material's TextureLayout
+ * carries clut = 0x8000 | localIdx. On first load of a custom we upload
+ * the RGBA data as a GL texture and rewrite the layout's clut to
+ * 0x8000 | globalIdx so AddSplit routes it through the Sentinel path.
+ * The icon range (0..161) and the model range (256..) never overlap. */
+#define NATIVE_MODEL_TEX_BASE  256
+#define NATIVE_MODEL_TEX_END   2048
+#define NATIVE_MODEL_TEX_MAX   256    /* max localIdx per custom */
+
 /* Width in VRAM words assigned to each player slot. */
 #define NATIVE_SLOT_WIDTH 128
 
@@ -134,6 +145,11 @@ static long            s_menuVrmSize[NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLO
  * LOAD_MODEL_FILE_HEADER_BYTES so it points to a valid struct Model. */
 #define NATIVE_PLAYER_MODEL_SLOTS 8
 static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
+
+/* Sentinel model texture allocator (see NATIVE_MODEL_TEX_BASE above).
+ * Monotonic: customs are cached and never freed, so no freelist. */
+static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
+static s16 s_sentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 
 static int ParseEngineID(const char *s)
 {
@@ -293,6 +309,8 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customHasColor, 0, sizeof(s_customHasColor));
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
+    memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
+    s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
 
@@ -588,6 +606,171 @@ static void ExpandModelHeaders(unsigned char *buf, long fileSize)
         numHeaders, NATIVE_MODELHEADER_COUNT);
 }
 
+/* --------------------------------------------------------------------- */
+/* Sentinel model textures                                               */
+/* --------------------------------------------------------------------- */
+
+static int AllocModelTexIdx(void)
+{
+    if (s_nextModelTexIdx >= NATIVE_MODEL_TEX_END)
+        return -1;
+    return s_nextModelTexIdx++;
+}
+
+static GLuint LoadSentinelBin(const char *path, int *outW, int *outH)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return 0;
+
+    u32 w = 0, h = 0;
+    if (fread(&w, 4, 1, f) != 1 || fread(&h, 4, 1, f) != 1)
+    {
+        fclose(f);
+        return 0;
+    }
+    if (w == 0 || h == 0 || w > 4096 || h > 4096)
+    {
+        fclose(f);
+        return 0;
+    }
+
+    size_t dataSize = (size_t)w * (size_t)h * 4;
+    u8 *data = (u8 *)malloc(dataSize);
+    if (!data)
+    {
+        fclose(f);
+        return 0;
+    }
+    if (fread(data, 1, dataSize, f) != dataSize)
+    {
+        free(data);
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+
+    GLint pa = 0, pb = 0;
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &pa);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &pb);
+
+    GLuint tex = 0;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (GLsizei)w, (GLsizei)h, 0,
+                 GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    glBindTexture(GL_TEXTURE_2D, (GLuint)pb);
+    glActiveTexture((GLenum)pa);
+
+    free(data);
+    *outW = (int)w;
+    *outH = (int)h;
+    return tex;
+}
+
+static void RegisterModelTextures(int characterID, unsigned char *data)
+{
+    int charIdx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (charIdx < 0 || charIdx >= NATIVE_CUSTOM_COUNT)
+        return;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+        return;
+
+    /* Probe: sentinel_00.bin must exist, otherwise this is a VRM model. */
+    char probe[256];
+    snprintf(probe, sizeof(probe),
+             "assets/mods/racers/%s/sentinel_00.bin", folder);
+    FILE *pf = fopen(probe, "rb");
+    if (!pf)
+        return;
+    fclose(pf);
+
+    /* Texarray pointer is at data[64] (already relocated by
+     * ApplyContainerPtrMap to a host address). */
+    u32 *pTexArray = (u32 *)(*(u32 *)&data[64]);
+    if (pTexArray == NULL)
+        return;
+
+    /* Command table starts at data[88]: [len(palettes), commands..., 0xFFFFFFFF] */
+    u32 *pCmd = (u32 *)&data[88];
+    pCmd++;  /* skip len(palettes) */
+
+    /* Iterate commands, collect unique ti, patch each layout in-place. */
+    u8 seen[512 / 8];
+    memset(seen, 0, sizeof(seen));
+    while (*pCmd != 0xFFFFFFFF)
+    {
+        u32 cmd = *pCmd++;
+        u32 ti = cmd & 0x1FF;
+        if (ti == 0 || ti >= 512)
+            continue;   /* 0 = no texture; >=512 out of range */
+        if (seen[ti >> 3] & (1u << (ti & 7)))
+            continue;
+        seen[ti >> 3] |= (u8)(1u << (ti & 7));
+
+        unsigned char *layout = (unsigned char *)pTexArray[ti - 1];  /* ti is 1-based */
+        if (layout == NULL)
+            continue;
+
+        u16 clut;
+        memcpy(&clut, layout + 2, 2);
+        if ((clut & 0x8000) == 0)
+            continue;  /* VRM layout, not Sentinel */
+
+        u16 localIdx = clut & 0x7FFF;
+        if (localIdx >= NATIVE_MODEL_TEX_MAX)
+            continue;
+
+        s16 cached = s_sentinelTexMap[charIdx][localIdx];
+        int globalIdx;
+        if (cached >= 0)
+        {
+            globalIdx = cached;
+        }
+        else
+        {
+            globalIdx = AllocModelTexIdx();
+            if (globalIdx < 0)
+            {
+                Log("[CustomRacer] model tex pool full (max=%d)\n",
+                    NATIVE_MODEL_TEX_END);
+                return;
+            }
+
+            char path[256];
+            snprintf(path, sizeof(path),
+                     "assets/mods/racers/%s/sentinel_%02d.bin",
+                     folder, localIdx);
+
+            int w = 0, h = 0;
+            GLuint tex = LoadSentinelBin(path, &w, &h);
+            if (tex == 0)
+            {
+                Log("[CustomRacer] sentinel load failed: %s\n", path);
+                s_nextModelTexIdx--;  /* rollback */
+                continue;
+            }
+
+            NativeGpu_RegisterCustomTexture((u16)globalIdx,
+                                            (TextureID)tex, w, h);
+            s_sentinelTexMap[charIdx][localIdx] = (s16)globalIdx;
+            Log("[CustomRacer] sentinel tex: charID=%d local=%d global=%d %dx%d\n",
+                characterID, localIdx, globalIdx, w, h);
+        }
+
+        u16 newClut = (u16)(0x8000 | globalIdx);
+        memcpy(layout + 2, &newClut, 2);
+    }
+}
+
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 {
     const char *folder = NativeCustomRacer_GetFolder(characterID);
@@ -608,6 +791,9 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
+
+    /* Register Sentinel model textures (no-op for VRM models). */
+    RegisterModelTextures(characterID, buf + 4);
 
     Log("[CustomRacer] model_p%d.ctr loaded: %s (player %d, %ld bytes)\n",
         playerIndex, path, playerIndex, sz);
@@ -667,6 +853,17 @@ void NativeCustomRacer_ApplySlot(int playerIndex, int characterID)
     const char *folder = NativeCustomRacer_GetFolder(characterID);
     if (!folder)
         return;
+
+    /* Skip VRM upload for Sentinel customs: their textures are loaded
+     * by RegisterModelTextures at model-load time. */
+    if (characterID >= NATIVE_CUSTOM_ID_BASE &&
+        characterID <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+    {
+        int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+        if (idx >= 0 && idx < NATIVE_CUSTOM_COUNT &&
+            s_sentinelTexMap[idx][0] >= 0)
+            return;
+    }
 
     char path[256];
     snprintf(path, sizeof(path),
