@@ -3,7 +3,7 @@
 # =========================================================================
 """NFR_PT_Racer: the single unified panel with sub-tabs.
 
-Dispatches to one of three draw methods based on scene.nfr_ui_tab.
+Dispatches to one of four draw methods based on scene.nfr_ui_tab.
 Pure UI: no persistent state, no operators owned here.
 """
 import bpy
@@ -20,6 +20,7 @@ from ..core.roster import _read_roster, _group_by_page
 from ..core.icons import _get_icon, _get_original_icon, _image_preview_icon_id
 from ..core.validate import validate_racer
 from ..slots.state import _resolve_cells
+from ..kart.templates import KART_TEMPLATES
 
 
 class NFR_PT_Racer(Panel):
@@ -50,6 +51,8 @@ class NFR_PT_Racer(Panel):
             self._draw_slots(context, layout)
         elif tab == 'MATERIALS':
             self._draw_materials(context, layout)
+        elif tab == 'KART':
+            self._draw_kart(context, layout)
 
     # ---------------------------------------------------------------------
     # SETTINGS tab
@@ -394,6 +397,36 @@ class NFR_PT_Racer(Panel):
             # Row 2: blend mode dropdown
             drop = box.row(align=True)
             drop.prop(mat, "nfr_racer_blend_mode", text="")
+
+    # ---------------------------------------------------------------------
+    # KART tab
+    # ---------------------------------------------------------------------
+    def _draw_kart(self, context, layout):
+        st = context.scene.kart_state
+
+        layout.label(text="Kart Editor", icon="MESH_DATA")
+
+        col = layout.column(align=True)
+        col.prop(st, "template_option")
+        col.prop(st, "variant")
+
+        row = col.row(align=True)
+        row.scale_y = 1.3
+        row.operator("nfr.kart_import_template", icon="IMPORT")
+
+        if not st.is_imported:
+            layout.separator()
+            layout.label(text="Press 'Import Template' to spawn the kart",
+                         icon="INFO")
+            return
+
+        layout.separator()
+        box = layout.box()
+        box.label(text="Colors", icon="COLOR")
+        for z in st.zones:
+            r = box.row(align=True)
+            r.label(text=z.display_name)
+            r.prop(z, "color", text="")
 
 
 _classes = (NFR_PT_Racer,)

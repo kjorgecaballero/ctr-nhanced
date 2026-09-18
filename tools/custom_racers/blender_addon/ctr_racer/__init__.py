@@ -1,45 +1,41 @@
 # =========================================================================
-# MODULE: bl_info
+# MODULE: ctr_racer — package init
 # =========================================================================
+"""CTR Racer Blender addon.
+
+Top-level orchestrator. Pure wiring: no functional code lives here.
+Each subpackage owns its own register()/unregister().
+"""
 bl_info = {
     "name": "CTR Racer",
     "author": "kjorgecaballero",
     "version": (2, 0, 0),
     "blender": (3, 2, 0),
-    "location": "View3D > N > Racer",
-    "description": "Configure and export custom CTR racers",
+    "location": "View3D > Sidebar > Racer",
+    "description": "Custom racer export + kart template editor for CTR nhanced",
     "category": "Import-Export",
 }
 
-# =========================================================================
-# MODULE: imports
-# =========================================================================
-from . import prefs
-from . import core
-from . import render
-from . import slots
-from . import export
-from . import ui
+from . import prefs, core, render, slots, export, kart, ui
 from .core.icons import _teardown_previews
 
-# =========================================================================
-# MODULE: registration
-# =========================================================================
 
 def register():
     prefs.register()
-    core.register()
-    render.register()
-    slots.register()
-    export.register()
-    ui.register()
+    core.register()      # Object.racer PointerProperty + NFR_RacerProps
+    render.register()    # Scene/Material props + render operators
+    slots.register()     # slot operators
+    export.register()    # export operators
+    kart.register()      # kart template importer + Scene.kart_state
+    ui.register()        # panel
+
 
 def unregister():
-    _teardown_previews()
+    _teardown_previews() 
     ui.unregister()
+    kart.unregister()
     export.unregister()
     slots.unregister()
     render.unregister()
-    core.unregister()
+    core.unregister()    
     prefs.unregister()
-
