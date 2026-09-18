@@ -17,7 +17,7 @@ from ..constants import (
 from ..prefs import _get_prefs
 from ..core.helpers import _find_object_by_slug, _active_racer
 from ..core.roster import _read_roster, _group_by_page
-from ..core.icons import _get_icon, _image_preview_icon_id
+from ..core.icons import _get_icon, _get_original_icon, _image_preview_icon_id
 from ..core.validate import validate_racer
 from ..slots.state import _resolve_cells
 
@@ -153,9 +153,14 @@ class NFR_PT_Racer(Panel):
         row.scale_y = 1.2
         row.operator("nfr.slot_refresh", text="Refresh", icon="FILE_REFRESH")
         assign_row = row.row(align=True)
+        # Disable "Assign Here" if the selected slot is a page-0 original
+        # (slots 0-15 are reserved by the engine and cannot be reassigned).
+        is_original_sel = (state._slot_sel_page == 0
+                           and 0 <= state._slot_sel_slot < 16)
         assign_row.enabled = (state._slot_sel_page == state._slot_view_page
                               and state._slot_sel_slot >= 0
-                              and active_racer is not None)
+                              and active_racer is not None
+                              and not is_original_sel)
         assign_row.operator("nfr.slot_assign_here",
                             text="Assign Here", icon="ADD")
 
@@ -185,6 +190,21 @@ class NFR_PT_Racer(Panel):
 
         for slot in DISPLAY_ORDER:
             kind, data = cells[slot]
+
+            # Engine originals on page 0, slots 0-15: draw like a normal
+            # cell with the bundled icon. The cell is still clickable (to
+            # inspect it), but "Assign Here" is gated off above.
+            if kind == "original":
+                icon = _get_original_icon(data["icon_file"])
+                if icon is not None:
+                    op = grid.operator("nfr.slot_click", text="",
+                                       icon_value=icon.icon_id)
+                else:
+                    op = grid.operator("nfr.slot_click", text=str(slot))
+                op.page = state._slot_view_page
+                op.slot = slot
+                continue
+
             if kind in ("entry", "pending"):
                 folder = data["folder"]
                 png = prefs.racers_dir() / folder / "icon.png"
@@ -209,6 +229,14 @@ class NFR_PT_Racer(Panel):
 
         layout.separator()
         box = layout.box()
+
+        if kind == "original":
+            box.label(
+                text=f"Slot {state._slot_sel_slot} — {data['name']}",
+                icon="LOCKED")
+            box.label(text="Engine original. Cannot be reassigned.",
+                      icon="INFO")
+            return
 
         if kind == "empty":
             box.label(text=f"Slot {state._slot_sel_slot} — empty", icon="INFO")

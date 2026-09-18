@@ -7,7 +7,12 @@ Lazily creates a preview collection. The collection is torn down by
 the addon's top-level unregister().
 """
 import bpy
+from pathlib import Path
 
+
+# Bundled original-racer icons live in ctr_racer/icons/. From
+# core/icons.py, that's two levels up.
+_ADDON_ICONS_DIR = Path(__file__).resolve().parent.parent / "icons"
 
 _preview_collection = None
 _icon_cache = {}
@@ -55,6 +60,16 @@ def _get_icon(slug, png_path):
     _icon_cache[slug] = icon
     _icon_mtimes[slug] = mtime
     return icon
+
+
+def _get_original_icon(icon_file):
+    """Load a bundled original-racer icon (crash.png, cortex.png, ...).
+
+    The cache key is prefixed with '__orig__' so it can't collide with a
+    user-named racer slug (e.g. a custom folder literally called 'crash'
+    would otherwise overwrite the cache entry)."""
+    png = _ADDON_ICONS_DIR / icon_file
+    return _get_icon(f"__orig__{icon_file}", png)
 
 
 def _image_preview_icon_id(img):
