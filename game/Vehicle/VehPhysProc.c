@@ -2370,7 +2370,7 @@ void VehPhysProc_SpinFirst_Init(struct Thread *t, struct Driver *d)
 		RB_Player_ModifyWumpa(d, -1);
 	}
 
-	Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, GET_MPK_ID(data.characterIDs[d->driverID]), VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
+	Voiceline_RequestPlay(VEH_PHYS_PROC_SPIN_VOICELINE_ID, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VEH_PHYS_PROC_SPIN_VOICELINE_PRIORITY);
 
 	// if spinning left
 	d->KartStates.Spinning.spinDir = 1;

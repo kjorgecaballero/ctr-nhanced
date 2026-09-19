@@ -2857,7 +2857,7 @@ u32 BOTS_ChangeState(struct Driver *driverVictim, int damageType, struct Driver 
 
 		if ((driverAttacker->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(1, GET_MPK_ID(data.characterIDs[driverVictim->driverID]), 0x10);
+			Voiceline_RequestPlay(1, GET_VOICE_CHAR_ID(data.characterIDs[driverVictim->driverID]), 0x10);
 		}
 		break;
 	case 3:

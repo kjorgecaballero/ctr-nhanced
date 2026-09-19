@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 // does not really touch voiceline
 void Voiceline_PoolInit(void)
@@ -136,6 +137,33 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 
 	if (voiceID >= 0x18)
 	{
+		return;
+	}
+
+	/* === Custom voicelines (v1) ===
+	 * Customs (characterID >= NATIVE_CUSTOM_ID_BASE) bypass the retail
+	 * queueing path: voiceData[0x10] and timeSet1/2 are indexed by enum
+	 * Characters (0..15) and would overrun with custom IDs. Play the
+	 * custom XA immediately through NativeAudio. */
+	if (characterID >= NATIVE_CUSTOM_ID_BASE)
+	{
+		fprintf(stderr, "[CustomRacer] custom branch: charID=%u voiceID=%u\n", characterID, voiceID);
+		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+			return;
+		if ((sdata->gGT->gameMode1 & END_OF_RACE) != 0)
+			return;
+		if (sdata->boolCanPlayVoicelines == 0)
+			return;
+		if (sdata->voicelineCooldown != 0)
+			return;
+
+		{
+			u8 voiceSetIdx = data.voiceID[voiceID];
+			if (NativeCustomRacer_PlayVoice((int)characterID, voiceSetIdx) != 0)
+			{
+				sdata->voicelineCooldown = 0x1e;
+			}
+		}
 		return;
 	}
 

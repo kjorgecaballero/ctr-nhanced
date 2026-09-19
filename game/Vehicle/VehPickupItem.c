@@ -622,7 +622,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(talk, GET_MPK_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
+			Voiceline_RequestPlay(talk, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
 		}
 
 		tw->rotY = d->rotCurr.y;
@@ -704,7 +704,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(VOICELINE_MINE_DROP, GET_MPK_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
+			Voiceline_RequestPlay(VOICELINE_MINE_DROP, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
 		}
 
 		mw = weaponTh->object;
@@ -844,7 +844,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(VOICELINE_MINE_DROP, GET_MPK_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
+			Voiceline_RequestPlay(VOICELINE_MINE_DROP, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
 		}
 
 		mw = weaponTh->object;
@@ -955,7 +955,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(VOICELINE_CLOCK, GET_MPK_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
+			Voiceline_RequestPlay(VOICELINE_CLOCK, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
 		}
 
 		int hurtVal = CLOCK_HURT_DURATION_NORMAL;
@@ -1025,7 +1025,7 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		// if human and not AI (AIs can not use Warpball)
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
-			Voiceline_RequestPlay(VOICELINE_WARPBALL, GET_MPK_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
+			Voiceline_RequestPlay(VOICELINE_WARPBALL, GET_VOICE_CHAR_ID(data.characterIDs[d->driverID]), VOICELINE_WEAPON_PRIORITY);
 		}
 
 		// used by RB_Warpball_SeekDriver

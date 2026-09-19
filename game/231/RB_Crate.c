@@ -477,7 +477,7 @@ int RB_CrateTime_ThCollide(struct Thread *crateThread, struct Thread *driverTh, 
 				gGT->frozenTimeRemaining += 0xb40;
 				gGT->timeCrateTypeSmashed = 3;
 
-				Voiceline_RequestPlay(0x13, GET_MPK_ID(data.characterIDs[driver->driverID]), 0x10);
+				Voiceline_RequestPlay(0x13, GET_VOICE_CHAR_ID(data.characterIDs[driver->driverID]), 0x10);
 			}
 
 			driver->PickupTimeboxHUD.cooldown = 10;

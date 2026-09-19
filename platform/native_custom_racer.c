@@ -8,6 +8,7 @@
 #include <platform/native_renderer.h>
 #include <platform/native_gpu.h>
 #include <platform/native_glad.h>
+#include <platform/native_audio.h>
 #include <ovr_230.h>
 
 #define NATIVE_ROSTER_MAX   160
@@ -150,6 +151,20 @@ static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
  * Monotonic: customs are cached and never freed, so no freelist. */
 static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
 static s16 s_sentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+
+/* Custom voicelines table (see NativeCustomRacer_PlayVoice). */
+#define NATIVE_VOICE_SET_COUNT    11
+#define NATIVE_VOICE_MAX_VARIANTS 8
+#define NATIVE_VOICE_PATH_LEN     128
+
+typedef struct
+{
+    u8 attempted;
+    u8 numVariants;
+    char paths[NATIVE_VOICE_MAX_VARIANTS][NATIVE_VOICE_PATH_LEN];
+} NativeVoiceSet;
+
+static NativeVoiceSet s_customVoices[NATIVE_CUSTOM_COUNT][NATIVE_VOICE_SET_COUNT];
 
 static int ParseEngineID(const char *s)
 {
@@ -310,6 +325,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
+    memset(s_customVoices, 0, sizeof(s_customVoices));
     s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
@@ -862,6 +878,78 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
         Log("[CustomRacer] podium dance override: charID=%d rank=%d mpkID=%d slot=0x%02X\n",
             charID, rank, mpkID, slot);
     }
+}
+
+/* === Custom voicelines ================================================
+ * s_customVoices[charIdx][setIdx] caches probed paths under
+ * assets/mods/racers/<slug>/voices/<setIdx>_<var>.xa. Lazy probe: the
+ * first PlayVoice for a (custom, set) pair walks variants 0..N-1 with
+ * fopen, stops at the first miss. ReloadRoster wipes the table. */
+static void ProbeVoiceSet(int charIdx, int setIdx)
+{
+    NativeVoiceSet *vs = &s_customVoices[charIdx][setIdx];
+    if (vs->attempted)
+        return;
+    vs->attempted = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(NATIVE_CUSTOM_ID_BASE + charIdx);
+    if (folder == NULL)
+        return;
+
+    for (int v = 0; v < NATIVE_VOICE_MAX_VARIANTS; v++)
+    {
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "assets/mods/racers/%s/voices/%d_%d.xa", folder, setIdx, v);
+        FILE *f = fopen(path, "rb");
+        if (f == NULL)
+            break;
+        fclose(f);
+        strncpy(vs->paths[v], path, NATIVE_VOICE_PATH_LEN - 1);
+        vs->paths[v][NATIVE_VOICE_PATH_LEN - 1] = 0;
+        vs->numVariants = (u8)(v + 1);
+    }
+    Log("[CustomRacer] ProbeVoiceSet: charIdx=%d setIdx=%d -> %d variants\n",
+        charIdx, setIdx, vs->numVariants);
+}
+
+int NativeCustomRacer_PlayVoice(int characterID, int voiceSetIndex)
+{
+    if (characterID < NATIVE_CUSTOM_ID_BASE)
+        return 0;
+    if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return 0;
+    if (voiceSetIndex < 0 || voiceSetIndex >= NATIVE_VOICE_SET_COUNT)
+        return 0;
+
+    int charIdx = characterID - NATIVE_CUSTOM_ID_BASE;
+    ProbeVoiceSet(charIdx, voiceSetIndex);
+
+    NativeVoiceSet *vs = &s_customVoices[charIdx][voiceSetIndex];
+    if (vs->numVariants == 0)
+        return 0;
+
+    /* Same RNG as Voiceline_RequestPlay_NextAudioRNG. */
+    sdata->audioRNG = ((sdata->audioRNG >> 3) + sdata->audioRNG * 0x20000000) * 5 + 1;
+    u32 rng = sdata->audioRNG;
+    int variant = (int)(rng % vs->numVariants);
+
+    int vol = sdata->vol_Voice << CDSYS_XA_VOLUME_SHIFT;
+    /* NativeAudio_PlayXAFile resolves paths via NativeAssets_ResolvePath,
+     * which prepends the assets root; ProbeVoiceSet's fopen runs from CWD.
+     * Strip "assets/" to bridge the two conventions. */
+    const char *audioPath = vs->paths[variant];
+    if (strncmp(audioPath, "assets/", 7) == 0)
+        audioPath += 7;
+    if (NativeAudio_PlayXAFile(audioPath, 0, vol, vol) == 0)
+    {
+        Log("[CustomRacer] PlayXAFile FAILED: %s\n", audioPath);
+        return 0;
+    }
+
+    Log("[CustomRacer] voiceline: charID=%d set=%d var=%d file=%s\n",
+        characterID, voiceSetIndex, variant, vs->paths[variant]);
+    return 1;
 }
 
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)

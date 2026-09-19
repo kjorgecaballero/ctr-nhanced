@@ -67,7 +67,7 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 	    (victimDriver->invincibleTimer != 0))
 	{
 	VictimLaugh:
-		Voiceline_RequestPlay(VEH_PICK_VOICELINE_VICTIM_LAUGH, GET_MPK_ID(victimCharacter), VEH_PICK_VOICELINE_PRIORITY);
+		Voiceline_RequestPlay(VEH_PICK_VOICELINE_VICTIM_LAUGH, GET_VOICE_CHAR_ID(victimCharacter), VEH_PICK_VOICELINE_PRIORITY);
 		return 0;
 	}
 
@@ -189,7 +189,7 @@ int VehPickState_NewState(struct Driver *victimDriver, int damageType, struct Dr
 
 	if (voice != 0)
 	{
-		Voiceline_RequestPlay(voice, GET_MPK_ID(victimCharacter), VEH_PICK_VOICELINE_PRIORITY);
+		Voiceline_RequestPlay(voice, GET_VOICE_CHAR_ID(victimCharacter), VEH_PICK_VOICELINE_PRIORITY);
 	}
 
 	switch (reason)

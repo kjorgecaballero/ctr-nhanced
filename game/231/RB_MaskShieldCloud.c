@@ -570,7 +570,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	if ((player->actionsFlagSet & ACTION_BOT) == 0)
 	{
 		// make driver talk
-		Voiceline_RequestPlay(13, GET_MPK_ID(data.characterIDs[player->driverID]), 0x10);
+		Voiceline_RequestPlay(13, GET_VOICE_CHAR_ID(data.characterIDs[player->driverID]), 0x10);
 	}
 
 	// copy position and rotation from one instance to another

@@ -208,6 +208,24 @@ int NativeCustomRacer_GetMaskIsGoodGuy(int characterID);
  * Default for customs without a wheels= field in roster.txt is 1. */
 int NativeCustomRacer_HasWheels(int characterID);
 
+/* === Custom voicelines (v1) ============================================
+ * Customs deliver XA files under
+ *   assets/mods/racers/<slug>/voices/<set>_<var>.xa
+ * <set> = 0..10 (data.voiceID[voiceID], same index as retail)
+ * <var> = 0..7 (variants; RNG picks one per call).
+ * Returns 1 if a custom voice was played. */
+int NativeCustomRacer_PlayVoice(int characterID, int voiceSetIndex);
+
+/* Wrapper for Voiceline_RequestPlay call sites. Originals map to their
+ * grid enum (retail path); customs (>= NATIVE_CUSTOM_ID_BASE) pass
+ * through raw so the custom voice table is used. */
+static inline int GET_VOICE_CHAR_ID(int id)
+{
+    if (id >= NATIVE_CUSTOM_ID_BASE)
+        return id;
+    return GET_MPK_ID(id);
+}
+
 #ifdef __cplusplus
 }
 #endif
