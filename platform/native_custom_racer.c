@@ -771,6 +771,99 @@ static void RegisterModelTextures(int characterID, unsigned char *data)
     }
 }
 
+/* === Custom podium dance ==============================================
+ * One dance.ctr per racer. Same .ctr format as model_pN.ctr.
+ * Loaded once per race, right before CS_Podium spawns the podium
+ * threads. See native_custom_racer.h for rationale. */
+static int s_podiumDanceLoaded = 0;
+
+void NativeCustomRacer_ResetPodiumDance(void)
+{
+    s_podiumDanceLoaded = 0;
+}
+
+int NativeCustomRacer_HasDanceModel(int characterID)
+{
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (!folder)
+        return 0;
+
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/%s/dance.ctr", folder);
+
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return 0;
+    fclose(f);
+    return 1;
+}
+
+static void *LoadDanceModelRaw(int characterID)
+{
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (!folder)
+        return NULL;
+
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/%s/dance.ctr", folder);
+
+    long sz = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] dance.ctr not found: %s\n", path);
+        return NULL;
+    }
+
+    ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
+
+    /* Reuse the racer's Sentinel texture cache. The dance model shares
+     * the same sentinel_NN.bin files as model_pN.ctr (v1 assumption:
+     * dance reuses the racer's textures). If a future dance model has
+     * its own textures, split the cache per-model. */
+    RegisterModelTextures(characterID, buf + 4);
+
+    Log("[CustomRacer] dance.ctr loaded: %s (%ld bytes)\n", path, sz);
+    return buf;
+}
+
+void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
+{
+    if (s_podiumDanceLoaded)
+        return;
+    s_podiumDanceLoaded = 1;
+
+    for (int i = 0; i < 8; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL)
+            continue;
+
+        int rank = d->driverRank;
+        if (rank < 0 || rank > 2)
+            continue;
+
+        u8 charID = data.characterIDs[d->driverID];
+        if (charID < NATIVE_CUSTOM_ID_BASE)
+            continue;
+        if (!NativeCustomRacer_HasDanceModel(charID))
+            continue;
+
+        void *buf = LoadDanceModelRaw(charID);
+        if (buf == NULL)
+            continue;
+
+        struct Model *m = (struct Model *)((u8 *)buf + LOAD_MODEL_FILE_HEADER_BYTES);
+        u8 mpkID = GET_MPK_ID(charID);
+        int slot = (int)mpkID + STATIC_CRASHDANCE;
+
+        gGT->modelPtr[slot] = m;
+        Log("[CustomRacer] podium dance override: charID=%d rank=%d mpkID=%d slot=0x%02X\n",
+            charID, rank, mpkID, slot);
+    }
+}
+
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
 {
     const char *folder = NativeCustomRacer_GetFolder(characterID);

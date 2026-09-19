@@ -636,6 +636,8 @@ void CS_Podium_FullScene_Init(void)
 
 	struct GameTracker *gGT = sdata->gGT;
 
+	NativeCustomRacer_LoadPodiumDanceModels(gGT);
+
 	// assume cutscene did not manipulate audio
 	D233.CutsceneManipulatesAudio = 0;
 

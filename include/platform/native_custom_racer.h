@@ -101,6 +101,15 @@ const char *NativeCustomRacer_GetDisplayName(int characterID);
  * specified player slot. Returns NULL on failure. The caller owns the buffer. */
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID);
 
+/* === Custom podium dance (v1) =========================================
+ * Podium model index is `mpkID + STATIC_CRASHDANCE`; CS_Podium_Init
+ * resolves it via gGT->modelPtr[]. This hook overrides that slot
+ * with a custom `dance.ctr` loaded from the racer's folder, right
+ * before the podium threads spawn. Retail path untouched. */
+void  NativeCustomRacer_ResetPodiumDance(void);
+int   NativeCustomRacer_HasDanceModel(int characterID);
+void  NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT);
+
 /* Applies textures.vrm for the given character to the player's VRAM region. */
 void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
 
