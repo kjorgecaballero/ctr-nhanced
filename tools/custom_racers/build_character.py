@@ -2,11 +2,27 @@
 
 Usage:
     python build_character.py <source_mesh.json> <internal_name> <output.ctr>
-                              [--player_slot N]
+                              [--player_slot N] [--sentinel] [--static]
 
 The --player_slot argument (0-3) shifts the atlas to the VRAM region that
 the runtime assigns to that player index. The runtime writes the VRM at
 the same offset, so both match.
+
+Animated mode (auto-detected):
+    If source_mesh.json contains shape keys beyond 'Basis' (with any of
+    the recognized names, see ANIM_KEY_ALIASES below), build_character
+    generates real multi-frame clips for turn / reverse / bump / jump
+    by interpolating between Basis and each shape key. The engine reads
+    these clips directly from the .ctr (VehFrame.c reads
+    mh->ptrAnimations[inst->animIndex]), so no runtime change is needed.
+
+    If no recognizable shape keys are present, the exporter falls back
+    to 1-frame clips (all frames = Basis), which is the previous
+    behaviour and keeps the custom testable in-game while the artist
+    hasn't authored any poses yet.
+
+    Pass --static to force the 1-frame fallback even when shape keys
+    are present (useful for debugging).
 
 Per-material double-sided: export_character.py records whether each
 Blender material has Backface Culling disabled (use_backface_culling
@@ -57,11 +73,14 @@ OUT_FILE = argv[2] if len(argv) > 2 else 'tiny.ctr'
 
 PLAYER_SLOT = 0
 SENTINEL_MODE = False
+STATIC_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
     elif a == '--sentinel':
         SENTINEL_MODE = True
+    elif a == '--static':
+        STATIC_MODE = True
 
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
@@ -82,6 +101,16 @@ MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
 SLOT_NAMES       = ['turn', 'reverse', 'bump', 'jump']
+
+# Shape key aliases recognized by the animated-mode auto-detector.
+# Each entry is (target_name_in_script, [accepted Blender shape key names]).
+# The first alias that exists in mesh['keys'] wins.
+ANIM_KEY_ALIASES = {
+    'left':     ['Direction_Gauche', 'Turn_Left', 'TurnLeft', 'Left', 'Steer_L'],
+    'right':    ['Direction_Droite', 'Turn_Right', 'TurnRight', 'Right', 'Steer_R'],
+    'reverse':  ['Regard_Arriere_Droite', 'Reverse', 'Look_Back', 'LookBack'],
+    'compress': ['Compression', 'Compress', 'Squash', 'Bump'],
+}
 
 # Each player slot occupies 128 words of VRAM.
 NATIVE_SLOT_WIDTH = 128
@@ -389,6 +418,98 @@ def prepare_textures(mesh):
     return textures
 
 
+# ---------------------------------------------------------------------------
+# Animated-mode helpers
+# ---------------------------------------------------------------------------
+
+def _find_anim_key(mesh, aliases):
+    """Return the first alias present in mesh['keys'], or None."""
+    keys = mesh.get('keys', {})
+    for name in aliases:
+        if name in keys and name != 'Basis':
+            return name
+    return None
+
+
+def make_clips_from_keys(mesh, records, quantize):
+    """Build multi-frame clips from shape keys (Ziggy convention).
+
+    Returns dict[clip_name] = list[frame], where each frame is a list of
+    quantized (x, y, z) tuples in `records` order, ready to be passed to
+    encode_animation(). Returns None if no recognizable shape keys are
+    present, so the caller can fall back to static 1-frame clips.
+
+    Each clip is built by interpolating between Basis and the matching
+    shape key. Missing keys fall back to Basis (1-frame clip), so a
+    partial set of shape keys still works.
+    """
+    keys = mesh.get('keys', {})
+    if not keys or set(keys.keys()) <= {'Basis'}:
+        return None
+
+    basis = keys['Basis']
+
+    key_left     = _find_anim_key(mesh, ANIM_KEY_ALIASES['left'])
+    key_right    = _find_anim_key(mesh, ANIM_KEY_ALIASES['right'])
+    key_reverse  = _find_anim_key(mesh, ANIM_KEY_ALIASES['reverse'])
+    key_compress = _find_anim_key(mesh, ANIM_KEY_ALIASES['compress'])
+
+    if not any([key_left, key_right, key_reverse, key_compress]):
+        return None
+
+    print(f"Animated mode: detected shape keys -> "
+          f"left={key_left} right={key_right} "
+          f"reverse={key_reverse} compress={key_compress}")
+
+    def morph(target_key, t):
+        """Linearly interpolate Basis -> target_key by t in [0, 1]."""
+        target = keys.get(target_key, basis) if target_key else basis
+        return [[a + (b - a) * t for a, b in zip(p, q)]
+                for p, q in zip(basis, target)]
+
+    def frame_from_pose(pose_pts):
+        return [quantize(pose_pts[vi]) for vi in records]
+
+    clips = {}
+
+    # turn: 21 frames. Frame 10 = Basis (center).
+    # Frames 0..9 morph toward left (frame 0 = full left).
+    # Frames 11..20 morph toward right (frame 20 = full right).
+    turn_frames = []
+    for i in range(21):
+        if i < 10:
+            t = (10 - i) / 10.0
+            pose = morph(key_left, t)
+        elif i == 10:
+            pose = basis
+        else:
+            t = (i - 10) / 10.0
+            pose = morph(key_right, t)
+        turn_frames.append(frame_from_pose(pose))
+    clips['turn'] = turn_frames
+
+    # reverse: 11 frames, Basis -> full reverse.
+    clips['reverse'] = [
+        frame_from_pose(morph(key_reverse, i / 10.0))
+        for i in range(11)
+    ]
+
+    # bump: 15 frames, sine curve compress and recover.
+    clips['bump'] = [
+        frame_from_pose(morph(key_compress,
+                              math.sin(math.pi * i / 14) ** 2))
+        for i in range(15)
+    ]
+
+    # jump: 4 frames, quick compress + ease out.
+    clips['jump'] = [
+        frame_from_pose(morph(key_compress, t))
+        for t in (0.0, 0.85, 0.30, 0.0)
+    ]
+
+    return clips
+
+
 def build():
     mesh = json.loads(SOURCE.read_text())
     mesh = apply_matrix_world(mesh)
@@ -542,8 +663,23 @@ def build():
     for i, layout in enumerate(layouts):
         ptr(texarray + 4 * i, append(layout))
 
-    frame = [quantize(basis[vi]) for vi in records]
-    clips = {name: [frame] for name in SLOT_NAMES}
+    # ---- Clips: auto-detect shape keys, else fall back to 1-frame ----
+    static_frame = [quantize(basis[vi]) for vi in records]
+    clips = None
+    if not STATIC_MODE:
+        clips = make_clips_from_keys(mesh, records, quantize)
+
+    if clips is None:
+        # Previous behaviour: 1-frame clips for every slot. Keeps the
+        # custom testable in-game while the artist hasn't authored any
+        # shape keys. The engine still reads them from the .ctr; the
+        # driver just doesn't visually move.
+        clips = {name: [static_frame] for name in SLOT_NAMES}
+        print("Static mode: 1-frame clips (no recognizable shape keys)")
+    else:
+        print(f"Animated mode: {len(clips)} clips")
+        for name, frames in clips.items():
+            print(f"  {name}: {len(frames)} frames")
 
     animarray = append(bytes(len(clips) * 4))
     ptr(24 + 56, animarray)
