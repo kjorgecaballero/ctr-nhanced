@@ -518,7 +518,14 @@ def build():
 
     def native(p): return (p[0]*64, p[2]*64, -p[1]*64)
 
-    allpts = [native(p) for p in basis]
+    # Range must cover Basis AND every shape key: animated clips deform
+    # vertices outside the Basis bounding box (e.g. head rotation pushes
+    # X negative). If we only used Basis, quantize() would overflow.
+    # Same idea as Ziggy's build_native_model.py, which includes the
+    # pose envelope in the range computation.
+    allpts = []
+    for key_pts in mesh['keys'].values():
+        allpts.extend(native(p) for p in key_pts)
     lo = [min(p[a] for p in allpts) - 1 for a in range(3)]
     hi = [max(p[a] for p in allpts) + 1 for a in range(3)]
     scale  = [math.ceil((hi[a] - lo[a]) * 4096 / 253) for a in range(3)]

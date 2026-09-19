@@ -282,7 +282,6 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 
 		s16 *currCharacterID = &D230.characterSelectPlayerState.currentCharacterID[playerIndex];
 
-		driverInst->animFrame = 0;
 		driverInst->animIndex = 0;
 
 		/* NITROS_OXIDE's race model uses anim 0 = turning. The other 15
@@ -290,6 +289,18 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		 * Oxide so the menu preview shows an idle pose. */
 		if (*currCharacterID == NITROS_OXIDE)
 			driverInst->animIndex = 1;
+
+		/* Custom racers may ship multi-frame clips in their .ctr (e.g.
+		 * our generated 'turn' clip has 21 frames, frame 0 = full left,
+		 * frame 10 = neutral Basis). The retail engine assumes frame 0
+		 * is the idle pose, which holds for originals but breaks for
+		 * multi-frame custom clips. Use the middle frame so the preview
+		 * shows the neutral pose. For originals and 1-frame clips,
+		 * n>>1 == 0 so this is a no-op. */
+		{
+			int n = INSTANCE_GetNumAnimFrames(driverInst, driverInst->animIndex);
+			driverInst->animFrame = n > 0 ? (n >> 1) : 0;
+		}
 
 		s16 _cid = *currCharacterID;
 		struct Model *model;
