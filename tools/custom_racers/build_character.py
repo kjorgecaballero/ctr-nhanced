@@ -2,7 +2,15 @@
 
 Usage:
     python build_character.py <source_mesh.json> <internal_name> <output.ctr>
-                              [--player_slot N] [--sentinel] [--static]
+                              [--player_slot N] [--sentinel] [--static] [--dance]
+
+                              --dance generates a single-clip .ctr for the custom podium dance
+feature (see docs/DANCE_CONTEXT.md). It replaces SLOT_NAMES with
+['dance'] and disables the shape-key fallback, so the output .ctr
+carries exactly one animation clip named 'dance' at index 0 — the
+slot the podium spawns. Requires --sentinel (the dance uses its own
+sentinel_NN.bin side-cars in <slug>/dance/, separate from the
+model's).
 
 The --player_slot argument (0-3) shifts the atlas to the VRAM region that
 the runtime assigns to that player index. The runtime writes the VRM at
@@ -74,6 +82,7 @@ OUT_FILE = argv[2] if len(argv) > 2 else 'tiny.ctr'
 PLAYER_SLOT = 0
 SENTINEL_MODE = False
 STATIC_MODE = False
+DANCE_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
@@ -81,6 +90,8 @@ for i, a in enumerate(argv):
         SENTINEL_MODE = True
     elif a == '--static':
         STATIC_MODE = True
+    elif a == '--dance':
+        DANCE_MODE = True
 
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
@@ -100,7 +111,7 @@ if not OUT_PATH.is_absolute():
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
-SLOT_NAMES       = ['turn', 'reverse', 'bump', 'jump']
+SLOT_NAMES       = ['dance'] if DANCE_MODE else ['turn', 'reverse', 'bump', 'jump']
 
 # Shape key aliases recognized by the animated-mode auto-detector.
 # Each entry is (target_name_in_script, [accepted Blender shape key names]).
@@ -710,7 +721,9 @@ def build():
                 print(f"  {name}: {len(frames)} frames")
 
     # Priority 2: shape keys (Ziggy convention).
-    if clips is None and not STATIC_MODE:
+    # Disabled in --dance mode: the dance carries exactly one clip
+    # ('dance') and shape keys are irrelevant.
+    if clips is None and not STATIC_MODE and not DANCE_MODE:
         clips = make_clips_from_keys(mesh, records, quantize)
 
     if clips is None:

@@ -27,7 +27,14 @@ def _get_blend_mode(mat):
     return value
 
 
-def export_mesh_json(obj, out_path):
+def export_mesh_json(obj, out_path, override_clips=None):
+    """Serialize `obj` to source_mesh.json.
+
+    If `override_clips` is provided, it replaces the clips dict in the
+    output and skips the prefs-driven bake (used by the dance export,
+    which bakes a single 'dance' clip independently of the racer's
+    anim_use_timeline / anim_frame_ranges settings).
+    """
     m = obj.data
     m.calc_loop_triangles()
 
@@ -62,6 +69,15 @@ def export_mesh_json(obj, out_path):
     except Exception:
         pass
 
+    # build_character.py reads mesh['keys']['Basis'] unconditionally.
+    # Meshes without shape keys (e.g. a dance mesh imported as a
+    # standalone object) need a synthetic Basis from the rest pose.
+    if m.shape_keys:
+        keys_dict = {k.name: [list(v.co) for v in k.data]
+                     for k in m.shape_keys.key_blocks}
+    else:
+        keys_dict = {"Basis": [list(v.co) for v in m.vertices]}
+
     result = {
         "source": bpy.data.filepath,
         "source_sha256": src_hash,
@@ -71,23 +87,25 @@ def export_mesh_json(obj, out_path):
                        "corners": corners(t)} for t in m.loop_triangles],
         "materials": materials,
         "images": images,
-        "keys": {k.name: [list(v.co) for v in k.data]
-                 for k in m.shape_keys.key_blocks},
+        "keys": keys_dict,
         "groups": {g.name: {str(v.index): next((a.weight for a in v.groups
                                                 if a.group == g.index), 0)
                             for v in m.vertices} for g in obj.vertex_groups},
     }
 
     # Optional: bake per-frame vertex positions from the timeline.
-    # Guarded so a broken JSON in prefs doesn't kill the export.
-    try:
-        prefs = _get_prefs(bpy.context)
-        if getattr(prefs, "anim_use_timeline", False):
-            ranges = json.loads(getattr(prefs, "anim_frame_ranges", "{}"))
-            if ranges:
-                result["clips"] = _bake_timeline_clips(obj, ranges)
-    except Exception as ex:
-        print(f"[mesh_json] timeline bake skipped: {ex}")
+    if override_clips is not None:
+        result["clips"] = override_clips
+    else:
+        # Guarded so a broken JSON in prefs doesn't kill the export.
+        try:
+            prefs = _get_prefs(bpy.context)
+            if getattr(prefs, "anim_use_timeline", False):
+                ranges = json.loads(getattr(prefs, "anim_frame_ranges", "{}"))
+                if ranges:
+                    result["clips"] = _bake_timeline_clips(obj, ranges)
+        except Exception as ex:
+            print(f"[mesh_json] timeline bake skipped: {ex}")
 
     Path(out_path).write_text(json.dumps(result, separators=(",", ":")),
                               encoding="utf-8")

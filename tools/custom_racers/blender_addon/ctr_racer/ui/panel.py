@@ -37,6 +37,7 @@ class NFR_PT_Racer(Panel):
             (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
              ('MATERIALS', 'Materials')),
             (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
+            (('DANCE', 'Dance'),),
         ):
             row = layout.row(align=True)
             row.scale_y = 1.3
@@ -58,6 +59,8 @@ class NFR_PT_Racer(Panel):
             self._draw_presets(context, layout)
         elif tab == 'ANIM':
             self._draw_anim(context, layout)
+        elif tab == 'DANCE':
+            self._draw_dance(context, layout)
 
     def _draw_settings(self, context, layout):
         obj = context.active_object
@@ -545,6 +548,36 @@ class NFR_PT_Racer(Panel):
         row.operator("nfr.anim_generate_test_shape_keys",
                      text="Generate ShapeKeys",
                      icon="SHAPEKEY_DATA")
+
+
+    def _draw_dance(self, context, layout):
+        st = context.scene.nfr_dance
+
+        layout.label(text="Custom Podium Dance", icon="ARMATURE_DATA")
+        layout.label(text="Bake the active mesh's timeline as a single",
+                     icon="INFO")
+        layout.label(text="'dance' clip and export it to <slug>/dance/.")
+
+        layout.separator()
+
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            layout.label(text="Select the dance mesh first", icon="ERROR")
+        else:
+            layout.label(text=f"Mesh: {obj.name} "
+                              f"({len(obj.data.vertices)} verts)",
+                         icon="MESH_DATA")
+
+        col = layout.column(align=True)
+        col.prop(st, "slug", text="Slug")
+        col.prop(st, "frame_start", text="Start")
+        col.prop(st, "frame_end",   text="End")
+
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.4
+        row.operator("nfr.dance_export",
+                     text="Export Dance.ctr", icon="EXPORT")
 
 
 _classes = (NFR_PT_Racer,)

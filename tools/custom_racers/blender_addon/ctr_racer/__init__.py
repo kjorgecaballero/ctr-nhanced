@@ -16,7 +16,7 @@ bl_info = {
     "category": "Import-Export",
 }
 
-from . import prefs, core, render, slots, export, kart, anim, ui
+from . import prefs, core, render, slots, export, kart, anim, dance, ui
 from .core.icons import _teardown_previews
 
 
@@ -28,12 +28,14 @@ def register():
     export.register()    # export operators
     kart.register()      # kart template importer + Scene.kart_state
     anim.register()      # animation-clip UX (Create Actions, Jump to clip)
+    dance.register()     # custom podium dance export
     ui.register()        # panel
 
 
 def unregister():
     _teardown_previews() 
     ui.unregister()
+    dance.unregister()
     anim.unregister()
     kart.unregister()
     export.unregister()

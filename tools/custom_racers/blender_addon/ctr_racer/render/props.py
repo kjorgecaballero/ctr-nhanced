@@ -60,6 +60,7 @@ def register():
             ('KART',      "Kart",      "Kart template editor"),
             ('PRESETS',   "Presets",   "Apply saved kart presets to racers"),
             ('ANIM',      "Anim",      "Animation clips and timeline markers"),
+            ('DANCE',     "Dance",     "Custom podium dance export"),
         ],
         default='SETTINGS',
     )
