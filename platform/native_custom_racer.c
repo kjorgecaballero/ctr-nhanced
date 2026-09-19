@@ -11,6 +11,14 @@
 #include <platform/native_audio.h>
 #include <ovr_230.h>
 
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+/* Debug-only: force player (driver 0) rank at the podium.
+ * Set by the hotkey in MainFrame_GameLogic, consumed by
+ * NativeDebug_ForcePodium and LoadPodiumDanceModels.
+ * See docs/DEBUG_PODIUM_JUMP.md */
+s32 g_debugForcedPodiumRank = -1;
+#endif
+
 #define NATIVE_ROSTER_MAX   160
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
 #define NATIVE_CTR_MAX_BYTES (256 * 1024)
@@ -875,11 +883,86 @@ static void *LoadDanceModelRaw(int characterID)
     return buf;
 }
 
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+/* Debug-only: jump straight to the podium from mid-race.
+ * Replicates the state PlayLevel_UpdateLapStats sets before calling
+ * MainGameEnd_Initialize:
+ *   - all driver ranks assigned
+ *   - ACTION_RACE_FINISHED set
+ *   - weapons cleared
+ *   - BOTS_Driver_Convert (sets funcThTick, stops running funcPtrs)
+ * Then calls the natural MainGameEnd_Initialize. */
+void NativeDebug_ForcePodium(s32 targetRank)
+{
+    struct GameTracker *gGT = sdata->gGT;
+    if (gGT == NULL) return;
+    if (gGT->level1 == NULL) return;
+    if (gGT->numPlyrCurrGame == 0) return;
+    if (sdata->ptrActiveMenu != NULL) return;
+    if (gGT->gameMode1 & (END_OF_RACE | GAME_CUTSCENE | MAIN_MENU)) return;
+    if (gGT->drivers[0] == NULL) return;
+
+    if (targetRank < 0 || targetRank > 2) targetRank = 0;
+
+    struct Driver *player = gGT->drivers[0];
+
+    /* Player rank = targetRank; others fill 0..7. */
+    s16 nextRank = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL || d == player) continue;
+        if (nextRank == targetRank) nextRank++;
+        d->driverRank = nextRank++;
+    }
+    player->driverRank = (s16)targetRank;
+
+    /* Mark everyone as finished + clear weapons. */
+    for (int i = 0; i < 8; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL) continue;
+        d->actionsFlagSet |= ACTION_RACE_FINISHED;
+        d->heldItemID = HELD_ITEM_NONE;
+    }
+    sdata->numPlayersFinishedRace = 8;
+
+    /* Convert player to robotcar (karts keep "driving"). */
+    BOTS_Driver_Convert(player);
+
+    /* BOTS_Driver_Convert may reset rank to 0 (winner).
+     * Re-apply ranks AFTER the conversion. */
+    nextRank = 0;
+    for (int i = 0; i < 8; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL || d == player) continue;
+        if (nextRank == targetRank) nextRank++;
+        d->driverRank = nextRank++;
+    }
+    player->driverRank = (s16)targetRank;
+
+    /* Now the natural end-of-race. */
+    MainGameEnd_Initialize();
+}
+#endif
+
 void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
 {
     if (s_podiumDanceLoaded)
         return;
     s_podiumDanceLoaded = 1;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+    /* Debug: the rank forcer is overwritten between
+     * MainGameEnd_Initialize and here. Re-apply the player's rank so
+     * the podium loads the dance for the forced rank. */
+    if (g_debugForcedPodiumRank >= 0 && g_debugForcedPodiumRank <= 2 &&
+        gGT->drivers[0] != NULL)
+    {
+        gGT->drivers[0]->driverRank = (s16)g_debugForcedPodiumRank;
+    }
+#endif
 
     for (int i = 0; i < 8; i++)
     {
@@ -888,6 +971,12 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
             continue;
 
         int rank = d->driverRank;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        fprintf(stderr, "[DBG-POD-DANCE] driver=%d rank=%d charID=%d\n",
+                i, rank, data.characterIDs[d->driverID]);
+#endif
+
         if (rank < 0 || rank > 2)
             continue;
 

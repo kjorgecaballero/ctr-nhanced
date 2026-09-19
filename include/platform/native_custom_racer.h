@@ -216,6 +216,16 @@ int NativeCustomRacer_HasWheels(int characterID);
  * Returns 1 if a custom voice was played. */
 int NativeCustomRacer_PlayVoice(int characterID, int voiceSetIndex);
 
+/* === Debug-only podium jump ============================================
+ * Set via hotkey in MainFrame_GameLogic (CTR_DEBUG_PODIUM_JUMP only).
+ * -1 = off, 0/1/2 = 1st/2nd/3rd. Consumed by NativeDebug_ForcePodium
+ * and LoadPodiumDanceModels.
+ * See docs/DEBUG_PODIUM_JUMP.md */
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+extern s32 g_debugForcedPodiumRank;
+void NativeDebug_ForcePodium(s32 targetRank);
+#endif
+
 /* Wrapper for Voiceline_RequestPlay call sites. Originals map to their
  * grid enum (retail path); customs (>= NATIVE_CUSTOM_ID_BASE) pass
  * through raw so the custom voice table is used. */

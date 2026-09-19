@@ -1,4 +1,6 @@
 #include <common.h>
+#include <stdio.h>
+#include <platform/native_custom_racer.h>
 
 #if defined(CTR_NATIVE)
 static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
@@ -129,6 +131,28 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 	struct PushBuffer *pushBuffer;
 	int iVar11;
 	struct Thread *psVar12;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+	/* Debug: jump straight to the podium from mid-race.
+	 * START             -> 1st place
+	 * L1 + START        -> 2nd place
+	 * L1 + R1 + START   -> 3rd place
+	 * See docs/DEBUG_PODIUM_JUMP.md */
+	{
+		struct GamepadBuffer *dbgPad = &sdata->gGamepads->gamepad[0];
+		if (dbgPad->buttonsTapped & BTN_START)
+		{
+			u32 held = (u32)dbgPad->buttonsHeldCurrFrame;
+			s32 rank = 0;
+			if ((held & (BTN_L1 | BTN_R1)) == (BTN_L1 | BTN_R1)) rank = 2;
+			else if (held & BTN_L1)                             rank = 1;
+
+			g_debugForcedPodiumRank = rank;
+			fprintf(stderr, "[DBG-PODIUM] jump rank=%d\n", rank);
+			NativeDebug_ForcePodium(rank);
+		}
+	}
+#endif
 
 	wasPausedAtFrameStart = true;
 	if ((gGT->gameMode1 & PAUSE_ALL) == 0)
