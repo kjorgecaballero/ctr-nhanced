@@ -105,11 +105,14 @@ SLOT_NAMES       = ['turn', 'reverse', 'bump', 'jump']
 # Shape key aliases recognized by the animated-mode auto-detector.
 # Each entry is (target_name_in_script, [accepted Blender shape key names]).
 # The first alias that exists in mesh['keys'] wins.
+#
+# English names. The old French aliases (Direction_Gauche, etc.) were
+# dropped; rename shape keys in the .blend if they still use those.
 ANIM_KEY_ALIASES = {
-    'left':     ['Direction_Gauche', 'Turn_Left', 'TurnLeft', 'Left', 'Steer_L'],
-    'right':    ['Direction_Droite', 'Turn_Right', 'TurnRight', 'Right', 'Steer_R'],
-    'reverse':  ['Regard_Arriere_Droite', 'Reverse', 'Look_Back', 'LookBack'],
-    'compress': ['Compression', 'Compress', 'Squash', 'Bump'],
+    'left':     ['Turn_Left', 'TurnLeft', 'Left', 'Steer_L', 'Direction_Left'],
+    'right':    ['Turn_Right', 'TurnRight', 'Right', 'Steer_R', 'Direction_Right'],
+    'reverse':  ['Reverse', 'Look_Back', 'LookBack', 'Look_Back_Right'],
+    'compress': ['Compress', 'Compression', 'Squash', 'Bump'],
 }
 
 # Each player slot occupies 128 words of VRAM.

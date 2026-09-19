@@ -14,6 +14,14 @@ from bpy.types import AddonPreferences
 from .constants import ADDON_ID, DEFAULT_REPO, DEFAULT_PYTHON
 
 
+# Default JSON for the animation clip frame ranges. Shared by
+# NFR_Preferences.anim_frame_ranges and NFR_OT_ResetAnimRanges.
+DEFAULT_ANIM_FRAME_RANGES = (
+    '{"turn": [0, 22], "reverse": [23, 35], '
+    '"bump": [36, 53], "jump": [54, 59]}'
+)
+
+
 class NFR_Preferences(AddonPreferences):
     bl_idname = ADDON_ID
 
@@ -57,8 +65,7 @@ class NFR_Preferences(AddonPreferences):
         description="JSON mapping clip name -> [start, end] frame in the "
                     "current scene. Recognized clips: turn, reverse, bump, "
                     'jump. Example: {"turn": [0, 22], "reverse": [23, 35]}',
-        default='{"turn": [0, 22], "reverse": [23, 35], '
-                '"bump": [36, 53], "jump": [54, 59]}')
+        default=DEFAULT_ANIM_FRAME_RANGES)
 
     def racers_dir(self):
         return Path(self.repo_path) / "assets" / "mods" / "racers"
@@ -88,6 +95,9 @@ class NFR_Preferences(AddonPreferences):
         layout.label(text="Animation:")
         layout.prop(self, "anim_use_timeline")
         layout.prop(self, "anim_frame_ranges")
+        layout.operator("nfr.anim_reset_ranges",
+                        text="Reset frame ranges to defaults",
+                        icon="LOOP_BACK")
         layout.separator()
         layout.label(text="Export target (derived from Repo Path):", icon="INFO")
         layout.label(text=str(self.racers_dir()))

@@ -59,6 +59,7 @@ def register():
             ('MATERIALS', "Materials", "Per-material render settings"),
             ('KART',      "Kart",      "Kart template editor"),
             ('PRESETS',   "Presets",   "Apply saved kart presets to racers"),
+            ('ANIM',      "Anim",      "Animation clips and timeline markers"),
         ],
         default='SETTINGS',
     )

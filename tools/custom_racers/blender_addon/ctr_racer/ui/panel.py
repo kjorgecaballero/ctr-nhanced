@@ -1,11 +1,7 @@
 # =========================================================================
 # MODULE: ui — panel
 # =========================================================================
-"""NFR_PT_Racer: the single unified panel with sub-tabs.
-
-Dispatches to one of five draw methods based on scene.nfr_ui_tab.
-Pure UI: no persistent state, no operators owned here.
-"""
+"""NFR_PT_Racer: the single unified panel with sub-tabs."""
 import bpy
 from pathlib import Path
 from bpy.types import Panel
@@ -23,6 +19,7 @@ from ..core.validate import validate_racer
 from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
 from ..kart.presets import scan_presets
+from ..anim.state import request_sync_from_prefs
 
 
 class NFR_PT_Racer(Panel):
@@ -32,17 +29,19 @@ class NFR_PT_Racer(Panel):
     bl_region_type = "UI"
     bl_category = "Racer"
 
-    # ---------------------------------------------------------------------
-    # Dispatch based on scene.nfr_ui_tab
-    # ---------------------------------------------------------------------
     def draw(self, context):
         layout = self.layout
         scene = context.scene
 
-        # Sub-tab selector — full-width segmented buttons
-        row = layout.row(align=True)
-        row.scale_y = 1.4
-        row.prop(scene, "nfr_ui_tab", expand=True)
+        for row_items in (
+            (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
+             ('MATERIALS', 'Materials')),
+            (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
+        ):
+            row = layout.row(align=True)
+            row.scale_y = 1.3
+            for tab_id, label in row_items:
+                row.prop_enum(scene, "nfr_ui_tab", tab_id, text=label)
 
         layout.separator()
 
@@ -57,10 +56,9 @@ class NFR_PT_Racer(Panel):
             self._draw_kart(context, layout)
         elif tab == 'PRESETS':
             self._draw_presets(context, layout)
+        elif tab == 'ANIM':
+            self._draw_anim(context, layout)
 
-    # ---------------------------------------------------------------------
-    # SETTINGS tab
-    # ---------------------------------------------------------------------
     def _draw_settings(self, context, layout):
         obj = context.active_object
         if obj is None or obj.type != "MESH":
@@ -69,12 +67,10 @@ class NFR_PT_Racer(Panel):
 
         r = obj.racer
 
-        # -------- Row: Is Racer checkbox + Validate icon --------
         row = layout.row(align=True)
         row.prop(r, "is_racer")
 
         if r.is_racer:
-            # Small inline validate button (icon only). Turns red if invalid.
             try:
                 ok, _warns, _errs = validate_racer(obj)
             except Exception:
@@ -118,14 +114,6 @@ class NFR_PT_Racer(Panel):
         color_row.prop(r, "color", text="")
         col.prop(r, "icon_path")
 
-        # -------- Export behavior (mirror of the prefs toggle) --------
-        layout.separator()
-        prefs = _get_prefs(context)
-        box = layout.box()
-        box.label(text="Export behavior", icon="PREFERENCES")
-        box.prop(prefs, "sentinel_models")
-
-        # -------- Dev Tools --------
         layout.separator()
         layout.label(text="Dev Tools:", icon="TOOL_SETTINGS")
 
@@ -150,9 +138,6 @@ class NFR_PT_Racer(Panel):
             layout.label(text="Script mode — edit DEFAULT_REPO", icon="INFO")
             layout.label(text=f"repo: {DEFAULT_REPO}")
 
-    # ---------------------------------------------------------------------
-    # SLOTS tab
-    # ---------------------------------------------------------------------
     def _draw_slots(self, context, layout):
         prefs = _get_prefs(context)
         active_racer = _active_racer(context)
@@ -167,8 +152,6 @@ class NFR_PT_Racer(Panel):
         row.scale_y = 1.2
         row.operator("nfr.slot_refresh", text="Refresh", icon="FILE_REFRESH")
         assign_row = row.row(align=True)
-        # Disable "Assign Here" if the selected slot is a page-0 original
-        # (slots 0-15 are reserved by the engine and cannot be reassigned).
         is_original_sel = (state._slot_sel_page == 0
                            and 0 <= state._slot_sel_slot < 16)
         assign_row.enabled = (state._slot_sel_page == state._slot_view_page
@@ -192,10 +175,6 @@ class NFR_PT_Racer(Panel):
             row_major=True, columns=6,
             even_columns=True, even_rows=True, align=True)
 
-        # Mirror the in-game page-0 grid: slot 16 is the leftmost cell of
-        # row 3 and slot 17 the rightmost, with slots 12-15 in between.
-        # Rows 1-2 keep their natural order. This is a DISPLAY order — the
-        # click handler still reports the real slot number.
         DISPLAY_ORDER = [
             0, 1, 2, 3, 4, 5,
             6, 7, 8, 9, 10, 11,
@@ -205,9 +184,6 @@ class NFR_PT_Racer(Panel):
         for slot in DISPLAY_ORDER:
             kind, data = cells[slot]
 
-            # Engine originals on page 0, slots 0-15: draw like a normal
-            # cell with the bundled icon. The cell is still clickable (to
-            # inspect it), but "Assign Here" is gated off above.
             if kind == "original":
                 icon = _get_original_icon(data["icon_file"])
                 if icon is not None:
@@ -298,9 +274,6 @@ class NFR_PT_Racer(Panel):
             op.page = state._slot_sel_page
             op.slot = state._slot_sel_slot
 
-    # ---------------------------------------------------------------------
-    # MATERIALS tab
-    # ---------------------------------------------------------------------
     def _draw_materials(self, context, layout):
         scene = context.scene
         obj = context.active_object
@@ -310,7 +283,6 @@ class NFR_PT_Racer(Panel):
 
         m = obj.data
 
-        # -------- Render ON/OFF (top of tab) --------
         top = layout.row(align=True)
         top.scale_y = 1.4
         toggle_icon = 'RADIOBUT_ON' if scene.nfr_ps1_render_state else 'RADIOBUT_OFF'
@@ -338,7 +310,6 @@ class NFR_PT_Racer(Panel):
         if state._mat_view_page > total_pages:
             state._mat_view_page = total_pages
 
-        # -------- Pagination (only if more than one page) --------
         if total_pages > 1:
             row = layout.row(align=True)
             sub_left = row.row(align=True)
@@ -356,7 +327,6 @@ class NFR_PT_Racer(Panel):
         end = min(start + MAX_MATS_PER_PAGE, total)
         page_mats = mats[start:end]
 
-        # -------- Per material --------
         for mat in page_mats:
             stored = mat.get("blend_mode", "half")
             if stored not in _BLEND_MODE_SET:
@@ -373,7 +343,6 @@ class NFR_PT_Racer(Panel):
                         img = n.image
                         break
 
-            # Row 1: thumb | info | eye | apply
             row = box.row(align=True)
 
             icon_id = _image_preview_icon_id(img)
@@ -405,13 +374,9 @@ class NFR_PT_Racer(Panel):
             )
             apply_op.material_name = mat.name
 
-            # Row 2: blend mode dropdown
             drop = box.row(align=True)
             drop.prop(mat, "nfr_racer_blend_mode", text="")
 
-    # ---------------------------------------------------------------------
-    # KART tab
-    # ---------------------------------------------------------------------
     def _draw_kart(self, context, layout):
         st = context.scene.kart_state
         prefs = _get_prefs(context)
@@ -446,7 +411,6 @@ class NFR_PT_Racer(Panel):
             split.label(text=z.display_name)
             split.prop(z, "color", text="")
 
-        # -------- Bake & Export --------
         layout.separator()
         layout.label(text="Save Preset:", icon="FILE_TICK")
         layout.prop(st, "preset_name", text="")
@@ -466,9 +430,6 @@ class NFR_PT_Racer(Panel):
         bake_row.operator("nfr.kart_bake_and_export",
                           text="Bake & Export", icon="RENDER_STILL")
 
-    # ---------------------------------------------------------------------
-    # PRESETS tab
-    # ---------------------------------------------------------------------
     def _draw_presets(self, context, layout):
         prefs = _get_prefs(context)
         st = context.scene.kart_state
@@ -487,12 +448,10 @@ class NFR_PT_Racer(Panel):
             warn.label(text=root_str)
             return
 
-        # Header row
         row = layout.row(align=True)
         row.label(text="Preset Browser", icon="FILE_FOLDER")
         row.operator("nfr.kart_open_presets_folder", text="", icon="FILEBROWSER")
 
-        # Target info
         obj = context.active_object
         can_apply = (obj is not None and obj.type == 'MESH'
                      and obj.racer.is_racer)
@@ -503,14 +462,12 @@ class NFR_PT_Racer(Panel):
             layout.label(text="Select a racer mesh to enable Apply",
                          icon="INFO")
 
-        # Filter row: Kart / Gold / Silver
         layout.separator()
         filter_row = layout.row(align=True)
         filter_row.scale_y = 1.3
         filter_row.prop(st, "preset_filter", expand=True)
         layout.separator()
 
-        # Pick the current variant's items
         filter_to_dir = {'KART': 'kart', 'GOLD': 'gold', 'SILVER': 'silver'}
         variant_dir = filter_to_dir.get(st.preset_filter, 'kart')
         all_presets = scan_presets(root)
@@ -521,7 +478,6 @@ class NFR_PT_Racer(Panel):
                          icon="INFO")
             return
 
-        # Pagination
         total = len(items)
         total_pages = max(1, (total + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
         if st.preset_page < 1:
@@ -561,6 +517,34 @@ class NFR_PT_Racer(Panel):
             op = sub.operator("nfr.kart_apply_preset",
                               text="Apply", icon="CHECKMARK")
             op.preset_dir = str(path)
+
+    def _draw_anim(self, context, layout):
+        scene = context.scene
+        st = scene.nfr_anim
+
+        request_sync_from_prefs(scene)
+
+        layout.label(text="Animation clips", icon="ACTION")
+
+        clip = st.selected_clip
+
+        row = layout.row(align=True)
+        row.scale_y = 1.4
+        row.prop(st, "selected_clip", text="")
+        row.prop(st, f"{clip}_start", text="Start:")
+        row.prop(st, f"{clip}_end", text="End:")
+        row.operator("nfr.anim_jump_to_clip", text="", icon="PLAY")
+        row.operator("nfr.anim_toggle_markers", text="", icon="MARKER")
+
+        # Test setup (both on one row)
+        layout.separator()
+        row = layout.row(align=True)
+        row.operator("nfr.anim_mark_kart",
+                     text="Mark Kart",
+                     icon="GROUP_VERTEX")
+        row.operator("nfr.anim_generate_test_shape_keys",
+                     text="Generate ShapeKeys",
+                     icon="SHAPEKEY_DATA")
 
 
 _classes = (NFR_PT_Racer,)
