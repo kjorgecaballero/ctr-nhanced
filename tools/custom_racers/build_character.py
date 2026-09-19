@@ -669,7 +669,8 @@ def build():
           f"ds_faces={ds_faces}/{len(faces)}")
     assert len(palettes) <= 128
     assert len(layouts) <= 511
-    assert len(records) <= 256
+    print(f"[DEBUG] len(records) = {len(records)}", flush=True)
+    assert len(records) <= 65536
 
     data = bytearray(88); patches = [20]
     data[0:16] = name16(MODEL_NAME)
@@ -756,8 +757,8 @@ def build():
         stats.append({'slot': index, 'name': name, **info})
 
     while len(data) % 4: data.append(0)
-    print(f"model size: {len(data)} bytes")
-    assert len(data) < 0x10000
+    print(f"model size: {len(data)} bytes ({len(data)/1024:.1f} KB)")
+    assert len(data) < 0x400000   # 4 MB — offsets del header son u32; solo para detectar runaway
 
     blob = pack_container(data, patches)
     OUT_PATH.write_bytes(blob)

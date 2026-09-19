@@ -21,7 +21,7 @@ s32 g_debugForcedPodiumRank = -1;
 
 #define NATIVE_ROSTER_MAX   160
 #define NATIVE_VRM_MAX_BYTES (256 * 1024)
-#define NATIVE_CTR_MAX_BYTES (256 * 1024)
+#define NATIVE_CTR_MAX_BYTES (2 * 1024 * 1024)   /* 2 MB — dance con muchos frames supera 256 KB */
 
 /* === Sentinel model textures =========================================
  * Build_character.py --sentinel emits one BIN per unique texture in the
@@ -826,9 +826,15 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
 }
 
 /* === Custom podium dance ==============================================
- * One dance.ctr per racer. Same .ctr format as model_pN.ctr.
- * Loaded once per race, right before CS_Podium spawns the podium
- * threads. See native_custom_racer.h for rationale. */
+ * Two dance variants per racer, same mesh + same materials + same
+ * Sentinel textures, different timelines:
+ *   - dance_win.ctr    : rank 0    (1st place)
+ *   - dance_loose.ctr  : rank 1, 2 (2nd/3rd place)
+ * Fallback: if the specific variant does not exist, dance.ctr is used.
+ * The sentinel_NN.bin side-cars are SHARED between the two variants
+ * (same mesh = same localIdx mapping), so s_danceSentinelTexMap is
+ * populated once and reused on the second load. Loaded once per race,
+ * right before CS_Podium spawns the podium threads. */
 static int s_podiumDanceLoaded = 0;
 
 void NativeCustomRacer_ResetPodiumDance(void)
@@ -836,38 +842,81 @@ void NativeCustomRacer_ResetPodiumDance(void)
     s_podiumDanceLoaded = 0;
 }
 
-int NativeCustomRacer_HasDanceModel(int characterID)
+int NativeCustomRacer_ResolveDancePath(int characterID, int isWin,
+                                       char *out, size_t out_sz)
 {
     const char *folder = NativeCustomRacer_GetFolder(characterID);
     if (!folder)
         return 0;
 
-    char path[256];
-    snprintf(path, sizeof(path),
-             "assets/mods/racers/%s/dance/dance.ctr", folder);
+    /* 1. Variant-specific path. */
+    snprintf(out, out_sz,
+             "assets/mods/racers/%s/dance/dance_%s.ctr",
+             folder, isWin ? "win" : "loose");
+    FILE *f = fopen(out, "rb");
+    if (f)
+    {
+        fclose(f);
+        return 1;
+    }
 
-    FILE *f = fopen(path, "rb");
-    if (!f)
-        return 0;
-    fclose(f);
-    return 1;
+    /* 2. Fallback: legacy single dance.ctr. */
+    snprintf(out, out_sz,
+             "assets/mods/racers/%s/dance/dance.ctr", folder);
+    f = fopen(out, "rb");
+    if (f)
+    {
+        fclose(f);
+        return 1;
+    }
+
+    return 0;
 }
 
-static void *LoadDanceModelRaw(int characterID)
+sstatic void *LoadDanceModelRaw(int characterID, const char *path)
 {
-    const char *folder = NativeCustomRacer_GetFolder(characterID);
-    if (!folder)
+    /* Diagnose before loading: "not found" vs "too large" need
+     * different fixes and LoadFileToMemory conflates them. */
+    FILE *probe = fopen(path, "rb");
+    if (!probe)
+    {
+        Log("[CustomRacer] dance.ctr not found: %s\n", path);
         return NULL;
+    }
+    fseek(probe, 0, SEEK_END);
+    long file_sz = ftell(probe);
+    fclose(probe);
 
-    char path[256];
-    snprintf(path, sizeof(path),
-             "assets/mods/racers/%s/dance/dance.ctr", folder);
+    if (file_sz > NATIVE_CTR_MAX_BYTES)
+    {
+        Log("[CustomRacer] dance.ctr too large: %s (%ld bytes, max %ld)\n",
+            path, file_sz, (long)NATIVE_CTR_MAX_BYTES);
+        return NULL;
+    }
 
     long sz = 0;
     unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
     if (!buf)
     {
-        Log("[CustomRacer] dance.ctr not found: %s\n", path);
+        Log("[CustomRacer] dance.ctr load failed: %s\n", path);
+        return NULL;
+    }
+    }
+    fseek(probe, 0, SEEK_END);
+    long file_sz = ftell(probe);
+    fclose(probe);
+
+    if (file_sz > NATIVE_CTR_MAX_BYTES)
+    {
+        Log("[CustomRacer] dance.ctr too large: %s (%ld bytes, max %ld)\n",
+            path, file_sz, (long)NATIVE_CTR_MAX_BYTES);
+        return NULL;
+    }
+
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] dance.ctr load failed: %s\n", path);
         return NULL;
     }
 
@@ -983,10 +1032,15 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
         u8 charID = data.characterIDs[d->driverID];
         if (charID < NATIVE_CUSTOM_ID_BASE)
             continue;
-        if (!NativeCustomRacer_HasDanceModel(charID))
+
+        /* rank 0 = win, rank 1-2 = loose. */
+        int isWin = (rank == 0);
+        char path[256];
+        if (!NativeCustomRacer_ResolveDancePath(charID, isWin,
+                                                path, sizeof(path)))
             continue;
 
-        void *buf = LoadDanceModelRaw(charID);
+        void *buf = LoadDanceModelRaw(charID, path);
         if (buf == NULL)
             continue;
 

@@ -549,14 +549,13 @@ class NFR_PT_Racer(Panel):
                      text="Generate ShapeKeys",
                      icon="SHAPEKEY_DATA")
 
-
     def _draw_dance(self, context, layout):
         st = context.scene.nfr_dance
 
         layout.label(text="Custom Podium Dance", icon="ARMATURE_DATA")
-        layout.label(text="Bake the active mesh's timeline as a single",
+        layout.label(text="Same mesh, two timelines: Win (rank 0) and",
                      icon="INFO")
-        layout.label(text="'dance' clip and export it to <slug>/dance/.")
+        layout.label(text="Loose (rank 1-2). Shared Sentinel textures.")
 
         layout.separator()
 
@@ -570,14 +569,36 @@ class NFR_PT_Racer(Panel):
 
         col = layout.column(align=True)
         col.prop(st, "slug", text="Slug")
-        col.prop(st, "frame_start", text="Start")
-        col.prop(st, "frame_end",   text="End")
 
+        # --- Win (rank 0) ---
+        layout.separator()
+        win_box = layout.box()
+        win_box.label(text="Win (rank 0)", icon="TRIA_RIGHT")
+        row = win_box.row(align=True)
+        row.prop(st, "win_start", text="Start")
+        row.prop(st, "win_end",   text="End")
+
+        # --- Loose (rank 1-2) ---
+        loose_box = layout.box()
+        loose_box.label(text="Loose (rank 1-2)", icon="TRIA_RIGHT")
+        row = loose_box.row(align=True)
+        row.prop(st, "loose_start", text="Start")
+        row.prop(st, "loose_end",   text="End")
+
+        # --- Actions ---
         layout.separator()
         row = layout.row(align=True)
+        row.scale_y = 1.3
+        op = row.operator("nfr.dance_export", text="Export Win", icon="EXPORT")
+        op.variant = 'WIN'
+        op = row.operator("nfr.dance_export", text="Export Loose")
+        op.variant = 'LOOSE'
+
+        row = layout.row(align=True)
         row.scale_y = 1.4
-        row.operator("nfr.dance_export",
-                     text="Export Dance.ctr", icon="EXPORT")
+        op = row.operator("nfr.dance_export",
+                          text="Export Both", icon="DUPLICATE")
+        op.variant = 'BOTH'
 
 
 _classes = (NFR_PT_Racer,)

@@ -5,8 +5,13 @@
 
 Owns NFR_DanceState (Scene.nfr_dance):
   - slug        : racer folder name the dance belongs to
-  - frame_start : first frame of the dance animation
-  - frame_end   : last frame of the dance animation
+  - win_start   : first frame of the win (rank 0) dance animation
+  - win_end     : last  frame of the win dance animation
+  - loose_start : first frame of the loose (rank 1-2) dance animation
+  - loose_end   : last  frame of the loose dance animation
+
+Both variants share the same mesh, materials and Sentinel textures.
+Only the timeline (frame range) and the output filename change.
 """
 import bpy
 from bpy.props import IntProperty, StringProperty
@@ -19,13 +24,25 @@ class NFR_DanceState(PropertyGroup):
         description="Folder name of the racer this dance belongs to",
         default="",
     )
-    frame_start: IntProperty(
-        name="Start", min=0, default=0,
-        description="First frame of the dance animation",
+
+    # Rank 0 / 1st place
+    win_start: IntProperty(
+        name="Win Start", min=0, default=0,
+        description="First frame of the win (rank 0) dance animation",
     )
-    frame_end: IntProperty(
-        name="End", min=0, default=59,
-        description="Last frame of the dance animation",
+    win_end: IntProperty(
+        name="Win End", min=0, default=45,
+        description="Last frame of the win (rank 0) dance animation",
+    )
+
+    # Ranks 1-2 / 2nd-3rd place
+    loose_start: IntProperty(
+        name="Loose Start", min=0, default=46,
+        description="First frame of the loose (rank 1-2) dance animation",
+    )
+    loose_end: IntProperty(
+        name="Loose End", min=0, default=90,
+        description="Last frame of the loose (rank 1-2) dance animation",
     )
 
 
