@@ -17,14 +17,30 @@
 
 /* === Sentinel model textures =========================================
  * Build_character.py --sentinel emits one BIN per unique texture in the
- * racer's folder (sentinel_NN.bin). Each model material's TextureLayout
+ * racer's folder (sentinel_NN.bin). Each material's TextureLayout
  * carries clut = 0x8000 | localIdx. On first load of a custom we upload
  * the RGBA data as a GL texture and rewrite the layout's clut to
  * 0x8000 | globalIdx so AddSplit routes it through the Sentinel path.
- * The icon range (0..161) and the model range (256..) never overlap. */
+ * The icon range (0..161) and the model range (256..) never overlap.
+ *
+ * Two kinds of .ctr use this path:
+ *   - model_pN.ctr    -> <slug>/sentinel_NN.bin          (kind MODEL)
+ *   - dance/dance.ctr -> <slug>/dance/sentinel_NN.bin    (kind DANCE)
+ * Each kind has its own localIdx cache (s_sentinelTexMap and
+ * s_danceSentinelTexMap), so a dance with different textures than its
+ * model does not collide with the model's cache. The GL texture
+ * allocator (s_nextModelTexIdx) is shared — both kinds upload into the
+ * 256..2047 pool and never free; that's fine for a session. */
 #define NATIVE_MODEL_TEX_BASE  256
 #define NATIVE_MODEL_TEX_END   2048
 #define NATIVE_MODEL_TEX_MAX   256    /* max localIdx per custom */
+
+/* Selects which .ctr is being processed: on-disk subfolder, probe path,
+ * and cache array used by RegisterModelTextures. */
+enum {
+    NATIVE_SENTINEL_KIND_MODEL = 0,
+    NATIVE_SENTINEL_KIND_DANCE = 1,
+};
 
 /* Width in VRAM words assigned to each player slot. */
 #define NATIVE_SLOT_WIDTH 128
@@ -147,10 +163,14 @@ static long            s_menuVrmSize[NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLO
 #define NATIVE_PLAYER_MODEL_SLOTS 8
 static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
 
-/* Sentinel model texture allocator (see NATIVE_MODEL_TEX_BASE above).
- * Monotonic: customs are cached and never freed, so no freelist. */
+/* Sentinel texture allocator (see NATIVE_MODEL_TEX_BASE above).
+ * Monotonic: textures are cached and never freed, so no freelist.
+ * The allocator is shared between MODEL and DANCE kinds; the per-kind
+ * localIdx caches (below) are separate so a dance's textures do not
+ * alias the model's. */
 static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
-static s16 s_sentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_sentinelTexMap     [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 
 /* Custom voicelines table (see NativeCustomRacer_PlayVoice). */
 #define NATIVE_VOICE_SET_COUNT    11
@@ -325,6 +345,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
+    memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_customVoices, 0, sizeof(s_customVoices));
     s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
@@ -690,7 +711,7 @@ static GLuint LoadSentinelBin(const char *path, int *outW, int *outH)
     return tex;
 }
 
-static void RegisterModelTextures(int characterID, unsigned char *data)
+static void RegisterModelTextures(int characterID, unsigned char *data, int kind)
 {
     int charIdx = characterID - NATIVE_CUSTOM_ID_BASE;
     if (charIdx < 0 || charIdx >= NATIVE_CUSTOM_COUNT)
@@ -700,10 +721,18 @@ static void RegisterModelTextures(int characterID, unsigned char *data)
     if (folder == NULL)
         return;
 
-    /* Probe: sentinel_00.bin must exist, otherwise this is a VRM model. */
+    /* On-disk subfolder + cache array + log tag depend on the kind. */
+    const char *subdir    = (kind == NATIVE_SENTINEL_KIND_DANCE) ? "dance/" : "";
+    const char *kind_name = (kind == NATIVE_SENTINEL_KIND_DANCE) ? "dance" : "model";
+    s16 (*cache)[NATIVE_MODEL_TEX_MAX] =
+        (kind == NATIVE_SENTINEL_KIND_DANCE)
+            ? s_danceSentinelTexMap
+            : s_sentinelTexMap;
+
+    /* Probe: sentinel_00.bin must exist, otherwise this is not Sentinel. */
     char probe[256];
     snprintf(probe, sizeof(probe),
-             "assets/mods/racers/%s/sentinel_00.bin", folder);
+             "assets/mods/racers/%s/%ssentinel_00.bin", folder, subdir);
     FILE *pf = fopen(probe, "rb");
     if (!pf)
         return;
@@ -745,7 +774,7 @@ static void RegisterModelTextures(int characterID, unsigned char *data)
         if (localIdx >= NATIVE_MODEL_TEX_MAX)
             continue;
 
-        s16 cached = s_sentinelTexMap[charIdx][localIdx];
+        s16 cached = cache[charIdx][localIdx];
         int globalIdx;
         if (cached >= 0)
         {
@@ -756,30 +785,31 @@ static void RegisterModelTextures(int characterID, unsigned char *data)
             globalIdx = AllocModelTexIdx();
             if (globalIdx < 0)
             {
-                Log("[CustomRacer] model tex pool full (max=%d)\n",
+                Log("[CustomRacer] custom tex pool full (max=%d)\n",
                     NATIVE_MODEL_TEX_END);
                 return;
             }
 
             char path[256];
             snprintf(path, sizeof(path),
-                     "assets/mods/racers/%s/sentinel_%02d.bin",
-                     folder, localIdx);
+                     "assets/mods/racers/%s/%ssentinel_%02d.bin",
+                     folder, subdir, localIdx);
 
             int w = 0, h = 0;
             GLuint tex = LoadSentinelBin(path, &w, &h);
             if (tex == 0)
             {
-                Log("[CustomRacer] sentinel load failed: %s\n", path);
+                Log("[CustomRacer] sentinel load failed (%s): %s\n",
+                    kind_name, path);
                 s_nextModelTexIdx--;  /* rollback */
                 continue;
             }
 
             NativeGpu_RegisterCustomTexture((u16)globalIdx,
                                             (TextureID)tex, w, h);
-            s_sentinelTexMap[charIdx][localIdx] = (s16)globalIdx;
-            Log("[CustomRacer] sentinel tex: charID=%d local=%d global=%d %dx%d\n",
-                characterID, localIdx, globalIdx, w, h);
+            cache[charIdx][localIdx] = (s16)globalIdx;
+            Log("[CustomRacer] sentinel tex (%s): charID=%d local=%d global=%d %dx%d\n",
+                kind_name, characterID, localIdx, globalIdx, w, h);
         }
 
         u16 newClut = (u16)(0x8000 | globalIdx);
@@ -805,7 +835,8 @@ int NativeCustomRacer_HasDanceModel(int characterID)
         return 0;
 
     char path[256];
-    snprintf(path, sizeof(path), "assets/mods/racers/%s/dance.ctr", folder);
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/dance/dance.ctr", folder);
 
     FILE *f = fopen(path, "rb");
     if (!f)
@@ -821,7 +852,8 @@ static void *LoadDanceModelRaw(int characterID)
         return NULL;
 
     char path[256];
-    snprintf(path, sizeof(path), "assets/mods/racers/%s/dance.ctr", folder);
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/dance/dance.ctr", folder);
 
     long sz = 0;
     unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
@@ -834,11 +866,10 @@ static void *LoadDanceModelRaw(int characterID)
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
 
-    /* Reuse the racer's Sentinel texture cache. The dance model shares
-     * the same sentinel_NN.bin files as model_pN.ctr (v1 assumption:
-     * dance reuses the racer's textures). If a future dance model has
-     * its own textures, split the cache per-model. */
-    RegisterModelTextures(characterID, buf + 4);
+    /* Dance has its own Sentinel cache (kind = DANCE). Its textures
+     * live in <slug>/dance/sentinel_NN.bin, independent from the
+     * model's <slug>/sentinel_NN.bin. See RegisterModelTextures. */
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_DANCE);
 
     Log("[CustomRacer] dance.ctr loaded: %s (%ld bytes)\n", path, sz);
     return buf;
@@ -974,7 +1005,7 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
     ExpandModelHeaders(buf, sz);
 
     /* Register Sentinel model textures (no-op for VRM models). */
-    RegisterModelTextures(characterID, buf + 4);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MODEL);
 
     Log("[CustomRacer] model_p%d.ctr loaded: %s (player %d, %ld bytes)\n",
         playerIndex, path, playerIndex, sz);
