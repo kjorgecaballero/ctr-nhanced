@@ -78,6 +78,17 @@ def export_mesh_json(obj, out_path):
                             for v in m.vertices} for g in obj.vertex_groups},
     }
 
+    # Optional: bake per-frame vertex positions from the timeline.
+    # Guarded so a broken JSON in prefs doesn't kill the export.
+    try:
+        prefs = _get_prefs(bpy.context)
+        if getattr(prefs, "anim_use_timeline", False):
+            ranges = json.loads(getattr(prefs, "anim_frame_ranges", "{}"))
+            if ranges:
+                result["clips"] = _bake_timeline_clips(obj, ranges)
+    except Exception as ex:
+        print(f"[mesh_json] timeline bake skipped: {ex}")
+
     Path(out_path).write_text(json.dumps(result, separators=(",", ":")),
                               encoding="utf-8")
 
@@ -160,3 +171,36 @@ def _racer_objects(context):
         return sel
     return [o for o in bpy.data.objects
             if o.type == "MESH" and o.racer.is_racer]
+
+
+def _bake_timeline_clips(obj, frame_ranges):
+    """Bake per-frame vertex positions from the Blender timeline.
+
+    obj.evaluated_get(depsgraph).to_mesh() applies ALL deformation:
+    shape keys, modifiers, armature, constraints, drivers — whatever
+    the artist used. We just capture the final vertex positions per
+    frame.
+
+    Returns dict[clip_name] = list of frames; each frame is a list of
+    [x, y, z] floats (object-local, matrix_world is stored separately
+    in the JSON so build_character.py can apply it).
+    """
+    scene = bpy.context.scene
+    original_frame = scene.frame_current
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    result = {}
+    try:
+        for clip_name, (fmin, fmax) in frame_ranges.items():
+            frames = []
+            for f in range(int(fmin), int(fmax) + 1):
+                scene.frame_set(f)
+                depsgraph.update()
+                obj_eval = obj.evaluated_get(depsgraph)
+                mesh_eval = obj_eval.to_mesh()
+                frames.append([[v.co.x, v.co.y, v.co.z]
+                               for v in mesh_eval.vertices])
+                obj_eval.to_mesh_clear()
+            result[clip_name] = frames
+    finally:
+        scene.frame_set(original_frame)
+    return result

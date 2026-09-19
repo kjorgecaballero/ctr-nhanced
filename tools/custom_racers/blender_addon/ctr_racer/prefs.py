@@ -45,6 +45,20 @@ class NFR_Preferences(AddonPreferences):
                     "preset name inside this folder",
         subtype="DIR_PATH",
         default="")
+    anim_use_timeline: BoolProperty(
+        name="Bake animation from timeline",
+        description="Export per-frame vertex positions from the Blender "
+                    "timeline (shape keys, armature, drivers — anything "
+                    "the depsgraph evaluates) as multi-frame clips in the "
+                    ".ctr. Ignored if there is no animation.",
+        default=False)
+    anim_frame_ranges: StringProperty(
+        name="Animation frame ranges",
+        description="JSON mapping clip name -> [start, end] frame in the "
+                    "current scene. Recognized clips: turn, reverse, bump, "
+                    'jump. Example: {"turn": [0, 22], "reverse": [23, 35]}',
+        default='{"turn": [0, 22], "reverse": [23, 35], '
+                '"bump": [36, 53], "jump": [54, 59]}')
 
     def racers_dir(self):
         return Path(self.repo_path) / "assets" / "mods" / "racers"
@@ -70,6 +84,10 @@ class NFR_Preferences(AddonPreferences):
         layout.separator()
         layout.label(text="Kart Editor:")
         layout.prop(self, "kart_presets_root")
+        layout.separator()
+        layout.label(text="Animation:")
+        layout.prop(self, "anim_use_timeline")
+        layout.prop(self, "anim_frame_ranges")
         layout.separator()
         layout.label(text="Export target (derived from Repo Path):", icon="INFO")
         layout.label(text=str(self.racers_dir()))

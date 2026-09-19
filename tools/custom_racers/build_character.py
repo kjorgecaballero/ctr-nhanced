@@ -180,6 +180,11 @@ def apply_matrix_world(mesh):
         ]
     mesh['vertices'] = [tf(v) for v in mesh['vertices']]
     mesh['keys'] = {k: [tf(v) for v in vs] for k, vs in mesh['keys'].items()}
+    if mesh.get('clips'):
+        mesh['clips'] = {
+            name: [[tf(v) for v in frame] for frame in frames]
+            for name, frames in mesh['clips'].items()
+        }
     return mesh
 
 
@@ -518,14 +523,18 @@ def build():
 
     def native(p): return (p[0]*64, p[2]*64, -p[1]*64)
 
-    # Range must cover Basis AND every shape key: animated clips deform
-    # vertices outside the Basis bounding box (e.g. head rotation pushes
-    # X negative). If we only used Basis, quantize() would overflow.
-    # Same idea as Ziggy's build_native_model.py, which includes the
-    # pose envelope in the range computation.
+    # Range must cover Basis, every shape key, AND every baked clip frame.
+    # Animated clips deform vertices outside the Basis bounding box (e.g.
+    # head rotation pushes X negative). If we only used Basis, quantize()
+    # would overflow and either assert or clamp. Same idea as Ziggy's
+    # build_native_model.py, which includes the pose envelope in the
+    # range computation.
     allpts = []
     for key_pts in mesh['keys'].values():
         allpts.extend(native(p) for p in key_pts)
+    for frames in mesh.get('clips', {}).values():
+        for frame in frames:
+            allpts.extend(native(p) for p in frame)
     lo = [min(p[a] for p in allpts) - 1 for a in range(3)]
     hi = [max(p[a] for p in allpts) + 1 for a in range(3)]
     scale  = [math.ceil((hi[a] - lo[a]) * 4096 / 253) for a in range(3)]
@@ -670,10 +679,35 @@ def build():
     for i, layout in enumerate(layouts):
         ptr(texarray + 4 * i, append(layout))
 
-    # ---- Clips: auto-detect shape keys, else fall back to 1-frame ----
+    # ---- Clips: baked timeline > shape keys > static 1-frame ----
     static_frame = [quantize(basis[vi]) for vi in records]
     clips = None
-    if not STATIC_MODE:
+
+    # Priority 1: baked clips from the addon (mesh['clips']).
+    # matrix_world already applied by apply_matrix_world() above.
+    #
+    # CRITICAL: iterate the vertex list in `records` order, NOT natural
+    # order. `records` is a permutation produced by the face-cache
+    # heuristic; the engine reads back vertices in `records` order, so
+    # sending natural-order clips corrupts the geometry (triangles point
+    # in random directions). Same mapping as make_clips_from_keys().
+    if not STATIC_MODE and mesh.get('clips'):
+        baked = {}
+        for name, frames in mesh['clips'].items():
+            if name not in SLOT_NAMES:
+                continue  # engine only knows 4 slots
+            baked[name] = [
+                [quantize(frame[vi]) for vi in records]
+                for frame in frames
+            ]
+        if baked:
+            clips = baked
+            print(f"Baked clips: {list(baked.keys())}")
+            for name, frames in baked.items():
+                print(f"  {name}: {len(frames)} frames")
+
+    # Priority 2: shape keys (Ziggy convention).
+    if clips is None and not STATIC_MODE:
         clips = make_clips_from_keys(mesh, records, quantize)
 
     if clips is None:
