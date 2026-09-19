@@ -328,6 +328,12 @@ class NFR_OT_GenerateTestShapeKeys(Operator):
                 return pivot + (rot @ (co - pivot))
             return t
 
+        def _rot_z(deg):
+            rot = Matrix.Rotation(math.radians(deg), 4, 'Z')
+            def t(co):
+                return pivot + (rot @ (co - pivot))
+            return t
+
         def _scale_y(factor):
             def t(co):
                 p = co - pivot
@@ -341,8 +347,7 @@ class NFR_OT_GenerateTestShapeKeys(Operator):
         if 'Compress' not in existing:
             _emit('Compress', _scale_y(0.6))
         if 'Reverse' not in existing:
-            _emit('Reverse', _rot_y(180.0))
-
+            _emit('Reverse', _rot_z(90.0))
         for kb in mesh.shape_keys.key_blocks:
             kb.value = 0.0
 
