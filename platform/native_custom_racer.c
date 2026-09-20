@@ -978,7 +978,9 @@ static void *LoadDanceModelRaw(int characterID, const char *path)
      * model's <slug>/sentinel_NN.bin. See RegisterModelTextures. */
     RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_DANCE);
 
+#if defined(CTR_DEBUG_PODIUM_JUMP)
     Log("[CustomRacer] dance.ctr loaded: %s (%ld bytes)\n", path, sz);
+#endif
     return buf;
 }
 
@@ -1103,8 +1105,10 @@ void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
         s_podiumDanceByChar[idx].model  = m;
         s_podiumDanceByChar[idx].frames = nFrames;
 
+#if defined(CTR_DEBUG_PODIUM_JUMP)
         Log("[CustomRacer] podium dance preload: charID=%d rank=%d frames=%u (deferred attach)\n",
             charID, rank, (unsigned)nFrames);
+#endif
     }
 }
 
@@ -1132,8 +1136,10 @@ void NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank)
         return;
 
     t->inst->model = custom;
+#if defined(CTR_DEBUG_PODIUM_JUMP)
     Log("[CustomRacer] podium dance attach: charID=%d rank=%d custom=%p\n",
         charID, rank, (void *)custom);
+#endif
 }
 
 /* Fix the per-thread retail podium model pointer. When two podiums share
