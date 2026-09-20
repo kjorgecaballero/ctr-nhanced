@@ -97,7 +97,7 @@ target_compile_definitions(ctr_native PRIVATE
     # Uncomment to enable the podium-jump debug
     # (START = 1st, L1+START = 2nd, L1+R1+START = 3rd).
     # See docs/DEBUG_PODIUM_JUMP.md
-    CTR_DEBUG_PODIUM_JUMP
+    # CTR_DEBUG_PODIUM_JUMP
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
 )
