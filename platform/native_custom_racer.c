@@ -859,6 +859,36 @@ typedef struct
 
 static PodiumDanceEntry s_podiumDanceByChar[NATIVE_CUSTOM_COUNT];
 
+/* rank -> charID snapshot, taken by NativeCustomRacer_CachePodiumCharIDs
+ * while gGT->drivers[] is still populated. Index 0 = First, 1 = Second,
+ * 2 = Third. hasCharID[i] == 0 means "no driver in that rank". */
+static u8 s_podiumRankCharID[3];
+static u8 s_podiumRankHasCharID[3];
+
+void NativeCustomRacer_CachePodiumCharIDs(struct GameTracker *gGT)
+{
+    memset(s_podiumRankCharID, 0, sizeof(s_podiumRankCharID));
+    memset(s_podiumRankHasCharID, 0, sizeof(s_podiumRankHasCharID));
+
+    if (gGT == NULL)
+        return;
+
+    for (int i = 0; i < 8; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL)
+            continue;
+
+        int rank = d->driverRank;
+        if (rank < 0 || rank > 2)
+            continue;
+
+        u8 charID = data.characterIDs[d->driverID];
+        s_podiumRankCharID[rank]    = charID;
+        s_podiumRankHasCharID[rank] = 1;
+    }
+}
+
 void NativeCustomRacer_ResetPodiumDance(void)
 {
     s_podiumDanceLoaded = 0;
@@ -1033,23 +1063,18 @@ void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
     }
 #endif
 
-    for (int i = 0; i < 8; i++)
+    for (int rank = 0; rank < 3; rank++)
     {
-        struct Driver *d = gGT->drivers[i];
-        if (d == NULL)
+        if (!s_podiumRankHasCharID[rank])
             continue;
 
-        int rank = d->driverRank;
+        u8 charID = s_podiumRankCharID[rank];
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
-        fprintf(stderr, "[DBG-POD-DANCE] driver=%d rank=%d charID=%d\n",
-                i, rank, data.characterIDs[d->driverID]);
+        fprintf(stderr, "[DBG-POD-DANCE] rank=%d charID=%d\n",
+                rank, charID);
 #endif
 
-        if (rank < 0 || rank > 2)
-            continue;
-
-        u8 charID = data.characterIDs[d->driverID];
         if (charID < NATIVE_CUSTOM_ID_BASE)
             continue;
         if (charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
@@ -1091,24 +1116,12 @@ void NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank)
 {
     if (t == NULL || t->inst == NULL)
         return;
-
-    struct GameTracker *gGT = sdata->gGT;
-    if (gGT == NULL)
+    if (rank < 0 || rank > 2)
+        return;
+    if (!s_podiumRankHasCharID[rank])
         return;
 
-    struct Driver *d = NULL;
-    for (int i = 0; i < 8; i++)
-    {
-        if (gGT->drivers[i] != NULL && gGT->drivers[i]->driverRank == rank)
-        {
-            d = gGT->drivers[i];
-            break;
-        }
-    }
-    if (d == NULL)
-        return;
-
-    u8 charID = data.characterIDs[d->driverID];
+    u8 charID = s_podiumRankCharID[rank];
     if (charID <  NATIVE_CUSTOM_ID_BASE ||
         charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
         return;
@@ -1121,6 +1134,43 @@ void NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank)
     t->inst->model = custom;
     Log("[CustomRacer] podium dance attach: charID=%d rank=%d custom=%p\n",
         charID, rank, (void *)custom);
+}
+
+/* Fix the per-thread retail podium model pointer. When two podiums share
+ * an mpkID (custom yaya_panda + original Tiny both map to mpkID 2),
+ * LOAD_TenStages case 8 writes the First and Second retail models into
+ * gGT->modelPtr[sameID], and the second write clobbers the first. Both
+ * podium threads then read the same Model* and CS_Thread_UseOpcode's
+ * `instance->model->id == gGT->podium_modelIndex_First/Second` checks
+ * both fire on the same instance, breaking the HIDE_MODEL windows and
+ * the depth-bias restoration.
+ *
+ * Fix: after CS_Thread_Init returns, force inst->model to the correct
+ * retail pointer for the rank. data.podiumModel_firstPlace/SecondPlace/
+ * ThirdPlace already have the LOAD_MODEL_FILE_HEADER_BYTES offset applied
+ * (see LOAD_TenStages case 8), so they're valid struct Model*. */
+void NativeCustomRacer_FixPodiumModel(struct Thread *t, int rank)
+{
+    if (t == NULL || t->inst == NULL)
+        return;
+
+    switch (rank)
+    {
+    case 0:
+        if (data.podiumModel_firstPlace != NULL)
+            t->inst->model = data.podiumModel_firstPlace;
+        break;
+    case 1:
+        if (data.podiumModel_secondPlace != NULL)
+            t->inst->model = data.podiumModel_secondPlace;
+        break;
+    case 2:
+        if (data.podiumModel_thirdPlace != NULL)
+            t->inst->model = data.podiumModel_thirdPlace;
+        break;
+    default:
+        break;
+    }
 }
 
 /* === Custom voicelines ================================================

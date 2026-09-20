@@ -176,7 +176,15 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 			instance->vertSplit = D233.VertSplitLine;
 		}
 
-		if ((int)instance->model->id == (int)(u8)gGT->podium_modelIndex_Second)
+		/* Detect the podium slot by pointer, not by id. When two podiums
+		 * share an mpkID (custom + original), gGT->podium_modelIndex_First
+		 * == podium_modelIndex_Second and the id check fires for both
+		 * threads. NativeCustomRacer_FixPodiumModel forces each thread's
+		 * inst->model to the correct retail pointer for its rank, so the
+		 * pointer comparison discriminates correctly. A custom dance
+		 * (installed by ApplyPodiumDanceToThread) has a different pointer
+		 * and does not match either window. */
+		if (instance->model == data.podiumModel_secondPlace)
 		{
 			if ((u32)(D233.podiumCameraFrame - CS_PODIUM_SECOND_HIDE_START_FRAME) < CS_PODIUM_SECOND_HIDE_FRAME_COUNT)
 			{
@@ -195,7 +203,7 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 		}
 	afterPodiumSecondModelCheck:
 
-		if ((int)instance->model->id == (int)(u8)gGT->podium_modelIndex_First)
+		if (instance->model == data.podiumModel_firstPlace)
 		{
 			if ((u32)(D233.podiumCameraFrame - CS_PODIUM_FIRST_HIDE_START_FRAME) < CS_PODIUM_FIRST_HIDE_FRAME_COUNT)
 			{

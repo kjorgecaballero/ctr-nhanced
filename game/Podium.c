@@ -12,7 +12,8 @@ enum PodiumConstants
 
 void Podium_InitModels(struct GameTracker *gGT)
 {
-	NativeCustomRacer_ResetPodiumDance();
+        NativeCustomRacer_CachePodiumCharIDs(gGT);
+        NativeCustomRacer_ResetPodiumDance();
 	gGT->podium_modelIndex_First = 0;
 	gGT->podium_modelIndex_Second = 0;
 	gGT->podium_modelIndex_Third = 0;

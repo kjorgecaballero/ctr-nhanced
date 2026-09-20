@@ -109,9 +109,17 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID);
 void  NativeCustomRacer_ResetPodiumDance(void);
 int   NativeCustomRacer_HasDanceModel(int characterID);
 
+/* Snapshot of the rank->charID mapping taken while gGT->drivers[] is
+ * still populated. Podium_InitModels calls this BEFORE the driver array
+ * gets cleared by the end-of-race flow. Preload/Apply must use this
+ * cache instead of reading drivers[] directly: by the time
+ * CS_Podium_FullScene_Init runs, only drivers[0] is guaranteed alive. */
+void  NativeCustomRacer_CachePodiumCharIDs(struct GameTracker *gGT);
+
 /* Preloads custom podium dance models for rank 0..2 drivers into an
  * internal per-charID table. Does NOT touch gGT->modelPtr[]. Call from
- * CS_Podium_FullScene_Init before the CS_Thread_Init calls. */
+ * CS_Podium_FullScene_Init before the CS_Thread_Init calls. Uses the
+ * rank->charID cache populated by NativeCustomRacer_CachePodiumCharIDs. */
 void  NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT);
 
 /* Attaches the preloaded custom dance model to a specific podium thread,
@@ -119,6 +127,14 @@ void  NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT);
  * CS_Podium_FullScene_Init immediately after each CS_Thread_Init. */
 struct Thread;
 void  NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank);
+
+/* Forces the thread's instance model to the correct retail podium model
+ * for the given rank (0 = First, 1 = Second, 2 = Third). Needed when two
+ * podiums share an mpkID (custom + original): LOAD_TenStages case 8 writes
+ * both into gGT->modelPtr[mpkID] and the last one wins, so both threads
+ * would read the same retail Model*. Call right after CS_Thread_Init and
+ * before NativeCustomRacer_ApplyPodiumDanceToThread. */
+void  NativeCustomRacer_FixPodiumModel(struct Thread *t, int rank);
 
 /* Returns the custom frame count for a model installed by
  * PreloadPodiumDanceModels, or 0 if the model is not a custom dance.

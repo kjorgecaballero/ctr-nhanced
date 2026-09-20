@@ -719,6 +719,7 @@ void CS_Podium_FullScene_Init(void)
 		// create thread for "third"
 		g_podiumSpawnIsFirst = 0;
 		podiumThread = CS_Thread_Init(gGT->podium_modelIndex_Third, &R233.s_third[0], &InitData, PODIUM_THIRD_YAW_OFFSET, 0);
+		NativeCustomRacer_FixPodiumModel(podiumThread, 2);
 		NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 2);
 	}
 
@@ -732,6 +733,7 @@ void CS_Podium_FullScene_Init(void)
 		// create thread for "second"
 		g_podiumSpawnIsFirst = 0;
 		podiumThread = CS_Thread_Init(gGT->podium_modelIndex_Second, &R233.s_second[0], &InitData, PODIUM_SECOND_YAW_OFFSET, 0);
+		NativeCustomRacer_FixPodiumModel(podiumThread, 1);
 		NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 1);
 	}
 
@@ -742,6 +744,7 @@ void CS_Podium_FullScene_Init(void)
 	// create thread for "first"
 	g_podiumSpawnIsFirst = 1;
 	podiumThread = CS_Thread_Init(gGT->podium_modelIndex_First, &R233.s_first[0], &InitData, 0, 0);
+	NativeCustomRacer_FixPodiumModel(podiumThread, 0);
 	NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 0);
 
 	InitData.characterPos.x = PODIUM_TAWNA_POS_X;
