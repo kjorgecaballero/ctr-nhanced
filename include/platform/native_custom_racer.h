@@ -110,6 +110,13 @@ void  NativeCustomRacer_ResetPodiumDance(void);
 int   NativeCustomRacer_HasDanceModel(int characterID);
 void  NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT);
 
+/* Returns the custom frame count for a model installed by
+ * LoadPodiumDanceModels, or 0 if the model is not a custom dance.
+ * CS_Thread.c uses this to make a custom dance with N frames play
+ * 0..N-1 instead of the retail script's hardcoded range. */
+struct Model;
+u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
+
 /* Applies textures.vrm for the given character to the player's VRAM region. */
 void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
 

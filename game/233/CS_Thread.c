@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 struct CSThreadParentFrameScratch
 {
@@ -430,6 +431,15 @@ processOpcode:
 	case CS_OPCODE_ANIM_ROT_RANGE:
 	case CS_OPCODE_ANIM_SYNC_MARKER:
 	case CS_OPCODE_ANIM_RANGE:
+	{
+		/* Custom podium dance: the retail dance scripts hardcode the frame
+		 * range (e.g. 0..35 for Komodo Joe's slot). A custom dance with N
+		 * frames must play 0..N-1, not 0..retailFrames. customFrames == 0
+		 * disables the override and leaves retail behavior untouched. */
+		u16 customFrames = 0;
+		if (instance != 0)
+			customFrames = NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model);
+
 		if (instance != 0)
 		{
 			cutsceneFlags = cs->flags;
@@ -463,17 +473,23 @@ processOpcode:
 		if (opcodeChanged != 0)
 		{
 			animIndex = (int)opcodeMeta->animIndex;
-			animFrame32 = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg0.i);
+			if (customFrames > 0)
+				animFrame32 = 0;
+			else
+				animFrame32 = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg0.i);
 			animFrame32 = animFrame32 << CS_FRAME32_SHIFT;
 			int rng = MixRNG_Scramble();
 			opcodeChanged = 0;
-			opcodeDuration =
-			    ((int)(((rng >> CS_RANDOM_DURATION_SHIFT) & CS_RANDOM_DURATION_MASK) * (((int)opcodeMeta->frameEnd - (int)opcodeMeta->frameStart) + 1)) >>
-			     FRACTIONAL_BITS) +
-			    (int)opcodeMeta->frameStart;
+			if (customFrames > 0)
+				opcodeDuration = (int)customFrames;
+			else
+				opcodeDuration =
+				    ((int)(((rng >> CS_RANDOM_DURATION_SHIFT) & CS_RANDOM_DURATION_MASK) * (((int)opcodeMeta->frameEnd - (int)opcodeMeta->frameStart) + 1)) >>
+				     FRACTIONAL_BITS) +
+				    (int)opcodeMeta->frameStart;
 		}
 		frameBoundaryHit = 0;
-		if (opcodeMeta->arg1.i < opcodeMeta->arg0.i)
+		if (customFrames == 0 && opcodeMeta->arg1.i < opcodeMeta->arg0.i)
 		{
 			int targetFrameTime = opcodeMeta->arg1.i * CS_FRAME32_UNIT;
 			animFrame32 = animFrame32 - elapsedTimeRemaining;
@@ -486,7 +502,11 @@ processOpcode:
 		}
 		else
 		{
-			int endFrame = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg1.i);
+			int endFrame;
+			if (customFrames > 0)
+				endFrame = (int)customFrames - 1;
+			else
+				endFrame = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg1.i);
 			nextFrameTime = (endFrame + 1) * CS_FRAME32_UNIT;
 			animFrame32 = animFrame32 + elapsedTimeRemaining;
 			if (nextFrameTime <= animFrame32)
@@ -510,7 +530,10 @@ processOpcode:
 			}
 			else
 			{
-				animFrame32 = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg0.i);
+				if (customFrames > 0)
+					animFrame32 = 0;
+				else
+					animFrame32 = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, opcodeMeta->arg0.i);
 				animFrame32 = animFrame32 << CS_FRAME32_SHIFT;
 			}
 		}
@@ -519,6 +542,7 @@ processOpcode:
 			elapsedTimeRemaining = 0;
 		}
 		goto finishOpcodeStep;
+	}
 
 	case CS_OPCODE_GOTO:
 		opcodeChanged = 1;
@@ -536,6 +560,13 @@ processOpcode:
 	case CS_OPCODE_SPAWN_CHILD:
 		if (instance != 0)
 		{
+			/* Custom podium dance: suppress retail FX spawns. The
+			 * retail script's SPAWN_CHILD models (smoke, sparks)
+			 * are choreographed for the retail animation; the
+			 * custom dance has no matching timing. */
+			if (NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model) > 0)
+				break;
+
 			// Retail builds this opcode 3 init data at scratchpad 0x1f800108.
 			struct CsThreadInitData *initData = CTR_SCRATCHPAD_PTR(struct CsThreadInitData, 0x108);
 			int spawnModelID = opcodeMeta->arg1.i;
@@ -577,6 +608,12 @@ processOpcode:
 	}
 
 	case CS_OPCODE_PLAY_CONTEXT_FX:
+		/* Custom podium dance: suppress retail context FX (Joe's
+		 * event sounds/particles don't line up with a custom anim). */
+		if (instance != 0 &&
+		    NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model) > 0)
+			break;
+
 		if (gGT->levelID == ADVENTURE_GARAGE)
 		{
 			if (instance != 0)
@@ -1288,6 +1325,15 @@ void CS_Thread_Particles(struct Thread *t)
 	}
 
 	if ((inst->flags & HIDE_MODEL) != 0)
+	{
+		return;
+	}
+
+	/* Custom podium dance: suppress the retail particle emitter.
+	 * The retail script sets a particleID for its own choreography
+	 * (Joe's smoke, sparks, etc.); the custom animation has no
+	 * matching sprite timing. */
+	if (NativeCustomRacer_GetPodiumDanceFramesForModel(inst->model) > 0)
 	{
 		return;
 	}

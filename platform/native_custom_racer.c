@@ -837,9 +837,38 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
  * right before CS_Podium spawns the podium threads. */
 static int s_podiumDanceLoaded = 0;
 
+/* Custom podium dance per-slot tables.
+ *   s_podiumDanceModel[i]  : custom Model* installed at slot
+ *                            STATIC_CRASHDANCE + i, or NULL.
+ *   s_podiumDanceFrames[i] : animation frame count (animIndex 0), or 0.
+ * CS_Thread.c uses the model pointer (NOT m->id, which is not
+ * guaranteed to match the slot for a custom-built .ctr) to detect a
+ * custom dance and substitute the retail script's hardcoded frame
+ * range with the model's real frame count. */
+#define NATIVE_PODIUM_DANCE_SLOT_COUNT 16
+static struct Model *s_podiumDanceModel [NATIVE_PODIUM_DANCE_SLOT_COUNT];
+static u16           s_podiumDanceFrames[NATIVE_PODIUM_DANCE_SLOT_COUNT];
+
 void NativeCustomRacer_ResetPodiumDance(void)
 {
     s_podiumDanceLoaded = 0;
+    memset(s_podiumDanceModel,  0, sizeof(s_podiumDanceModel));
+    memset(s_podiumDanceFrames, 0, sizeof(s_podiumDanceFrames));
+}
+
+/* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).
+ * Returns the custom frame count for the given model, or 0 if the
+ * model is not a custom dance (retail scripts keep their ranges). */
+u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model)
+{
+    if (model == NULL)
+        return 0;
+    for (int i = 0; i < NATIVE_PODIUM_DANCE_SLOT_COUNT; i++)
+    {
+        if (s_podiumDanceModel[i] == model)
+            return s_podiumDanceFrames[i];
+    }
+    return 0;
 }
 
 int NativeCustomRacer_ResolveDancePath(int characterID, int isWin,
@@ -873,7 +902,7 @@ int NativeCustomRacer_ResolveDancePath(int characterID, int isWin,
     return 0;
 }
 
-sstatic void *LoadDanceModelRaw(int characterID, const char *path)
+static void *LoadDanceModelRaw(int characterID, const char *path)
 {
     /* Diagnose before loading: "not found" vs "too large" need
      * different fixes and LoadFileToMemory conflates them. */
@@ -895,24 +924,6 @@ sstatic void *LoadDanceModelRaw(int characterID, const char *path)
     }
 
     long sz = 0;
-    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
-    if (!buf)
-    {
-        Log("[CustomRacer] dance.ctr load failed: %s\n", path);
-        return NULL;
-    }
-    }
-    fseek(probe, 0, SEEK_END);
-    long file_sz = ftell(probe);
-    fclose(probe);
-
-    if (file_sz > NATIVE_CTR_MAX_BYTES)
-    {
-        Log("[CustomRacer] dance.ctr too large: %s (%ld bytes, max %ld)\n",
-            path, file_sz, (long)NATIVE_CTR_MAX_BYTES);
-        return NULL;
-    }
-
     unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
     if (!buf)
     {
@@ -1049,8 +1060,20 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
         int slot = (int)mpkID + STATIC_CRASHDANCE;
 
         gGT->modelPtr[slot] = m;
-        Log("[CustomRacer] podium dance override: charID=%d rank=%d mpkID=%d slot=0x%02X\n",
-            charID, rank, mpkID, slot);
+
+        /* Publish the custom frame count. CS_Thread.c uses it to override
+         * the retail dance script's hardcoded frame range (see
+         * NativeCustomRacer_GetPodiumDanceFramesForModel). */
+        struct ModelHeader *danceHdr = m->headers;
+        u16 nFrames = 0;
+        if (danceHdr != NULL && danceHdr->ptrAnimations != NULL &&
+            danceHdr->ptrAnimations[0] != NULL)
+            nFrames = (u16)(danceHdr->ptrAnimations[0]->numFrames & 0x7FFF);
+        s_podiumDanceModel [mpkID] = m;
+        s_podiumDanceFrames[mpkID] = nFrames;
+
+        Log("[CustomRacer] podium dance override: charID=%d rank=%d mpkID=%d slot=0x%02X frames=%u\n",
+            charID, rank, mpkID, slot, (unsigned)nFrames);
     }
 }
 
