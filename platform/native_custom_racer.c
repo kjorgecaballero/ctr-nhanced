@@ -837,23 +837,32 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
  * right before CS_Podium spawns the podium threads. */
 static int s_podiumDanceLoaded = 0;
 
-/* Custom podium dance per-slot tables.
- *   s_podiumDanceModel[i]  : custom Model* installed at slot
- *                            STATIC_CRASHDANCE + i, or NULL.
- *   s_podiumDanceFrames[i] : animation frame count (animIndex 0), or 0.
- * CS_Thread.c uses the model pointer (NOT m->id, which is not
- * guaranteed to match the slot for a custom-built .ctr) to detect a
- * custom dance and substitute the retail script's hardcoded frame
- * range with the model's real frame count. */
-#define NATIVE_PODIUM_DANCE_SLOT_COUNT 16
-static struct Model *s_podiumDanceModel [NATIVE_PODIUM_DANCE_SLOT_COUNT];
-static u16           s_podiumDanceFrames[NATIVE_PODIUM_DANCE_SLOT_COUNT];
+/* Custom podium dance per-char tables.
+ *
+ * Keyed by characterID, not by mpkID slot, because two racers can share
+ * a slot: a custom (BigNorm, page 1 slot 1) and its corresponding original
+ * (Cortex, enum NEO_CORTEX) both map to mpkID 1 via s_gridToCharID. Writing
+ * gGT->modelPtr[mpkID + STATIC_CRASHDANCE] would make both read the custom.
+ *
+ * The custom Model* is instead attached per-thread from CS_Podium.c after
+ * CS_Thread_Init returns (see NativeCustomRacer_ApplyPodiumDanceToThread).
+ *
+ * CS_Thread.c uses the model pointer (NOT m->id, which is not guaranteed
+ * to match the slot for a custom-built .ctr) to detect a custom dance and
+ * substitute the retail script's hardcoded frame range with the model's
+ * real frame count. */
+typedef struct
+{
+    struct Model *model;
+    u16           frames;
+} PodiumDanceEntry;
+
+static PodiumDanceEntry s_podiumDanceByChar[NATIVE_CUSTOM_COUNT];
 
 void NativeCustomRacer_ResetPodiumDance(void)
 {
     s_podiumDanceLoaded = 0;
-    memset(s_podiumDanceModel,  0, sizeof(s_podiumDanceModel));
-    memset(s_podiumDanceFrames, 0, sizeof(s_podiumDanceFrames));
+    memset(s_podiumDanceByChar, 0, sizeof(s_podiumDanceByChar));
 }
 
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).
@@ -863,10 +872,10 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model)
 {
     if (model == NULL)
         return 0;
-    for (int i = 0; i < NATIVE_PODIUM_DANCE_SLOT_COUNT; i++)
+    for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
     {
-        if (s_podiumDanceModel[i] == model)
-            return s_podiumDanceFrames[i];
+        if (s_podiumDanceByChar[i].model == model)
+            return s_podiumDanceByChar[i].frames;
     }
     return 0;
 }
@@ -1007,7 +1016,7 @@ void NativeDebug_ForcePodium(s32 targetRank)
 }
 #endif
 
-void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
+void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
 {
     if (s_podiumDanceLoaded)
         return;
@@ -1043,6 +1052,8 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
         u8 charID = data.characterIDs[d->driverID];
         if (charID < NATIVE_CUSTOM_ID_BASE)
             continue;
+        if (charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            continue;
 
         /* rank 0 = win, rank 1-2 = loose. */
         int isWin = (rank == 0);
@@ -1056,25 +1067,60 @@ void NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT)
             continue;
 
         struct Model *m = (struct Model *)((u8 *)buf + LOAD_MODEL_FILE_HEADER_BYTES);
-        u8 mpkID = GET_MPK_ID(charID);
-        int slot = (int)mpkID + STATIC_CRASHDANCE;
 
-        gGT->modelPtr[slot] = m;
-
-        /* Publish the custom frame count. CS_Thread.c uses it to override
-         * the retail dance script's hardcoded frame range (see
-         * NativeCustomRacer_GetPodiumDanceFramesForModel). */
         struct ModelHeader *danceHdr = m->headers;
         u16 nFrames = 0;
         if (danceHdr != NULL && danceHdr->ptrAnimations != NULL &&
             danceHdr->ptrAnimations[0] != NULL)
             nFrames = (u16)(danceHdr->ptrAnimations[0]->numFrames & 0x7FFF);
-        s_podiumDanceModel [mpkID] = m;
-        s_podiumDanceFrames[mpkID] = nFrames;
 
-        Log("[CustomRacer] podium dance override: charID=%d rank=%d mpkID=%d slot=0x%02X frames=%u\n",
-            charID, rank, mpkID, slot, (unsigned)nFrames);
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        s_podiumDanceByChar[idx].model  = m;
+        s_podiumDanceByChar[idx].frames = nFrames;
+
+        Log("[CustomRacer] podium dance preload: charID=%d rank=%d frames=%u (deferred attach)\n",
+            charID, rank, (unsigned)nFrames);
     }
+}
+
+/* Called from CS_Podium.c immediately after each CS_Thread_Init returns.
+ * Swaps inst->model to the custom dance model for the driver whose
+ * driverRank == rank, if a preloaded dance exists for that charID.
+ * Does nothing for originals and for ranks without a custom dance. */
+void NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank)
+{
+    if (t == NULL || t->inst == NULL)
+        return;
+
+    struct GameTracker *gGT = sdata->gGT;
+    if (gGT == NULL)
+        return;
+
+    struct Driver *d = NULL;
+    for (int i = 0; i < 8; i++)
+    {
+        if (gGT->drivers[i] != NULL && gGT->drivers[i]->driverRank == rank)
+        {
+            d = gGT->drivers[i];
+            break;
+        }
+    }
+    if (d == NULL)
+        return;
+
+    u8 charID = data.characterIDs[d->driverID];
+    if (charID <  NATIVE_CUSTOM_ID_BASE ||
+        charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return;
+
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+    struct Model *custom = s_podiumDanceByChar[idx].model;
+    if (custom == NULL)
+        return;
+
+    t->inst->model = custom;
+    Log("[CustomRacer] podium dance attach: charID=%d rank=%d custom=%p\n",
+        charID, rank, (void *)custom);
 }
 
 /* === Custom voicelines ================================================

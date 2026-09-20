@@ -108,10 +108,20 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID);
  * before the podium threads spawn. Retail path untouched. */
 void  NativeCustomRacer_ResetPodiumDance(void);
 int   NativeCustomRacer_HasDanceModel(int characterID);
-void  NativeCustomRacer_LoadPodiumDanceModels(struct GameTracker *gGT);
+
+/* Preloads custom podium dance models for rank 0..2 drivers into an
+ * internal per-charID table. Does NOT touch gGT->modelPtr[]. Call from
+ * CS_Podium_FullScene_Init before the CS_Thread_Init calls. */
+void  NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT);
+
+/* Attaches the preloaded custom dance model to a specific podium thread,
+ * based on the driver whose driverRank == rank. Call from
+ * CS_Podium_FullScene_Init immediately after each CS_Thread_Init. */
+struct Thread;
+void  NativeCustomRacer_ApplyPodiumDanceToThread(struct Thread *t, int rank);
 
 /* Returns the custom frame count for a model installed by
- * LoadPodiumDanceModels, or 0 if the model is not a custom dance.
+ * PreloadPodiumDanceModels, or 0 if the model is not a custom dance.
  * CS_Thread.c uses this to make a custom dance with N frames play
  * 0..N-1 instead of the retail script's hardcoded range. */
 struct Model;

@@ -624,10 +624,17 @@ void CS_Podium_Prize_Init(u32 prizeModel, const char *prizeName, const SVec3Slot
 	}
 }
 
+/* Set before each CS_Thread_Init call so CS_Thread_Init picks the right
+ * win/lose dance script. Cannot compare modelID with podium_modelIndex_First
+ * because two podiums can share an mpkID (custom yaya_panda + original Tiny
+ * both map to mpkID 2). */
+int g_podiumSpawnIsFirst = 0;
+
 void CS_Podium_FullScene_Init(void)
 {
 	struct Instance *driverInstSelf;
 	struct Thread *victoryCamThread;
+	struct Thread *podiumThread;
 	u32 podiumMusic;
 	struct CsThreadInitData InitData = {0};
 	MATRIX podiumMatrix;
@@ -636,7 +643,7 @@ void CS_Podium_FullScene_Init(void)
 
 	struct GameTracker *gGT = sdata->gGT;
 
-	NativeCustomRacer_LoadPodiumDanceModels(gGT);
+	NativeCustomRacer_PreloadPodiumDanceModels(gGT);
 
 	// assume cutscene did not manipulate audio
 	D233.CutsceneManipulatesAudio = 0;
@@ -710,7 +717,9 @@ void CS_Podium_FullScene_Init(void)
 		InitData.characterPos.z = PODIUM_THIRD_POS_Z;
 
 		// create thread for "third"
-		CS_Thread_Init(gGT->podium_modelIndex_Third, &R233.s_third[0], &InitData, PODIUM_THIRD_YAW_OFFSET, 0);
+		g_podiumSpawnIsFirst = 0;
+		podiumThread = CS_Thread_Init(gGT->podium_modelIndex_Third, &R233.s_third[0], &InitData, PODIUM_THIRD_YAW_OFFSET, 0);
+		NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 2);
 	}
 
 	// if someone placed second
@@ -721,7 +730,9 @@ void CS_Podium_FullScene_Init(void)
 		InitData.characterPos.z = PODIUM_SECOND_POS_Z;
 
 		// create thread for "second"
-		CS_Thread_Init(gGT->podium_modelIndex_Second, &R233.s_second[0], &InitData, PODIUM_SECOND_YAW_OFFSET, 0);
+		g_podiumSpawnIsFirst = 0;
+		podiumThread = CS_Thread_Init(gGT->podium_modelIndex_Second, &R233.s_second[0], &InitData, PODIUM_SECOND_YAW_OFFSET, 0);
+		NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 1);
 	}
 
 	InitData.characterPos.x = PODIUM_FIRST_POS_X;
@@ -729,13 +740,16 @@ void CS_Podium_FullScene_Init(void)
 	InitData.characterPos.z = PODIUM_FIRST_POS_Z;
 
 	// create thread for "first"
-	CS_Thread_Init(gGT->podium_modelIndex_First, &R233.s_first[0], &InitData, 0, 0);
+	g_podiumSpawnIsFirst = 1;
+	podiumThread = CS_Thread_Init(gGT->podium_modelIndex_First, &R233.s_first[0], &InitData, 0, 0);
+	NativeCustomRacer_ApplyPodiumDanceToThread(podiumThread, 0);
 
 	InitData.characterPos.x = PODIUM_TAWNA_POS_X;
 	InitData.characterPos.y = PODIUM_TAWNA_POS_Y;
 	InitData.characterPos.z = PODIUM_TAWNA_POS_Z;
 
 	// create thread for trophy girl (internally called "tawna")
+	g_podiumSpawnIsFirst = 0;
 	CS_Thread_Init(gGT->podium_modelIndex_tawna, &R233.s_tawna[0], &InitData, PODIUM_TAWNA_YAW_OFFSET, 0);
 
 	CS_Podium_Prize_Init(gGT->podiumRewardID, &R233.s_prize[0], &InitData.podiumPos);

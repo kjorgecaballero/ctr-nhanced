@@ -1809,7 +1809,14 @@ struct Thread *CS_Thread_Init(s16 modelID, const char *name, struct CsThreadInit
 			char *const *base;
 			int off = (modelID - STATIC_CRASHDANCE);
 
-			if (modelID == gGT->podium_modelIndex_First)
+			/* Cannot compare modelID with gGT->podium_modelIndex_First:
+			 * two podiums can share an mpkID (custom yaya_panda + original
+			 * Tiny both map to mpkID 2 -> same podium_modelIndex_First
+			 * AND podium_modelIndex_Second value). CS_Podium_FullScene_Init
+			 * sets g_podiumSpawnIsFirst before each CS_Thread_Init so the
+			 * right script (first vs other) is picked. */
+			extern int g_podiumSpawnIsFirst;
+			if (g_podiumSpawnIsFirst)
 			{
 				base = R233.danceFirstScripts;
 			}
