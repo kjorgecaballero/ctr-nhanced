@@ -225,15 +225,16 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			return;
 		}
 
-		/* Remap de animación airborne. Retail usa el enum Characters
-		 * (0..15), no el raw ID. Para customs (>= 16) hay que consultar
-		 * GET_MPK_ID: un custom en grid slot 14 hereda el enum FAKE_CRASH,
-		 * y sus matrices airborne están mal formadas en retail (por eso
-		 * el retail remapea Fake Crash a Crash). Sin este remap, el
-		 * custom cae en FAKE_CRASH + BASE y el motor lee basura →
-		 * segfault al saltar. Mismo razonamiento para Penta. */
+		/* Airborne animation remap. Retail indexes by enum Characters
+		 * (0..15), not by the raw ID. For customs (>= 16) we must consult
+		 * GET_MPK_ID: a custom in grid slot 14 inherits enum FAKE_CRASH,
+		 * whose airborne matrices are malformed in retail (which is why
+		 * retail remaps Fake Crash to Crash). Without this remap, the
+		 * custom falls through to FAKE_CRASH + BASE and the engine reads
+		 * garbage -> segfault on jump. Same reasoning for Penta. */
 		characterID = data.characterIDs[d->driverID];
 		{
+			int isCustom = (characterID >= NATIVE_CUSTOM_ID_BASE);
 			u8 mpkID = GET_MPK_ID(characterID);
 
 			if (mpkID == PENTA_PENGUIN)
@@ -245,9 +246,24 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 				characterID = CRASH_BANDICOOT;
 			}
 
-			/* Recompute después del remap: para customs, characterID
-			 * acaba de ser reemplazado por su enum Characters (0..15).
-			 * GET_MPK_ID de un original pasa sin cambios. */
+			/* N_TROPY (grid 8, 16) and RIPPER_ROO (grid 10, 17) have
+			 * airborne matrices that don't work with custom meshes:
+			 * the mesh comes out rotated ~180 degrees and scaled by
+			 * a corrupt matrix. Remap only for customs; originals keep
+			 * their retail matrices. Same pattern as Penta and Fake
+			 * Crash above. */
+			if (isCustom && mpkID == N_TROPY)
+			{
+				characterID = COCO_BANDICOOT;
+			}
+			if (isCustom && mpkID == RIPPER_ROO)
+			{
+				characterID = TINY_TIGER;
+			}
+
+			/* Recompute after the remap: for customs, characterID
+			 * has just been replaced by its enum Characters (0..15).
+			 * GET_MPK_ID of an original passes through unchanged. */
 			mpkID = GET_MPK_ID(characterID);
 
 			if (mpkID == NITROS_OXIDE)
