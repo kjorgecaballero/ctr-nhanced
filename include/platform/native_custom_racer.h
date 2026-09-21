@@ -247,7 +247,18 @@ int NativeCustomRacer_HasWheels(int characterID);
  * <set> = 0..10 (data.voiceID[voiceID], same index as retail)
  * <var> = 0..7 (variants; RNG picks one per call).
  * Returns 1 if a custom voice was played. */
-int NativeCustomRacer_PlayVoice(int characterID, int voiceSetIndex);
+
+/* Returns the base xaID for the custom's voice tracks (314 + slot*8),
+ * or 0 if the character has no custom voice assigned. Track layout:
+ * base+0=boost, +1=hurt, +2=spin, +3=jump, +4=trap, +5=protected,
+ * +6=overtake, +7=attack. */
+int NativeCustomRacer_GetVoiceTrackBase(int characterID);
+
+/* Returns the duration of the last custom voiceline played, in
+ * 60Hz frames (capped at 600 = 10s). 0 if nothing played or the
+ * call failed. HOWL_Voiceline.c uses this to size the custom
+ * cooldown so a queued retail voiceline cannot cut the custom
+ * mid-playback. */
 
 /* === Debug-only rank forcer ============================================
  * Set via L2 + D-pad en MainFrame_GameLogic (CTR_INTERNAL only).

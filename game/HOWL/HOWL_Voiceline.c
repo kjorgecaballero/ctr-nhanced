@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_audio.h>
 
 // does not really touch voiceline
 void Voiceline_PoolInit(void)
@@ -147,7 +148,11 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 	 * custom XA immediately through NativeAudio. */
 	if (characterID >= NATIVE_CUSTOM_ID_BASE)
 	{
-		fprintf(stderr, "[CustomRacer] custom branch: charID=%u voiceID=%u\n", characterID, voiceID);
+		/* Custom voicelines: enqueue in the retail Voiceline2 list, and
+		 * let Voiceline_StartPlay resolve the custom xaID via
+		 * NativeCustomRacer_GetVoiceTrackBase. The retail player then
+		 * drives CDSYS_XAPlay, which handles cooldown, XA_State, and
+		 * all the streaming machinery. No parallel path needed. */
 		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 			return;
 		if ((sdata->gGT->gameMode1 & END_OF_RACE) != 0)
@@ -157,12 +162,37 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 		if (sdata->voicelineCooldown != 0)
 			return;
 
+		/* Dedup: don't enqueue the same (character, voiceID) twice. */
+		for (struct Item *it = sdata->Voiceline2.first; it != NULL; it = it->next)
 		{
-			u8 voiceSetIdx = data.voiceID[voiceID];
-			if (NativeCustomRacer_PlayVoice((int)characterID, voiceSetIdx) != 0)
-			{
-				sdata->voicelineCooldown = 0x1e;
-			}
+			struct VoicelineItem *vl = (struct VoicelineItem *)it;
+			if ((voiceID == (u32)vl->voiceID) &&
+			    (characterID == vl->characterID))
+				return;
+		}
+
+		struct Item *item = sdata->Voiceline1.first;
+		if (item != NULL)
+		{
+			LIST_RemoveMember(&sdata->Voiceline1, item);
+		}
+		else
+		{
+			item = sdata->Voiceline2.last;
+			if (item != NULL)
+				LIST_RemoveMember(&sdata->Voiceline2, item);
+		}
+		if (item == NULL)
+			return;
+
+		LIST_AddFront(&sdata->Voiceline2, item);
+
+		{
+			struct VoicelineItem *vl = (struct VoicelineItem *)item;
+			vl->characterID          = characterID;
+			vl->secondaryCharacterID = characterID2;
+			vl->voiceID              = voiceID;
+			vl->startFrame           = sdata->gGT->timer;
 		}
 		return;
 	}
@@ -315,6 +345,30 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	u32 voiceID = (u16)voiceLineItem->voiceID;
 	u32 characterID = voiceLineItem->characterID;
 	u32 voiceSetIndex;
+
+	/* Custom branch: route through the retail CDSYS_XAPlay with an
+	 * extended xaID. The XNF has been patched by
+	 * build_voice_pipeline.py to map 314+ to the custom banks. */
+	if (characterID >= NATIVE_CUSTOM_ID_BASE)
+	{
+		int base = NativeCustomRacer_GetVoiceTrackBase((int)characterID);
+		if (base == 0)
+		{
+			sdata->voicelineCooldown = 0x1e;
+			return;
+		}
+		int eventIdx = data.voiceID[voiceID];
+		if (eventIdx > 7) eventIdx = 7;
+		int trackId = base + eventIdx;
+		if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
+		{
+			sdata->voicelineCooldown = 0x1e;
+			return;
+		}
+		sdata->voicelineCooldown =
+			(s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, trackId) / 5) + 0x1e;
+		return;
+	}
 
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[0], CTR_ReadU32LE((u8 *)voiceLineItem + 0x0));
 	CTR_WriteU32LE(&sdata->backupParams_FUN_8002cf28[1], CTR_ReadU32LE((u8 *)voiceLineItem + 0x4));
