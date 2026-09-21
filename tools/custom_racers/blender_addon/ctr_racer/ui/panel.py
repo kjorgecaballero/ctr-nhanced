@@ -20,6 +20,7 @@ from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
 from ..kart.presets import scan_presets
 from ..anim.state import request_sync_from_prefs
+from ..voices.state import VOICE_EVENTS
 
 
 class NFR_PT_Racer(Panel):
@@ -37,7 +38,7 @@ class NFR_PT_Racer(Panel):
             (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
              ('MATERIALS', 'Materials')),
             (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
-            (('DANCE', 'Dance'),),
+            (('DANCE', 'Dance'), ('VOICES', 'Voices')),
         ):
             row = layout.row(align=True)
             row.scale_y = 1.3
@@ -61,6 +62,8 @@ class NFR_PT_Racer(Panel):
             self._draw_anim(context, layout)
         elif tab == 'DANCE':
             self._draw_dance(context, layout)
+        elif tab == 'VOICES':
+            self._draw_voices(context, layout)
 
     def _draw_settings(self, context, layout):
         obj = context.active_object
@@ -600,6 +603,52 @@ class NFR_PT_Racer(Panel):
                           text="Export Both", icon="DUPLICATE")
         op.variant = 'BOTH'
 
+    def _draw_voices(self, context, layout):
+        st = context.scene.nfr_voices
+        prefs = _get_prefs(context)
+
+        layout.label(text="Custom Voicelines", icon="SPEAKER")
+        layout.label(text="Pick WAVs per event. They are copied to",
+                     icon="INFO")
+        layout.label(text="<slug>/voices/<event>.wav, then the pipeline")
+        layout.label(text="regenerates ENG.XNF + S18.XA+ sidecars.")
+
+        layout.separator()
+
+        active_racer = _active_racer(context)
+        active_slug = active_racer.slug if active_racer else None
+
+        col = layout.column(align=True)
+        col.prop(st, "slug", text="Slug")
+
+        slug = (st.slug or "").strip()
+        if slug:
+            slug_dir = prefs.racers_dir() / slug
+            if slug_dir.is_dir():
+                layout.label(text=f"Folder exists: {slug}",
+                             icon="CHECKMARK")
+            else:
+                layout.label(text=f"Folder not found: {slug}",
+                             icon="ERROR")
+        elif active_slug:
+            layout.label(text=f"Active racer: {active_slug}",
+                         icon="INFO")
+
+        layout.separator()
+
+        box = layout.box()
+        box.label(text="Event WAVs", icon="SOUND")
+        for event, label, _desc in VOICE_EVENTS:
+            row = box.row(align=True)
+            row.label(text=f"{label}:")
+            row.prop(st, event, text="")
+
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.4
+        row.enabled = bool(slug)
+        row.operator("nfr.voices_build",
+                     text="Build Voice Banks", icon="PLAY")
 
 _classes = (NFR_PT_Racer,)
 
