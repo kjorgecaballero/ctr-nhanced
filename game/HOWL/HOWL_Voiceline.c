@@ -2,6 +2,32 @@
 #include <platform/native_custom_racer.h>
 #include <platform/native_audio.h>
 
+/* === Custom voiceline routing (mirrors Ziggy's VoiceGroup) ============
+ * Maps retail voiceID (0..23) to one of 8 semantic groups. voiceIDs
+ * not in the table are ignored. Mirrors Ziggy's ziggy_voice.c.
+ * group: 0=boost, 1=hurt, 2=spin, 3=jump, 4=trap, 5=protected,
+ *        6=overtake, 7=attack. */
+static int CustomVoiceGroup(u32 voiceID)
+{
+	switch (voiceID)
+	{
+	case 16: return 0;             /* turbo */
+	case 1: case 4: return 1;      /* hit / squashed */
+	case 3: return 2;              /* spin */
+	case 7: return 3;              /* native big-air meter */
+	case 15: return 4;             /* potion / TNT / crate */
+	case 2: case 13: return 5;     /* blocked hit / shield */
+	case 8: return 6;              /* passes a human racer */
+	case 10: case 11: case 12: case 14: return 7;
+	default: return -1;
+	}
+}
+
+/* Per-custom voice state: seen mask, last-frame stamp, RNG gate. */
+static u32 s_customVoiceSeen;
+static u32 s_customVoiceLastFrame;
+static u8  s_customVoiceHasSpoken;
+
 // does not really touch voiceline
 void Voiceline_PoolInit(void)
 {
@@ -141,26 +167,46 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 		return;
 	}
 
-	/* === Custom voicelines (v1) ===
-	 * Customs (characterID >= NATIVE_CUSTOM_ID_BASE) bypass the retail
-	 * queueing path: voiceData[0x10] and timeSet1/2 are indexed by enum
-	 * Characters (0..15) and would overrun with custom IDs. Play the
-	 * custom XA immediately through NativeAudio. */
+	/* === Custom voicelines (Ziggy-style) ===
+	 * Customs (characterID >= NATIVE_CUSTOM_ID_BASE) enqueue in the
+	 * retail Voiceline2 list; Voiceline_StartPlay then routes the
+	 * custom xaID via NativeCustomRacer_GetVoiceTrackBase. Mirrors
+	 * Ziggy's ziggy_voice.c: group filter, 60-frame guard, 1/4 & 1/8
+	 * RNG. Retail engine handles cooldown, XA_State, streaming. */
 	if (characterID >= NATIVE_CUSTOM_ID_BASE)
 	{
-		/* Custom voicelines: enqueue in the retail Voiceline2 list, and
-		 * let Voiceline_StartPlay resolve the custom xaID via
-		 * NativeCustomRacer_GetVoiceTrackBase. The retail player then
-		 * drives CDSYS_XAPlay, which handles cooldown, XA_State, and
-		 * all the streaming machinery. No parallel path needed. */
+		int group;
+		u32 frame;
+
 		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 			return;
 		if ((sdata->gGT->gameMode1 & END_OF_RACE) != 0)
 			return;
 		if (sdata->boolCanPlayVoicelines == 0)
 			return;
+
+		group = CustomVoiceGroup(voiceID);
+		if (group < 0)
+			return;
+
+		/* 60-frame (1 second) minimum between any two custom voicelines. */
+		frame = sdata->gGT->frameTimer_MainFrame_ResetDB;
+		if (s_customVoiceHasSpoken && (frame - s_customVoiceLastFrame) < 60)
+			return;
+
 		if (sdata->voicelineCooldown != 0)
 			return;
+
+		/* Same 1/4 first-use and 1/8 repeat odds as retail for
+		 * voluntary quips (voiceID > 7), matching Ziggy. */
+		if (voiceID > 7)
+		{
+			u32 rng;
+			sdata->audioRNG = ((sdata->audioRNG >> 3) + sdata->audioRNG * 0x20000000) * 5 + 1;
+			rng = sdata->audioRNG;
+			if (rng & ((s_customVoiceSeen & (1u << voiceID)) ? 7 : 3))
+				return;
+		}
 
 		/* Dedup: don't enqueue the same (character, voiceID) twice. */
 		for (struct Item *it = sdata->Voiceline2.first; it != NULL; it = it->next)
@@ -194,6 +240,9 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 			vl->voiceID              = voiceID;
 			vl->startFrame           = sdata->gGT->timer;
 		}
+		s_customVoiceSeen |= 1u << voiceID;
+		s_customVoiceLastFrame = frame;
+		s_customVoiceHasSpoken = 1;
 		return;
 	}
 
@@ -348,18 +397,19 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 
 	/* Custom branch: route through the retail CDSYS_XAPlay with an
 	 * extended xaID. The XNF has been patched by
-	 * build_voice_pipeline.py to map 314+ to the custom banks. */
+	 * build_voice_pipeline.py to map 314+ to the custom banks.
+	 * Uses CustomVoiceGroup() for the semantic group index (mirrors
+	 * Ziggy's ziggy_voice.c). */
 	if (characterID >= NATIVE_CUSTOM_ID_BASE)
 	{
 		int base = NativeCustomRacer_GetVoiceTrackBase((int)characterID);
-		if (base == 0)
+		int group = CustomVoiceGroup(voiceID);
+		if (base == 0 || group < 0)
 		{
 			sdata->voicelineCooldown = 0x1e;
 			return;
 		}
-		int eventIdx = data.voiceID[voiceID];
-		if (eventIdx > 7) eventIdx = 7;
-		int trackId = base + eventIdx;
+		int trackId = base + group;
 		if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
 		{
 			sdata->voicelineCooldown = 0x1e;
@@ -367,6 +417,8 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 		}
 		sdata->voicelineCooldown =
 			(s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, trackId) / 5) + 0x1e;
+		s_customVoiceLastFrame = sdata->gGT->frameTimer_MainFrame_ResetDB;
+		s_customVoiceHasSpoken = 1;
 		return;
 	}
 
