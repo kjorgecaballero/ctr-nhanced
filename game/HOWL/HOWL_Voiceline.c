@@ -12,7 +12,7 @@ static int CustomVoiceGroup(u32 voiceID)
 	switch (voiceID)
 	{
 	case 16: return 0;             /* turbo */
-	case 1: case 4: return 1;      /* hit / squashed */
+	case 1: case 4: case 5: case 6: return 1;  /* hit / squashed / crash */
 	case 3: return 2;              /* spin */
 	case 7: return 3;              /* native big-air meter */
 	case 15: return 4;             /* potion / TNT / crate */
@@ -161,6 +161,8 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 	u32 elapsedFrames;
 	u32 canImmediate;
 	u32 canQueue;
+
+
 
 	if (voiceID >= 0x18)
 	{
