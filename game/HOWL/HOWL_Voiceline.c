@@ -23,10 +23,15 @@ static int CustomVoiceGroup(u32 voiceID)
 	}
 }
 
-/* Per-custom voice state: seen mask, last-frame stamp, RNG gate. */
-static u32 s_customVoiceSeen;
-static u32 s_customVoiceLastFrame;
-static u8  s_customVoiceHasSpoken;
+/* Per-custom voice state: seen mask, last-frame stamp, RNG gate.
+ * Indexed by (characterID - NATIVE_CUSTOM_ID_BASE) so multiple customs
+ * in the same race (2P VS) don't share RNG / guard state. The custom
+ * branch filters characterID < NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT
+ * before writing, so idx is always in [0, NATIVE_CUSTOM_COUNT).
+ * static → zero-init. */
+static u32 s_customVoiceSeen[NATIVE_CUSTOM_COUNT];
+static u32 s_customVoiceLastFrame[NATIVE_CUSTOM_COUNT];
+static u8  s_customVoiceHasSpoken[NATIVE_CUSTOM_COUNT];
 
 // does not really touch voiceline
 void Voiceline_PoolInit(void)
@@ -179,6 +184,7 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 	{
 		int group;
 		u32 frame;
+		int idx;
 
 		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 			return;
@@ -187,13 +193,15 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 		if (sdata->boolCanPlayVoicelines == 0)
 			return;
 
+		idx = (int)characterID - NATIVE_CUSTOM_ID_BASE;
+
 		group = CustomVoiceGroup(voiceID);
 		if (group < 0)
 			return;
 
 		/* 60-frame (1 second) minimum between any two custom voicelines. */
 		frame = sdata->gGT->frameTimer_MainFrame_ResetDB;
-		if (s_customVoiceHasSpoken && (frame - s_customVoiceLastFrame) < 60)
+		if (s_customVoiceHasSpoken[idx] && (frame - s_customVoiceLastFrame[idx]) < 60)
 			return;
 
 		if (sdata->voicelineCooldown != 0)
@@ -206,7 +214,7 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 			u32 rng;
 			sdata->audioRNG = ((sdata->audioRNG >> 3) + sdata->audioRNG * 0x20000000) * 5 + 1;
 			rng = sdata->audioRNG;
-			if (rng & ((s_customVoiceSeen & (1u << voiceID)) ? 7 : 3))
+			if (rng & ((s_customVoiceSeen[idx] & (1u << voiceID)) ? 7 : 3))
 				return;
 		}
 
@@ -242,9 +250,9 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 			vl->voiceID              = voiceID;
 			vl->startFrame           = sdata->gGT->timer;
 		}
-		s_customVoiceSeen |= 1u << voiceID;
-		s_customVoiceLastFrame = frame;
-		s_customVoiceHasSpoken = 1;
+		s_customVoiceSeen[idx] |= 1u << voiceID;
+		s_customVoiceLastFrame[idx] = frame;
+		s_customVoiceHasSpoken[idx] = 1;
 		return;
 	}
 
@@ -404,8 +412,19 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 	 * Ziggy's ziggy_voice.c). */
 	if (characterID >= NATIVE_CUSTOM_ID_BASE)
 	{
-		int base = NativeCustomRacer_GetVoiceTrackBase((int)characterID);
-		int group = CustomVoiceGroup(voiceID);
+		int idx;
+		int base;
+		int group;
+
+		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+		{
+			sdata->voicelineCooldown = 0x1e;
+			return;
+		}
+
+		idx = (int)characterID - NATIVE_CUSTOM_ID_BASE;
+		base = NativeCustomRacer_GetVoiceTrackBase((int)characterID);
+		group = CustomVoiceGroup(voiceID);
 		if (base == 0 || group < 0)
 		{
 			sdata->voicelineCooldown = 0x1e;
@@ -419,8 +438,8 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 		}
 		sdata->voicelineCooldown =
 			(s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, trackId) / 5) + 0x1e;
-		s_customVoiceLastFrame = sdata->gGT->frameTimer_MainFrame_ResetDB;
-		s_customVoiceHasSpoken = 1;
+		s_customVoiceLastFrame[idx] = sdata->gGT->frameTimer_MainFrame_ResetDB;
+		s_customVoiceHasSpoken[idx] = 1;
 		return;
 	}
 
