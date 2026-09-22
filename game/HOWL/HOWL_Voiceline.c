@@ -430,8 +430,24 @@ void Voiceline_StartPlay(struct Item *voiceLine)
 			sdata->voicelineCooldown = 0x1e;
 			return;
 		}
-		int trackId = base + group;
-		if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
+                int trackId;
+                if (group >= NATIVE_VOICE_GAMEPLAY_GROUP_COUNT)
+                {
+                        /* Menu events (groups 8/9): 1 variant each,
+                         * slots 16/17. */
+                        trackId = base + NATIVE_VOICE_MENU_BASE
+                                + (group - NATIVE_VOICE_GAMEPLAY_GROUP_COUNT);
+                }
+                else
+                {
+                        /* Gameplay: 2 variants per group, picked at
+                         * random at play time (mirrors retail's
+                         * `rng % numVoiceIDs` for a set). */
+                        u32 rng = Voiceline_RequestPlay_NextAudioRNG();
+                        int variant = (int)(rng % NATIVE_VOICE_VARIANTS_PER_GROUP);
+                        trackId = base + group * NATIVE_VOICE_VARIANTS_PER_GROUP + variant;
+                }
+                if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
 		{
 			sdata->voicelineCooldown = 0x1e;
 			return;

@@ -17,34 +17,53 @@ from bpy.props import StringProperty, PointerProperty
 
 
 VOICE_EVENTS = (
-    ("boost",     "Boost",     "Boost pad / turbo item"),
-    ("hurt",      "Hurt",      "Hit / squashed"),
-    ("spin",      "Spin",      "Spin attack"),
-    ("jump",      "Jump",      "Big-air meter"),
-    ("trap",      "Trap",      "Potion / TNT / crate"),
-    ("protected", "Protected", "Blocked hit / shield"),
-    ("overtake",  "Overtake",  "Passes a human racer"),
-    ("attack",    "Attack",    "Attack item fired"),
-    ("menu_yes",  "Menu Yes",  "YES quip in the options menu"),
-    ("menu_ouch", "Menu Ouch", "OUCH quip in the options menu"),
+    ("boost_01",     "Boost 1",     "Boost pad / turbo item (variant 1)"),
+    ("boost_02",     "Boost 2",     "Boost pad / turbo item (variant 2)"),
+    ("hurt_01",      "Hurt 1",      "Hit / squashed / wall crash (variant 1)"),
+    ("hurt_02",      "Hurt 2",      "Hit / squashed / wall crash (variant 2)"),
+    ("spin_01",      "Spin 1",      "Spin attack (variant 1)"),
+    ("spin_02",      "Spin 2",      "Spin attack (variant 2)"),
+    ("jump_01",      "Jump 1",      "Big-air meter (variant 1)"),
+    ("jump_02",      "Jump 2",      "Big-air meter (variant 2)"),
+    ("trap_01",      "Trap 1",      "Potion / TNT / crate (variant 1)"),
+    ("trap_02",      "Trap 2",      "Potion / TNT / crate (variant 2)"),
+    ("protected_01", "Protected 1", "Blocked hit / shield (variant 1)"),
+    ("protected_02", "Protected 2", "Blocked hit / shield (variant 2)"),
+    ("overtake_01",  "Overtake 1",  "Passes a human racer (variant 1)"),
+    ("overtake_02",  "Overtake 2",  "Passes a human racer (variant 2)"),
+    ("attack_01",    "Attack 1",    "Attack item fired (variant 1)"),
+    ("attack_02",    "Attack 2",    "Attack item fired (variant 2)"),
+    ("menu_yes",     "Menu Yes",    "YES quip in the options menu"),
+    ("menu_ouch",    "Menu Ouch",   "OUCH quip in the options menu"),
 )
 
-SIDECAR_VERSION = 2
+# Slots 0..15 = gameplay, 16..17 = menu. Split index for the UI.
+MENU_SPLIT_INDEX = 16
+
+SIDECAR_VERSION = 3
 
 
 class NFR_VoicesState(bpy.types.PropertyGroup):
     slug: StringProperty(name="Slug", default="")
 
-    boost:     StringProperty(name="Boost",     subtype="FILE_PATH")
-    hurt:      StringProperty(name="Hurt",      subtype="FILE_PATH")
-    spin:      StringProperty(name="Spin",      subtype="FILE_PATH")
-    jump:      StringProperty(name="Jump",      subtype="FILE_PATH")
-    trap:      StringProperty(name="Trap",      subtype="FILE_PATH")
-    protected: StringProperty(name="Protected", subtype="FILE_PATH")
-    overtake:  StringProperty(name="Overtake",  subtype="FILE_PATH")
-    attack:    StringProperty(name="Attack",    subtype="FILE_PATH")
-    menu_yes:  StringProperty(name="Menu Yes",  subtype="FILE_PATH")
-    menu_ouch: StringProperty(name="Menu Ouch", subtype="FILE_PATH")
+    boost_01:     StringProperty(name="Boost 1",     subtype="FILE_PATH")
+    boost_02:     StringProperty(name="Boost 2",     subtype="FILE_PATH")
+    hurt_01:      StringProperty(name="Hurt 1",      subtype="FILE_PATH")
+    hurt_02:      StringProperty(name="Hurt 2",      subtype="FILE_PATH")
+    spin_01:      StringProperty(name="Spin 1",      subtype="FILE_PATH")
+    spin_02:      StringProperty(name="Spin 2",      subtype="FILE_PATH")
+    jump_01:      StringProperty(name="Jump 1",      subtype="FILE_PATH")
+    jump_02:      StringProperty(name="Jump 2",      subtype="FILE_PATH")
+    trap_01:      StringProperty(name="Trap 1",      subtype="FILE_PATH")
+    trap_02:      StringProperty(name="Trap 2",      subtype="FILE_PATH")
+    protected_01: StringProperty(name="Protected 1", subtype="FILE_PATH")
+    protected_02: StringProperty(name="Protected 2", subtype="FILE_PATH")
+    overtake_01:  StringProperty(name="Overtake 1",  subtype="FILE_PATH")
+    overtake_02:  StringProperty(name="Overtake 2",  subtype="FILE_PATH")
+    attack_01:    StringProperty(name="Attack 1",    subtype="FILE_PATH")
+    attack_02:    StringProperty(name="Attack 2",    subtype="FILE_PATH")
+    menu_yes:     StringProperty(name="Menu Yes",    subtype="FILE_PATH")
+    menu_ouch:    StringProperty(name="Menu Ouch",   subtype="FILE_PATH")
 
 
 def _roster_hash(repo_root):
@@ -107,6 +126,9 @@ def _pipeline_status(repo_root):
     if sidecar.get("roster_hash") != current:
         return ("stale", sidecar)
     if sidecar.get("event_count") != len(VOICE_EVENTS):
+        return ("stale_layout", sidecar)
+    # v3 adds variant_count. Sidecars without it (v2) are stale too.
+    if sidecar.get("variant_count") != 2:
         return ("stale_layout", sidecar)
     return ("fresh", sidecar)
 

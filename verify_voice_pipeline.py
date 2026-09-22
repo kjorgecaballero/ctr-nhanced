@@ -79,11 +79,14 @@ all_ok &= check(
     "int NativeCustomRacer_GetVoiceTrackBase(int characterID);" in t,
 )
 all_ok &= check(
-    "native_custom_racer.h : event index defines",
+    "native_custom_racer.h : event index defines (v2, 18 slots)",
     "NATIVE_VOICE_EVENT_MENU_YES" in t
     and "NATIVE_VOICE_EVENT_MENU_OUCH" in t
-    and "NATIVE_VOICE_EVENT_COUNT     10" in t
-    and "#define NATIVE_VOICE_TRACK_BASE  314" in t,
+    and "NATIVE_VOICE_EVENT_BOOST_01" in t
+    and "NATIVE_VOICE_EVENT_ATTACK_02" in t
+    and "#define NATIVE_VOICE_EVENT_COUNT         18" in t
+    and "#define NATIVE_VOICE_TRACK_BASE           314" in t
+    and "NATIVE_VOICE_VARIANTS_PER_GROUP" in t,
 )
 
 
@@ -120,6 +123,12 @@ all_ok &= check(
     "HOWL_Voiceline.c : StartPlay custom branch marker",
     "Custom branch: route through the retail CDSYS_XAPlay" in t,
 )
+all_ok &= check(
+    "HOWL_Voiceline.c : StartPlay picks gameplay variant via RNG",
+    "NATIVE_VOICE_VARIANTS_PER_GROUP" in t
+    and "NATIVE_VOICE_GAMEPLAY_GROUP_COUNT" in t
+    and "NATIVE_VOICE_MENU_BASE" in t,
+)
 
 # Old debug log should be gone (or at least not in RequestPlay anymore)
 all_ok &= check(
@@ -148,16 +157,26 @@ all_ok &= check(
 p = "tools/custom_racers/build_voice_pipeline.py"
 t = read(p)
 all_ok &= check(
-    "build_voice_pipeline.py : VOICE_EVENT_COUNT = 10",
-    "VOICE_EVENT_COUNT = 10" in t,
+    "build_voice_pipeline.py : VOICE_EVENT_COUNT = 18",
+    "VOICE_EVENT_COUNT = 18" in t,
 )
 all_ok &= check(
-    "build_voice_pipeline.py : EVENTS includes menu_yes/menu_ouch",
-    '"menu_yes", "menu_ouch"' in t,
+    "build_voice_pipeline.py : EVENTS includes _01/_02 variants",
+    '"boost_01", "boost_02"' in t
+    and '"attack_01",    "attack_02"' in t
+    and '"menu_yes", "menu_ouch"' in t,
+)
+all_ok &= check(
+    "build_voice_pipeline.py : LEGACY_FALLBACKS present",
+    "LEGACY_FALLBACKS" in t and '"boost_01":     "boost"' in t,
 )
 all_ok &= check(
     "build_voice_pipeline.py : sidecar emits event_count",
     '"event_count": VOICE_EVENT_COUNT' in t,
+)
+all_ok &= check(
+    "build_voice_pipeline.py : sidecar emits variant_count",
+    '"variant_count": 2' in t,
 )
 
 
@@ -174,8 +193,7 @@ all_ok &= check(
 )
 
 # At least one voice bank
-banks = sorted(Path("assets/XA/ENG/GAME").glob("S1[89].XA")) + \
-        sorted(Path("assets/XA/ENG/GAME").glob("S[2-9][0-9].XA"))
+banks = sorted(Path("assets/XA/ENG/GAME").glob("S*.XA"))
 all_ok &= check(
     "at least one custom voice bank (S18.XA+)",
     len(banks) > 0,
@@ -200,9 +218,19 @@ if sidecar_path.is_file():
     except Exception:
         sc = {}
     all_ok &= check(
-        "sidecar advertises event_count=10",
-        sc.get("event_count") == 10,
+        "sidecar advertises event_count=18",
+        sc.get("event_count") == 18,
         f"got {sc.get('event_count')!r}",
+    )
+    all_ok &= check(
+        "sidecar advertises variant_count=2",
+        sc.get("variant_count") == 2,
+        f"got {sc.get('variant_count')!r}",
+    )
+    all_ok &= check(
+        "sidecar version = 3",
+        sc.get("version") == 3,
+        f"got {sc.get('version')!r}",
     )
 
 

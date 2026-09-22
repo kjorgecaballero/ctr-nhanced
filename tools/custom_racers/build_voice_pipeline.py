@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
 """build_voice_pipeline.py - Encode custom voicelines and patch ENG.XNF.
 
-Track base for a racer at roster index i = 314 + i*10.
-Event index e -> track 314 + i*10 + e.
-Events: 0=boost 1=hurt 2=spin 3=jump 4=trap 5=protected
-        6=overtake 7=attack 8=menu_yes 9=menu_ouch.
+Track base for a racer at roster index i = 314 + i*18.
+Event index e -> track 314 + i*18 + e.
+
+Event layout (18 slots, mirrors NATIVE_VOICE_EVENT_* in
+include/platform/native_custom_racer.h):
+
+    Gameplay, 8 groups x 2 variants = 16 slots:
+      slot  0 = boost_01       slot  1 = boost_02
+      slot  2 = hurt_01        slot  3 = hurt_02
+      slot  4 = spin_01        slot  5 = spin_02
+      slot  6 = jump_01        slot  7 = jump_02
+      slot  8 = trap_01        slot  9 = trap_02
+      slot 10 = protected_01   slot 11 = protected_02
+      slot 12 = overtake_01    slot 13 = overtake_02
+      slot 14 = attack_01      slot 15 = attack_02
+    Menu, 2 events x 1 variant = 2 slots:
+      slot 16 = menu_yes       slot 17 = menu_ouch
+
+Backwards compat: a legacy `<group>.wav` (no numeric suffix) is used
+as variant 1 (the `_01` slot) if `<group>_01.wav` is missing. So a
+custom with only `boost.wav` still gets a boost voiceline; the second
+variant slot stays null (silent).
 
 The XA Form2 bank format carries only 8 audio channels per bank, so
-events are split into chunks of 8 (CHUNK_SIZE). A custom with 10
-events uses 2 banks: bank A for events 0-7, bank B for events 8-9.
+events are split into chunks of 8 (CHUNK_SIZE). 18 events -> 3 banks
+per custom (chunk 0-7, chunk 8-15, chunk 16-17).
 
 Gaps (racers without voices) are written as null entries so the XNF
 stays contiguous.
@@ -47,13 +65,38 @@ SIDECAR   = XNF.parent / (XNF.name + ".voices.json")
 CACHE_DIR = ROOT / "assets" / "XA" / ".voices_cache"
 
 VOICE_TRACK_BASE  = 314
-VOICE_EVENT_COUNT = 10
+VOICE_EVENT_COUNT = 18
 VOICE_BANK_BASE   = 18
 CHUNK_SIZE        = 8   # XA Form2 audio channels per bank
 
-EVENTS = ["boost", "hurt", "spin", "jump",
-          "trap", "protected", "overtake", "attack",
-          "menu_yes", "menu_ouch"]
+# 18 slots. Gameplay: 8 groups x 2 variants (slots 0..15).
+# Menu: 2 events x 1 variant (slots 16..17).
+EVENTS = [
+    "boost_01", "boost_02",
+    "hurt_01",  "hurt_02",
+    "spin_01",  "spin_02",
+    "jump_01",  "jump_02",
+    "trap_01",  "trap_02",
+    "protected_01", "protected_02",
+    "overtake_01",  "overtake_02",
+    "attack_01",    "attack_02",
+    "menu_yes", "menu_ouch",
+]
+
+# Legacy (pre-v3) filenames without the numeric suffix. If the new
+# `<event>.wav` is missing for the `_01` slot of a gameplay group,
+# fall back to the legacy name so existing customs (e.g. HASTY) keep
+# their voiceline instead of going silent.
+LEGACY_FALLBACKS = {
+    "boost_01":     "boost",
+    "hurt_01":      "hurt",
+    "spin_01":      "spin",
+    "jump_01":      "jump",
+    "trap_01":      "trap",
+    "protected_01": "protected",
+    "overtake_01":  "overtake",
+    "attack_01":    "attack",
+}
 
 XNF_HEADER      = 0x44
 XNF_MAGIC       = 0x464e4958
@@ -65,7 +108,7 @@ OFF_AUX         = 0x1c
 OFF_SONGS_GAME  = 0x34
 SECTOR          = xa_codec.XA_FORM2_SECTOR
 
-SIDECAR_VERSION = 2
+SIDECAR_VERSION = 3
 
 
 def read_roster():
@@ -98,6 +141,7 @@ def write_sidecar(roster, banks_written, tracks_written):
         "roster_hash": roster_fingerprint(roster),
         "roster_count": len(roster),
         "event_count": VOICE_EVENT_COUNT,
+        "variant_count": 2,
         "chunk_size": CHUNK_SIZE,
         "banks_written": banks_written,
         "tracks_written": tracks_written,
@@ -247,9 +291,14 @@ def cmd_restore():
     if bak.is_file():
         shutil.copy(bak, XNF)
         print(f"Restored {XNF}")
-    for b in sorted(BANKS.glob("S1[89].XA")) + sorted(BANKS.glob("S[2-9][0-9].XA")):
-        b.unlink()
-        print(f"Removed {b.name}")
+    for b in sorted(BANKS.glob("S*.XA")):
+        try:
+            num = int(b.stem[1:])
+        except ValueError:
+            continue
+        if num >= VOICE_BANK_BASE:
+            b.unlink()
+            print(f"Removed {b.name}")
     if SIDECAR.is_file():
         SIDECAR.unlink()
         print(f"Removed {SIDECAR.name}")
@@ -299,6 +348,14 @@ def cmd_build(verbose):
         any_present = False
         for event in EVENTS:
             wav = voices_dir / f"{event}.wav"
+            # Backwards compat: fall back to the legacy suffix-less
+            # name for the `_01` slot of gameplay groups.
+            if not wav.is_file():
+                legacy = LEGACY_FALLBACKS.get(event)
+                if legacy is not None:
+                    cand = voices_dir / f"{legacy}.wav"
+                    if cand.is_file():
+                        wav = cand
             if wav.is_file():
                 track_bytes.append(
                     encode_track_cached(wav, channel=len(track_bytes) % CHUNK_SIZE,

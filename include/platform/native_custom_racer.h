@@ -241,7 +241,7 @@ int NativeCustomRacer_GetMaskIsGoodGuy(int characterID);
  * Default for customs without a wheels= field in roster.txt is 1. */
 int NativeCustomRacer_HasWheels(int characterID);
 
-/* === Custom voicelines (v1) ============================================
+/* === Custom voicelines (v2) ============================================
  * Customs deliver XA files under
  *   assets/mods/racers/<slug>/voices/<set>_<var>.xa
  * <set> = 0..10 (data.voiceID[voiceID], same index as retail)
@@ -251,25 +251,37 @@ int NativeCustomRacer_HasWheels(int characterID);
 /* Event indices within a custom's voice bank. Must match the EVENTS
  * list in tools/custom_racers/build_voice_pipeline.py: reordering here
  * without rebuilding the XNF will route every event to the wrong track. */
-#define NATIVE_VOICE_TRACK_BASE  314
-#define NATIVE_VOICE_EVENT_BOOST      0
-#define NATIVE_VOICE_EVENT_HURT       1
-#define NATIVE_VOICE_EVENT_SPIN       2
-#define NATIVE_VOICE_EVENT_JUMP       3
-#define NATIVE_VOICE_EVENT_TRAP       4
-#define NATIVE_VOICE_EVENT_PROTECTED  5
-#define NATIVE_VOICE_EVENT_OVERTAKE   6
-#define NATIVE_VOICE_EVENT_ATTACK     7
-#define NATIVE_VOICE_EVENT_MENU_YES   8
-#define NATIVE_VOICE_EVENT_MENU_OUCH  9
-#define NATIVE_VOICE_EVENT_COUNT     10
+#define NATIVE_VOICE_TRACK_BASE           314
+#define NATIVE_VOICE_VARIANTS_PER_GROUP   2
+#define NATIVE_VOICE_GAMEPLAY_GROUP_COUNT 8
+#define NATIVE_VOICE_MENU_BASE            (NATIVE_VOICE_GAMEPLAY_GROUP_COUNT * NATIVE_VOICE_VARIANTS_PER_GROUP)
+
+#define NATIVE_VOICE_EVENT_BOOST_01      0
+#define NATIVE_VOICE_EVENT_BOOST_02      1
+#define NATIVE_VOICE_EVENT_HURT_01       2
+#define NATIVE_VOICE_EVENT_HURT_02       3
+#define NATIVE_VOICE_EVENT_SPIN_01       4
+#define NATIVE_VOICE_EVENT_SPIN_02       5
+#define NATIVE_VOICE_EVENT_JUMP_01       6
+#define NATIVE_VOICE_EVENT_JUMP_02       7
+#define NATIVE_VOICE_EVENT_TRAP_01       8
+#define NATIVE_VOICE_EVENT_TRAP_02       9
+#define NATIVE_VOICE_EVENT_PROTECTED_01  10
+#define NATIVE_VOICE_EVENT_PROTECTED_02  11
+#define NATIVE_VOICE_EVENT_OVERTAKE_01   12
+#define NATIVE_VOICE_EVENT_OVERTAKE_02   13
+#define NATIVE_VOICE_EVENT_ATTACK_01     14
+#define NATIVE_VOICE_EVENT_ATTACK_02     15
+#define NATIVE_VOICE_EVENT_MENU_YES      16
+#define NATIVE_VOICE_EVENT_MENU_OUCH     17
+#define NATIVE_VOICE_EVENT_COUNT         18
 
 /* Returns the base xaID for the custom's voice tracks
  * (314 + roster_index * NATIVE_VOICE_EVENT_COUNT), or 0 if the
- * character has no custom voice assigned. Track layout:
- *   base+0=boost, +1=hurt, +2=spin, +3=jump, +4=trap,
- *   +5=protected, +6=overtake, +7=attack,
- *   +8=menu_yes, +9=menu_ouch. */
+ * character has no custom voice assigned.
+ * Slot layout (gameplay groups use group*2+variant):
+ *   base+0=boost_01, +1=boost_02, +2=hurt_01, ..., +15=attack_02,
+ *   +16=menu_yes, +17=menu_ouch. */
 int NativeCustomRacer_GetVoiceTrackBase(int characterID);
 
 /* Returns the duration of the last custom voiceline played, in

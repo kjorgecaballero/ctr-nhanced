@@ -20,7 +20,7 @@ from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
 from ..kart.presets import scan_presets
 from ..anim.state import request_sync_from_prefs
-from ..voices.state import VOICE_EVENTS, _pipeline_status
+from ..voices.state import VOICE_EVENTS, MENU_SPLIT_INDEX, _pipeline_status
 
 
 class NFR_PT_Racer(Panel):
@@ -668,14 +668,14 @@ class NFR_PT_Racer(Panel):
 
         box = layout.box()
         box.label(text="Gameplay Events", icon="SOUND")
-        for event, label, _desc in VOICE_EVENTS[:8]:
+        for event, label, _desc in VOICE_EVENTS[:MENU_SPLIT_INDEX]:
             row = box.row(align=True)
             row.label(text=f"{label}:")
             row.prop(st, event, text="")
 
         box = layout.box()
         box.label(text="Menu Events", icon="SOUND")
-        for event, label, _desc in VOICE_EVENTS[8:]:
+        for event, label, _desc in VOICE_EVENTS[MENU_SPLIT_INDEX:]:
             row = box.row(align=True)
             row.label(text=f"{label}:")
             row.prop(st, event, text="")
