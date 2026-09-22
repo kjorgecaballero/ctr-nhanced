@@ -313,28 +313,38 @@ void OptionsMenu_TestSound(int newRow, int newBoolPlay)
 		// OG game does this, instead of gGT->drivers[0]?
 		int driverID = sdata->gGT->cameraDC[0].driverToFollow->driverID;
 
-		int characterID = GET_MPK_ID(data.characterIDs[driverID]);
+		int rawCharID = data.characterIDs[driverID];
+		int characterID = GET_MPK_ID(rawCharID);
 
 		int frameCount = sdata->gGT->frameTimer_MainFrame_ResetDB;
-
-		int sampleVoiceID;
 
 		// every 25th frame
 		if (frameCount == (frameCount / 25) * 25)
 		{
-			// every 50th frame (0, 50, 100, 150)
-			if (frameCount == (frameCount / 50) * 50)
-			{
-				sampleVoiceID = characterID + 0x1c;
-			}
+			// every 50th frame (0, 50, 100, 150) -> "yes"
+			// every 50th frame (25, 75, 125, 175) -> "ouch"
+			int isOuch = (frameCount != (frameCount / 50) * 50);
 
-			// every 50th frame (25, 75, 125, 175)
+			if (rawCharID >= NATIVE_CUSTOM_ID_BASE)
+			{
+				/* Custom: route through the XA voice bank (Ziggy-style,
+				 * same engine path as race voicelines). Skip if an XA
+				 * is already playing so held volume does not spam
+				 * tracks. Let the WAV finish on its own when the user
+				 * leaves the row (no OtherFX_Stop1 on the custom path). */
+				int base = NativeCustomRacer_GetVoiceTrackBase(rawCharID);
+				if (base != 0 && sdata->XA_State == 0)
+				{
+					int ev = isOuch ? NATIVE_VOICE_EVENT_MENU_OUCH
+					                : NATIVE_VOICE_EVENT_MENU_YES;
+					CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, base + ev);
+				}
+			}
 			else
 			{
-				sampleVoiceID = characterID + 0x2c;
+				int sampleVoiceID = characterID + (isOuch ? 0x2c : 0x1c);
+				sdata->OptionSlider_soundID = OtherFX_Play(sampleVoiceID, 0);
 			}
-
-			sdata->OptionSlider_soundID = OtherFX_Play(sampleVoiceID, 0);
 		}
 	}
 }

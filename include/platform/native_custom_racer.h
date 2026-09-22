@@ -248,10 +248,28 @@ int NativeCustomRacer_HasWheels(int characterID);
  * <var> = 0..7 (variants; RNG picks one per call).
  * Returns 1 if a custom voice was played. */
 
-/* Returns the base xaID for the custom's voice tracks (314 + slot*8),
- * or 0 if the character has no custom voice assigned. Track layout:
- * base+0=boost, +1=hurt, +2=spin, +3=jump, +4=trap, +5=protected,
- * +6=overtake, +7=attack. */
+/* Event indices within a custom's voice bank. Must match the EVENTS
+ * list in tools/custom_racers/build_voice_pipeline.py: reordering here
+ * without rebuilding the XNF will route every event to the wrong track. */
+#define NATIVE_VOICE_TRACK_BASE  314
+#define NATIVE_VOICE_EVENT_BOOST      0
+#define NATIVE_VOICE_EVENT_HURT       1
+#define NATIVE_VOICE_EVENT_SPIN       2
+#define NATIVE_VOICE_EVENT_JUMP       3
+#define NATIVE_VOICE_EVENT_TRAP       4
+#define NATIVE_VOICE_EVENT_PROTECTED  5
+#define NATIVE_VOICE_EVENT_OVERTAKE   6
+#define NATIVE_VOICE_EVENT_ATTACK     7
+#define NATIVE_VOICE_EVENT_MENU_YES   8
+#define NATIVE_VOICE_EVENT_MENU_OUCH  9
+#define NATIVE_VOICE_EVENT_COUNT     10
+
+/* Returns the base xaID for the custom's voice tracks
+ * (314 + roster_index * NATIVE_VOICE_EVENT_COUNT), or 0 if the
+ * character has no custom voice assigned. Track layout:
+ *   base+0=boost, +1=hurt, +2=spin, +3=jump, +4=trap,
+ *   +5=protected, +6=overtake, +7=attack,
+ *   +8=menu_yes, +9=menu_ouch. */
 int NativeCustomRacer_GetVoiceTrackBase(int characterID);
 
 /* Returns the duration of the last custom voiceline played, in

@@ -25,9 +25,11 @@ VOICE_EVENTS = (
     ("protected", "Protected", "Blocked hit / shield"),
     ("overtake",  "Overtake",  "Passes a human racer"),
     ("attack",    "Attack",    "Attack item fired"),
+    ("menu_yes",  "Menu Yes",  "YES quip in the options menu"),
+    ("menu_ouch", "Menu Ouch", "OUCH quip in the options menu"),
 )
 
-SIDECAR_VERSION = 1
+SIDECAR_VERSION = 2
 
 
 class NFR_VoicesState(bpy.types.PropertyGroup):
@@ -41,6 +43,8 @@ class NFR_VoicesState(bpy.types.PropertyGroup):
     protected: StringProperty(name="Protected", subtype="FILE_PATH")
     overtake:  StringProperty(name="Overtake",  subtype="FILE_PATH")
     attack:    StringProperty(name="Attack",    subtype="FILE_PATH")
+    menu_yes:  StringProperty(name="Menu Yes",  subtype="FILE_PATH")
+    menu_ouch: StringProperty(name="Menu Ouch", subtype="FILE_PATH")
 
 
 def _roster_hash(repo_root):
@@ -86,10 +90,12 @@ def _read_sidecar(repo_root):
 
 def _pipeline_status(repo_root):
     """Return (state, data) where state is one of:
-        'no_roster'   - roster.txt not found
-        'missing'     - sidecar not found (pipeline never ran)
-        'stale'       - sidecar exists but hash doesn't match roster
-        'fresh'       - sidecar hash matches roster
+        'no_roster'    - roster.txt not found
+        'missing'      - sidecar not found (pipeline never ran)
+        'stale'        - sidecar exists but hash doesn't match roster
+        'stale_layout' - hash matches but event layout is outdated
+                         (sidecar was built with a different event count)
+        'fresh'        - sidecar hash matches roster and layout
     data is the sidecar dict (or None).
     """
     current = _roster_hash(repo_root)
@@ -100,6 +106,8 @@ def _pipeline_status(repo_root):
         return ("missing", None)
     if sidecar.get("roster_hash") != current:
         return ("stale", sidecar)
+    if sidecar.get("event_count") != len(VOICE_EVENTS):
+        return ("stale_layout", sidecar)
     return ("fresh", sidecar)
 
 

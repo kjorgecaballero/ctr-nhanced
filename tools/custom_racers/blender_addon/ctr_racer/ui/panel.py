@@ -629,6 +629,12 @@ class NFR_PT_Racer(Panel):
             warn.label(text="Voice banks are STALE (roster changed).",
                        icon="ERROR")
             layout.label(text="Click Build Voice Banks to regenerate.")
+        elif pstatus == "stale_layout":
+            warn = layout.row()
+            warn.alert = True
+            warn.label(text="Voice banks use the OLD event layout.",
+                       icon="ERROR")
+            layout.label(text="Click Build Voice Banks to regenerate.")
         elif pstatus == "fresh" and pdata is not None:
             n_banks = pdata.get("banks_written", "?")
             gen = pdata.get("generated_at", "?")
@@ -661,8 +667,15 @@ class NFR_PT_Racer(Panel):
         layout.separator()
 
         box = layout.box()
-        box.label(text="Event WAVs", icon="SOUND")
-        for event, label, _desc in VOICE_EVENTS:
+        box.label(text="Gameplay Events", icon="SOUND")
+        for event, label, _desc in VOICE_EVENTS[:8]:
+            row = box.row(align=True)
+            row.label(text=f"{label}:")
+            row.prop(st, event, text="")
+
+        box = layout.box()
+        box.label(text="Menu Events", icon="SOUND")
+        for event, label, _desc in VOICE_EVENTS[8:]:
             row = box.row(align=True)
             row.label(text=f"{label}:")
             row.prop(st, event, text="")

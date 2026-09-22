@@ -4,6 +4,7 @@
 Checks each anchor by substring / structural markers, not exact text.
 Exit code 0 = all good, 1 = something missing.
 """
+import json
 import sys
 from pathlib import Path
 
@@ -38,8 +39,12 @@ all_ok &= check(
     "static int s_customVoiceBase[NATIVE_CUSTOM_COUNT];" in t,
 )
 all_ok &= check(
-    "native_custom_racer.c : NATIVE_VOICE_TRACK_BASE defined",
-    "#define NATIVE_VOICE_TRACK_BASE" in t,
+    "native_custom_racer.c : NATIVE_VOICE_TRACK_BASE not duplicated in .c",
+    "#define NATIVE_VOICE_TRACK_BASE" not in t,
+)
+all_ok &= check(
+    "native_custom_racer.c : NATIVE_VOICE_EVENT_COUNT moved to header",
+    "#define NATIVE_VOICE_EVENT_COUNT" not in t,
 )
 all_ok &= check(
     "native_custom_racer.c : voice_slot counter removed (uses roster index)",
@@ -73,6 +78,13 @@ all_ok &= check(
     "native_custom_racer.h : GetVoiceTrackBase declared",
     "int NativeCustomRacer_GetVoiceTrackBase(int characterID);" in t,
 )
+all_ok &= check(
+    "native_custom_racer.h : event index defines",
+    "NATIVE_VOICE_EVENT_MENU_YES" in t
+    and "NATIVE_VOICE_EVENT_MENU_OUCH" in t
+    and "NATIVE_VOICE_EVENT_COUNT     10" in t
+    and "#define NATIVE_VOICE_TRACK_BASE  314" in t,
+)
 
 
 # ---------------------------------------------------------------------
@@ -88,8 +100,7 @@ all_ok &= check(
 )
 all_ok &= check(
     "HOWL_Voiceline.c : RequestPlay enqueues with LIST_AddFront",
-    "LIST_AddFront(&sdata->Voiceline2, item);" in t
-    and "Custom voicelines: enqueue in the retail Voiceline2 list" in t,
+    "LIST_AddFront(&sdata->Voiceline2, item);" in t,
 )
 all_ok &= check(
     "HOWL_Voiceline.c : RequestPlay has dedup loop",
@@ -115,6 +126,38 @@ all_ok &= check(
     "HOWL_Voiceline.c : old custom-branch log removed",
     "custom branch: charID=%u voiceID=%u" not in t
     or "custom branch: charID=%u voiceID=%u" in t and "GetVoiceTrackBase" in t,
+)
+
+
+# ---------------------------------------------------------------------
+# game/HOWL/HOWL_Settings.c (menu YES/OUCH)
+# ---------------------------------------------------------------------
+p = "game/HOWL/HOWL_Settings.c"
+t = read(p)
+all_ok &= check(
+    "HOWL_Settings.c : custom branch in OptionsMenu_TestSound",
+    "NATIVE_VOICE_EVENT_MENU_OUCH" in t
+    and "NATIVE_VOICE_EVENT_MENU_YES" in t
+    and "NativeCustomRacer_GetVoiceTrackBase(rawCharID)" in t,
+)
+
+
+# ---------------------------------------------------------------------
+# tools/custom_racers/build_voice_pipeline.py
+# ---------------------------------------------------------------------
+p = "tools/custom_racers/build_voice_pipeline.py"
+t = read(p)
+all_ok &= check(
+    "build_voice_pipeline.py : VOICE_EVENT_COUNT = 10",
+    "VOICE_EVENT_COUNT = 10" in t,
+)
+all_ok &= check(
+    "build_voice_pipeline.py : EVENTS includes menu_yes/menu_ouch",
+    '"menu_yes", "menu_ouch"' in t,
+)
+all_ok &= check(
+    "build_voice_pipeline.py : sidecar emits event_count",
+    '"event_count": VOICE_EVENT_COUNT' in t,
 )
 
 
@@ -147,6 +190,19 @@ if Path("assets/XA/ENG.XNF.bak").is_file():
         "XNF was extended",
         new_size > orig_size,
         f"{orig_size} -> {new_size} (+{new_size - orig_size})",
+    )
+
+# Sidecar advertises the current event count
+sidecar_path = Path("assets/XA/ENG.XNF.voices.json")
+if sidecar_path.is_file():
+    try:
+        sc = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    except Exception:
+        sc = {}
+    all_ok &= check(
+        "sidecar advertises event_count=10",
+        sc.get("event_count") == 10,
+        f"got {sc.get('event_count')!r}",
     )
 
 

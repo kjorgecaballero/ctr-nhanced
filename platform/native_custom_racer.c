@@ -183,12 +183,11 @@ static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 
 
 /* Voice track base per custom. Filled in ReloadRoster: for the i-th
- * roster entry, s_customVoiceBase[charIdx] = 314 + i*8. The engine's
- * extended ENG.XNF maps those xaIDs to the custom banks built by
- * tools/custom_racers/build_voice_pipeline.py. */
-#define NATIVE_VOICE_TRACK_BASE  314
-#define NATIVE_VOICE_EVENT_COUNT 8
-static int s_customVoiceBase[NATIVE_CUSTOM_COUNT];;
+ * roster entry, s_customVoiceBase[charIdx] = NATIVE_VOICE_TRACK_BASE
+ * + i * NATIVE_VOICE_EVENT_COUNT. Both constants live in the header.
+ * The engine's extended ENG.XNF maps those xaIDs to the custom banks
+ * built by tools/custom_racers/build_voice_pipeline.py. */
+static int s_customVoiceBase[NATIVE_CUSTOM_COUNT];
 
 static int ParseEngineID(const char *s)
 {

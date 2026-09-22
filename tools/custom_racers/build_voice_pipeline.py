@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """build_voice_pipeline.py - Encode custom voicelines and patch ENG.XNF.
 
-Track base for a racer at roster index i = 314 + i*8.
-Event index e -> track 314 + i*8 + e.
+Track base for a racer at roster index i = 314 + i*10.
+Event index e -> track 314 + i*10 + e.
+Events: 0=boost 1=hurt 2=spin 3=jump 4=trap 5=protected
+        6=overtake 7=attack 8=menu_yes 9=menu_ouch.
+
+The XA Form2 bank format carries only 8 audio channels per bank, so
+events are split into chunks of 8 (CHUNK_SIZE). A custom with 10
+events uses 2 banks: bank A for events 0-7, bank B for events 8-9.
+
 Gaps (racers without voices) are written as null entries so the XNF
 stays contiguous.
 
@@ -40,10 +47,13 @@ SIDECAR   = XNF.parent / (XNF.name + ".voices.json")
 CACHE_DIR = ROOT / "assets" / "XA" / ".voices_cache"
 
 VOICE_TRACK_BASE  = 314
-VOICE_EVENT_COUNT = 8
+VOICE_EVENT_COUNT = 10
 VOICE_BANK_BASE   = 18
+CHUNK_SIZE        = 8   # XA Form2 audio channels per bank
+
 EVENTS = ["boost", "hurt", "spin", "jump",
-          "trap", "protected", "overtake", "attack"]
+          "trap", "protected", "overtake", "attack",
+          "menu_yes", "menu_ouch"]
 
 XNF_HEADER      = 0x44
 XNF_MAGIC       = 0x464e4958
@@ -55,7 +65,7 @@ OFF_AUX         = 0x1c
 OFF_SONGS_GAME  = 0x34
 SECTOR          = xa_codec.XA_FORM2_SECTOR
 
-SIDECAR_VERSION = 1
+SIDECAR_VERSION = 2
 
 
 def read_roster():
@@ -87,6 +97,8 @@ def write_sidecar(roster, banks_written, tracks_written):
         "version": SIDECAR_VERSION,
         "roster_hash": roster_fingerprint(roster),
         "roster_count": len(roster),
+        "event_count": VOICE_EVENT_COUNT,
+        "chunk_size": CHUNK_SIZE,
         "banks_written": banks_written,
         "tracks_written": tracks_written,
         "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -143,6 +155,10 @@ def encode_track_cached(wav_path, channel, verbose=False):
 
 
 def build_bank(track_bytes_list):
+    """Build a single XA Form2 bank from up to CHUNK_SIZE tracks.
+
+    track_bytes_list must have exactly CHUNK_SIZE entries (None for
+    empty slots). Returns (bank_bytes, per_channel_sector_counts)."""
     silence = silent_sector()
     per_track = []
     for t in track_bytes_list:
@@ -167,6 +183,25 @@ def build_bank(track_bytes_list):
             sec[-4:] = bytes(4)
             out.extend(sec)
     return bytes(out), [len(s) for s in per_track]
+
+
+def build_banks(track_bytes_list):
+    """Split a per-event list into chunks of CHUNK_SIZE and build one
+    bank per chunk. Returns (banks_bytes, per_chunk_channel_counts).
+
+    The XA Form2 format carries only 8 audio channels per bank, so a
+    custom with more than 8 events needs multiple banks. Event e goes
+    to bank e//CHUNK_SIZE, channel e%CHUNK_SIZE."""
+    banks = []
+    counts = []
+    for start in range(0, len(track_bytes_list), CHUNK_SIZE):
+        chunk = list(track_bytes_list[start:start + CHUNK_SIZE])
+        while len(chunk) < CHUNK_SIZE:
+            chunk.append(None)
+        bank, n_audio = build_bank(chunk)
+        banks.append(bank)
+        counts.append(n_audio)
+    return banks, counts
 
 
 def patch_xnf(original, custom_tracks):
@@ -266,7 +301,8 @@ def cmd_build(verbose):
             wav = voices_dir / f"{event}.wav"
             if wav.is_file():
                 track_bytes.append(
-                    encode_track_cached(wav, channel=len(track_bytes), verbose=verbose)
+                    encode_track_cached(wav, channel=len(track_bytes) % CHUNK_SIZE,
+                                        verbose=verbose)
                 )
                 any_present = True
             else:
@@ -277,22 +313,30 @@ def cmd_build(verbose):
                 print(f"  [{i}] {slug}: no WAVs, skip")
             continue
 
-        bank, n_audio = build_bank(track_bytes)
-        file_number = VOICE_BANK_BASE + bank_idx
-        bank_path = BANKS / f"S{file_number:02d}.XA"
-        bank_path.parent.mkdir(parents=True, exist_ok=True)
-        bank_path.write_bytes(bank)
-        bank_idx += 1
+        banks, chunk_counts = build_banks(track_bytes)
+        n_chunks = len(banks)
+        base_file = VOICE_BANK_BASE + bank_idx
+
+        for ci, bank in enumerate(banks):
+            fn = base_file + ci
+            bank_path = BANKS / f"S{fn:02d}.XA"
+            bank_path.parent.mkdir(parents=True, exist_ok=True)
+            bank_path.write_bytes(bank)
 
         base = VOICE_TRACK_BASE + i * VOICE_EVENT_COUNT
         for e_idx in range(VOICE_EVENT_COUNT):
-            sector_end = (n_audio[e_idx] + 1) * 16
-            voice_entries[base + e_idx] = (e_idx, file_number, sector_end)
+            ci = e_idx // CHUNK_SIZE
+            ch = e_idx % CHUNK_SIZE
+            n_sectors = chunk_counts[ci][ch]
+            sector_end = (n_sectors + 1) * 16
+            fn = base_file + ci
+            voice_entries[base + e_idx] = (ch, fn, sector_end)
             if base + e_idx > max_track:
                 max_track = base + e_idx
 
-        print(f"  [{i}] {slug}: S{file_number:02d}.XA "
-              f"({len(bank)}B), tracks {base}..{base+7}")
+        bank_idx += n_chunks
+        print(f"  [{i}] {slug}: {n_chunks} bank(s) (S{base_file:02d}+), "
+              f"tracks {base}..{base+VOICE_EVENT_COUNT-1}")
 
     if not voice_entries:
         print("No tracks to add.")
