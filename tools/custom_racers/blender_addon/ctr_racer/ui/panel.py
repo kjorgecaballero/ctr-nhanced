@@ -20,7 +20,7 @@ from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
 from ..kart.presets import scan_presets
 from ..anim.state import request_sync_from_prefs
-from ..voices.state import VOICE_EVENTS
+from ..voices.state import VOICE_EVENTS, _pipeline_status
 
 
 class NFR_PT_Racer(Panel):
@@ -612,6 +612,30 @@ class NFR_PT_Racer(Panel):
                      icon="INFO")
         layout.label(text="<slug>/voices/<event>.wav, then the pipeline")
         layout.label(text="regenerates ENG.XNF + S18.XA+ sidecars.")
+
+        layout.separator()
+
+        # --- Voice bank freshness (VOICELINES-ROSTER-FINGERPRINT) ---
+        repo_root = Path(DEFAULT_REPO)
+        pstatus, pdata = _pipeline_status(repo_root)
+        if pstatus == "missing":
+            warn = layout.row()
+            warn.alert = True
+            warn.label(text="Voice banks never built.", icon="ERROR")
+            layout.label(text="Click Build Voice Banks to generate them.")
+        elif pstatus == "stale":
+            warn = layout.row()
+            warn.alert = True
+            warn.label(text="Voice banks are STALE (roster changed).",
+                       icon="ERROR")
+            layout.label(text="Click Build Voice Banks to regenerate.")
+        elif pstatus == "fresh" and pdata is not None:
+            n_banks = pdata.get("banks_written", "?")
+            gen = pdata.get("generated_at", "?")
+            layout.label(text=f"Voice banks up to date "
+                              f"({n_banks} banks, {gen}).",
+                         icon="CHECKMARK")
+        # 'no_roster' -> silent
 
         layout.separator()
 

@@ -9,8 +9,20 @@ stays contiguous.
 Usage:
     python tools/custom_racers/build_voice_pipeline.py            # build
     python tools/custom_racers/build_voice_pipeline.py --restore  # undo
+
+After a successful build, writes a sidecar next to the XNF
+(ENG.XNF.voices.json) containing a hash of the roster. The Blender
+addon reads this sidecar to warn the user when the roster has changed
+since the last build (VOICELINES-ROSTER-FINGERPRINT).
+
+Also caches per-WAV XA encodes under assets/XA/.voices_cache/ so
+subsequent builds skip the (slow) brute-force encoder when a WAV
+hasn't changed. Keyed by SHA256 of the WAV contents + channel index.
 """
 import argparse
+import datetime
+import hashlib
+import json
 import shutil
 import struct
 import sys
@@ -20,10 +32,12 @@ TOOLS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TOOLS))
 import xa_codec
 
-ROOT    = TOOLS.parents[1]
-RACERS  = ROOT / "assets" / "mods" / "racers"
-XNF     = ROOT / "assets" / "XA" / "ENG.XNF"
-BANKS   = ROOT / "assets" / "XA" / "ENG" / "GAME"
+ROOT      = TOOLS.parents[1]
+RACERS    = ROOT / "assets" / "mods" / "racers"
+XNF       = ROOT / "assets" / "XA" / "ENG.XNF"
+BANKS     = ROOT / "assets" / "XA" / "ENG" / "GAME"
+SIDECAR   = XNF.parent / (XNF.name + ".voices.json")
+CACHE_DIR = ROOT / "assets" / "XA" / ".voices_cache"
 
 VOICE_TRACK_BASE  = 314
 VOICE_EVENT_COUNT = 8
@@ -40,6 +54,8 @@ OFF_NUM_TRACKS  = 0x10
 OFF_AUX         = 0x1c
 OFF_SONGS_GAME  = 0x34
 SECTOR          = xa_codec.XA_FORM2_SECTOR
+
+SIDECAR_VERSION = 1
 
 
 def read_roster():
@@ -59,6 +75,26 @@ def read_roster():
     return out
 
 
+def roster_fingerprint(roster):
+    """16-hex SHA256 of the roster in the exact order the pipeline
+    iterates it. Any change to page, slot, or slug invalidates it."""
+    payload = "\n".join(f"{p}|{s}|{slug}" for p, s, slug in roster)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def write_sidecar(roster, banks_written, tracks_written):
+    data = {
+        "version": SIDECAR_VERSION,
+        "roster_hash": roster_fingerprint(roster),
+        "roster_count": len(roster),
+        "banks_written": banks_written,
+        "tracks_written": tracks_written,
+        "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    SIDECAR.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"Wrote {SIDECAR.name} (hash {data['roster_hash']})")
+
+
 def silent_sector():
     s = bytearray(SECTOR)
     for g in range(18):
@@ -72,6 +108,38 @@ def encode_track(wav_path, channel):
     if sr != xa_codec.SAMPLE_RATE:
         pcm = xa_codec.resample_linear(pcm, sr, xa_codec.SAMPLE_RATE)
     return xa_codec.encode_xa(pcm, channel=channel)
+
+
+def _wav_sha(wav_path):
+    """SHA256 of the file contents, chunked read so it works on large
+    files without loading them fully into memory."""
+    h = hashlib.sha256()
+    with open(wav_path, "rb") as f:
+        while True:
+            chunk = f.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def encode_track_cached(wav_path, channel, verbose=False):
+    """encode_track() with a disk cache keyed by (wav sha256, channel).
+
+    Cache lives under assets/XA/.voices_cache/ and is NOT touched by
+    --restore. Delete the directory to force a full re-encode."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    sha = _wav_sha(wav_path)
+    cache_path = CACHE_DIR / f"{sha}_c{channel}.xa"
+    if cache_path.is_file():
+        if verbose:
+            print(f"      cache hit: {wav_path.name} (ch={channel})")
+        return cache_path.read_bytes()
+    if verbose:
+        print(f"      cache MISS: encoding {wav_path.name} (ch={channel})...")
+    data = encode_track(wav_path, channel)
+    cache_path.write_bytes(data)
+    return data
 
 
 def build_bank(track_bytes_list):
@@ -147,6 +215,12 @@ def cmd_restore():
     for b in sorted(BANKS.glob("S1[89].XA")) + sorted(BANKS.glob("S[2-9][0-9].XA")):
         b.unlink()
         print(f"Removed {b.name}")
+    if SIDECAR.is_file():
+        SIDECAR.unlink()
+        print(f"Removed {SIDECAR.name}")
+    # CACHE_DIR is intentionally NOT cleaned here. Delete it manually
+    # if you want to force a full re-encode:
+    #   rm -rf assets/XA/.voices_cache/
 
 
 def cmd_build(verbose):
@@ -191,7 +265,9 @@ def cmd_build(verbose):
         for event in EVENTS:
             wav = voices_dir / f"{event}.wav"
             if wav.is_file():
-                track_bytes.append(encode_track(wav, channel=len(track_bytes)))
+                track_bytes.append(
+                    encode_track_cached(wav, channel=len(track_bytes), verbose=verbose)
+                )
                 any_present = True
             else:
                 track_bytes.append(None)
@@ -220,6 +296,7 @@ def cmd_build(verbose):
 
     if not voice_entries:
         print("No tracks to add.")
+        write_sidecar(roster, banks_written=0, tracks_written=0)
         return
 
     # Pad from 314 to max_track. Roster indices without voices get null
@@ -233,6 +310,8 @@ def cmd_build(verbose):
     XNF.write_bytes(new_xnf)
     print(f"\nPatched {XNF.name}: {len(original)} -> {len(new_xnf)}B, "
           f"+{len(custom_tracks)} tracks, +{bank_idx} banks")
+
+    write_sidecar(roster, banks_written=bank_idx, tracks_written=len(custom_tracks))
 
 
 def main():
