@@ -588,6 +588,16 @@ class NFR_PT_Racer(Panel):
         row.prop(st, "loose_start", text="Start")
         row.prop(st, "loose_end",   text="End")
 
+        # --- Podium Music (rank 0) ---
+        music_box = layout.box()
+        music_box.label(text="Podium Music (rank 0)", icon="SOUND")
+        music_box.prop(st, "podium_music_path", text="WAV")
+        row = music_box.row(align=True)
+        row.scale_y = 1.3
+        row.enabled = bool(st.slug)
+        row.operator("nfr.dance_build_music",
+                     text="Build Music Bank", icon="PLAY")
+
         # --- Actions ---
         layout.separator()
         row = layout.row(align=True)

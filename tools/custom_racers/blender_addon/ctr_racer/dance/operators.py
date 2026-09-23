@@ -154,7 +154,72 @@ class NFR_OT_DanceExport(Operator):
         return {"FINISHED"}
 
 
-_classes = (NFR_OT_DanceExport,)
+class NFR_OT_DanceBuildMusic(Operator):
+    bl_idname = "nfr.dance_build_music"
+    bl_label = "Build Music Bank"
+    bl_description = (
+        "Copy the picked WAV to <slug>/music/podium.wav and run "
+        "build_voice_pipeline.py to rebuild ENG.XNF (MUSIC category) "
+        "and generate XA/MUSIC/S18.XA"
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_dance
+        prefs = _get_prefs(context)
+
+        src = (st.podium_music_path or "").strip()
+        if not src:
+            self.report({"ERROR"}, "Pick a podium music WAV first")
+            return {"CANCELLED"}
+
+        slug = (st.slug or "").strip()
+        if not slug:
+            self.report({"ERROR"}, "Set the racer slug first")
+            return {"CANCELLED"}
+
+        slug_dir = prefs.racers_dir() / slug
+        if not slug_dir.is_dir():
+            self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
+            return {"CANCELLED"}
+
+        music_dir = slug_dir / "music"
+        music_dir.mkdir(parents=True, exist_ok=True)
+        dst = music_dir / "podium.wav"
+
+        src_path = Path(src)
+        if not src_path.is_file():
+            self.report({"ERROR"}, f"WAV not found: {src_path}")
+            return {"CANCELLED"}
+        try:
+            if src_path.resolve() != dst.resolve():
+                import shutil as _sh
+                _sh.copy2(src_path, dst)
+        except Exception as ex:
+            self.report({"ERROR"}, f"Copy failed: {ex}")
+            return {"CANCELLED"}
+
+        build_py = (Path(prefs.repo_path) / "tools" / "custom_racers"
+                    / "build_voice_pipeline.py")
+        res = subprocess.run(
+            [prefs.python_exe, str(build_py), "-v"],
+            cwd=str(prefs.repo_path),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if res.returncode != 0:
+            self.report({"ERROR"},
+                        f"Pipeline failed ({res.returncode}):\n"
+                        f"{res.stderr[-400:]}")
+            return {"CANCELLED"}
+
+        self.report({"INFO"},
+                    f"Podium music built for '{slug}' "
+                    f"(<slug>/music/podium.wav)")
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+_classes = (NFR_OT_DanceExport, NFR_OT_DanceBuildMusic)
 
 
 def register():

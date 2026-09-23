@@ -45,6 +45,16 @@ class NFR_DanceState(PropertyGroup):
         description="Last frame of the loose (rank 1-2) dance animation",
     )
 
+    # Podium music (optional). One WAV per custom, played at rank 0.
+    # Copied to <slug>/music/podium.wav by NFR_OT_DanceBuildMusic.
+    podium_music_path: StringProperty(
+        name="Podium Music",
+        description="Optional WAV for the podium music (rank 0). "
+                    "Exported to <slug>/music/podium.wav",
+        subtype="FILE_PATH",
+        default="",
+    )
+
 
 _classes = (NFR_DanceState,)
 
