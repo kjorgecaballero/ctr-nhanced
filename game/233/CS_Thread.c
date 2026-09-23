@@ -414,6 +414,11 @@ afterCameraAndSkipChecks:
 		{
 			instance->animFrame = (s16)animFrame;
 			instance->animIndex = (char)animIndex;
+
+			/* Per-frame dance SFX trigger. No-op for originals and
+			 * for frames that are not a target. Fires on frame
+			 * transitions only (see NativeCustomRacer_TickDanceSfx). */
+			NativeCustomRacer_TickDanceSfx(instance->model, (int)animFrame);
 		}
 		if (cs->frameOverrideRoot != 0)
 		{

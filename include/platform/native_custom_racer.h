@@ -143,6 +143,31 @@ void  NativeCustomRacer_FixPodiumModel(struct Thread *t, int rank);
 struct Model;
 u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 
+/* === Custom dance SFX (v1) ============================================
+ * Up to 16 per-frame XA triggers attached to a custom podium dance.
+ * The addon writes <slug>/dance/sfx.bin (magic 'SFX1' + u32 count +
+ * u32 frames[count], little-endian) and encodes each frame's WAV to a
+ * custom GAME track. Win and loose share one SFX list per custom.
+ *
+ * Track layout:
+ *   trackId = NATIVE_DANCE_SFX_TRACK_BASE
+ *           + roster_index * NATIVE_DANCE_SFX_MAX
+ *           + slot
+ * Slots with no WAV stay null in the XNF; CDSYS_XAPlay then returns 0
+ * and the trigger is silently ignored. The base constant sits well
+ * above the voice range (314 + 146*18 = 2942) so the pipeline can
+ * append dance-SFX tracks after voices without collision.
+ *
+ * TickDanceSfx is called from CS_Thread.c right after
+ * instance->animFrame is updated. It fires on frame *transitions*
+ * (prev != curr) so a looping animation doesn't re-fire while the
+ * target frame is held. No-op for original models and for frames
+ * that aren't a target. */
+#define NATIVE_DANCE_SFX_TRACK_BASE 4096
+#define NATIVE_DANCE_SFX_MAX        16
+
+void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
+
 
 /* === Custom podium music (v1) ==========================================
  * One track per custom. xaID = 13 + roster_index (retail MUSIC occupies

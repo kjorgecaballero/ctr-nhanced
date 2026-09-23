@@ -189,6 +189,15 @@ static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
  * built by tools/custom_racers/build_voice_pipeline.py. */
 static int s_customVoiceBase[NATIVE_CUSTOM_COUNT];
 static int s_customMusicBase[NATIVE_CUSTOM_COUNT];
+static int s_customDanceSfxBase[NATIVE_CUSTOM_COUNT];
+
+/* Per-custom dance SFX list (loaded from <slug>/dance/sfx.bin in
+ * ReloadRoster) + anti-loop guard. s_danceSfxPrevFrame is reset to
+ * 0xFF (=-1) at the top of each race so the first tick at frame 0
+ * fires. Values are signed so -1 is not a valid frame. */
+static u32 s_danceSfxFrames  [NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
+static u8  s_danceSfxCount   [NATIVE_CUSTOM_COUNT];
+static s16 s_danceSfxPrevFrame[NATIVE_CUSTOM_COUNT];
 
 static int ParseEngineID(const char *s)
 {
@@ -202,6 +211,8 @@ static int ParseEngineID(const char *s)
 /* --------------------------------------------------------------------- */
 /* Legacy parser (ext_id folder). Kept for backward compatibility.       */
 /* --------------------------------------------------------------------- */
+static void LoadDanceSfxSidecar(int idx, const char *folder);
+
 static int Roster_ParseLine(char *line, RosterEntry *out)
 {
     char *p = line;
@@ -352,6 +363,8 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_customVoiceBase, 0, sizeof(s_customVoiceBase));
     memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
+    memset(s_customDanceSfxBase, 0, sizeof(s_customDanceSfxBase));
+    memset(s_danceSfxCount, 0, sizeof(s_danceSfxCount));
     s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
@@ -431,6 +444,16 @@ void NativeCustomRacer_ReloadRoster(void)
                  * xaID = NATIVE_MUSIC_TRACK_BASE + roster_index. */
                 s_customMusicBase[idx] = NATIVE_MUSIC_TRACK_BASE
                                        + (s_pageEntryCount - 1);
+
+                /* Custom dance SFX. NATIVE_DANCE_SFX_MAX tracks per
+                 * roster entry; slots without a WAV stay null in the
+                 * XNF (CDSYS_XAPlay returns 0 and the tick is a
+                 * no-op). */
+                s_customDanceSfxBase[idx] = NATIVE_DANCE_SFX_TRACK_BASE
+                                          + (s_pageEntryCount - 1)
+                                          * NATIVE_DANCE_SFX_MAX;
+
+                LoadDanceSfxSidecar(idx, folderStored);
 
                 {
                     const char *dn = (e.displayName[0] != '\0') ? e.displayName : e.folder;
@@ -922,6 +945,57 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model)
     return 0;
 }
 
+void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame)
+{
+    if (model == NULL)
+        return;
+
+    /* Locate the charIdx only among the 3 active podium ranks. The
+     * s_podiumDanceByChar table is sparse (0-3 non-NULL entries),
+     * so this is at most 3 pointer comparisons per tick. */
+    int idx = -1;
+    for (int rank = 0; rank < 3; rank++)
+    {
+        if (!s_podiumRankHasCharID[rank])
+            continue;
+        int cid = (int)s_podiumRankCharID[rank];
+        if (cid <  NATIVE_CUSTOM_ID_BASE ||
+            cid >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            continue;
+        int i = cid - NATIVE_CUSTOM_ID_BASE;
+        if (s_podiumDanceByChar[i].model == model)
+        {
+            idx = i;
+            break;
+        }
+    }
+    if (idx < 0)
+        return;
+
+    u8 count = s_danceSfxCount[idx];
+    if (count == 0)
+        return;
+
+    /* Fire only on frame transitions. A looping anim that holds the
+     * same frame for multiple ticks fires once; on the next loop the
+     * transition from prev != frame re-arms it. */
+    s16 prev = s_danceSfxPrevFrame[idx];
+    if (prev == (s16)frame)
+        return;
+    s_danceSfxPrevFrame[idx] = (s16)frame;
+
+    int base = s_customDanceSfxBase[idx];
+    if (base <= 0)
+        return;
+
+    for (int i = 0; i < (int)count; i++)
+    {
+        if ((int)s_danceSfxFrames[idx][i] != frame)
+            continue;
+        CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, base + i);
+    }
+}
+
 int NativeCustomRacer_ResolveDancePath(int characterID, int isWin,
                                        char *out, size_t out_sz)
 {
@@ -951,6 +1025,48 @@ int NativeCustomRacer_ResolveDancePath(int characterID, int isWin,
     }
 
     return 0;
+}
+
+/* Reads <slug>/dance/sfx.bin into the per-custom SFX tables.
+ * Format: "SFX1" (4 bytes) + u32 count + u32 frames[count], LE.
+ * Silent no-op if the file is missing, the magic is wrong, or the
+ * read fails. */
+static void LoadDanceSfxSidecar(int idx, const char *folder)
+{
+    s_danceSfxCount[idx] = 0;
+
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/dance/sfx.bin", folder);
+
+    FILE *f = fopen(path, "rb");
+    if (!f)
+        return;
+
+    char magic[4];
+    u32 count = 0;
+    if (fread(magic, 1, 4, f) != 4 ||
+        memcmp(magic, "SFX1", 4) != 0 ||
+        fread(&count, sizeof(u32), 1, f) != 1)
+    {
+        fclose(f);
+        return;
+    }
+    if (count > NATIVE_DANCE_SFX_MAX)
+        count = NATIVE_DANCE_SFX_MAX;
+
+    if (fread(s_danceSfxFrames[idx], sizeof(u32), count, f) != count)
+    {
+        fclose(f);
+        return;
+    }
+    fclose(f);
+    s_danceSfxCount[idx] = (u8)count;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+    Log("[CustomRacer] dance sfx sidecar: charID=%d count=%u\n",
+        idx + NATIVE_CUSTOM_ID_BASE, (unsigned)count);
+#endif
 }
 
 static void *LoadDanceModelRaw(int characterID, const char *path)
@@ -1065,6 +1181,10 @@ void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
     if (s_podiumDanceLoaded)
         return;
     s_podiumDanceLoaded = 1;
+
+    /* Reset the per-frame SFX guard so frame 0 can fire on the first
+     * tick of a new race. 0xFF = -1 = "no previous frame". */
+    memset(s_danceSfxPrevFrame, 0xFF, sizeof(s_danceSfxPrevFrame));
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     /* Debug: the rank forcer is overwritten between
