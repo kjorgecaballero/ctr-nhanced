@@ -42,9 +42,60 @@ MENU_SPLIT_INDEX = 16
 
 SIDECAR_VERSION = 3
 
+# Legacy fallback map: canonical <group>_01 event -> bare <group>.wav.
+# Mirrors LEGACY_FALLBACKS in tools/custom_racers/build_voice_pipeline.py.
+# Only *_01 slots have a fallback; *_02 slots are silent if missing.
+LEGACY_FALLBACKS = {
+    "boost_01":     "boost",
+    "hurt_01":      "hurt",
+    "spin_01":      "spin",
+    "jump_01":      "jump",
+    "trap_01":      "trap",
+    "protected_01": "protected",
+    "overtake_01":  "overtake",
+    "attack_01":    "attack",
+}
+
+
+def _auto_detect_wavs(source_dir):
+    """Scan source_dir for WAVs matching VOICE_EVENTS.
+
+    Returns a dict {event: Path|None}. Canonical <event>.wav wins;
+    for *_01 slots only, fall back to the legacy <group>.wav if the
+    canonical file is missing. Mirrors the resolution order in
+    build_voice_pipeline.py so the addon and the pipeline agree on
+    which WAV is which event.
+
+    The caller is responsible for checking source_dir exists.
+    """
+    out = {}
+    for event, _label, _desc in VOICE_EVENTS:
+        cand = source_dir / f"{event}.wav"
+        if cand.is_file():
+            out[event] = cand
+            continue
+        legacy = LEGACY_FALLBACKS.get(event)
+        if legacy is not None:
+            alt = source_dir / f"{legacy}.wav"
+            if alt.is_file():
+                out[event] = alt
+                continue
+        out[event] = None
+    return out
+
 
 class NFR_VoicesState(bpy.types.PropertyGroup):
     slug: StringProperty(name="Slug", default="")
+
+    # Where the user's source WAVs live (any folder on disk). The
+    # auto-detect operator scans this folder for the 18 canonical
+    # event names and fills the per-event pickers.
+    source_dir: StringProperty(
+        name="Source Folder",
+        subtype="DIR_PATH",
+        description="Folder containing your source WAVs "
+                    "(boost_01.wav, ..., menu_ouch.wav)",
+    )
 
     boost_01:     StringProperty(name="Boost 1",     subtype="FILE_PATH")
     boost_02:     StringProperty(name="Boost 2",     subtype="FILE_PATH")

@@ -11,7 +11,7 @@ from bpy.types import Operator
 
 from ..constants import DEFAULT_REPO
 from ..prefs import _get_prefs
-from .state import VOICE_EVENTS
+from .state import VOICE_EVENTS, _auto_detect_wavs
 
 
 class NFR_OT_VoicesBuild(Operator):
@@ -40,7 +40,7 @@ class NFR_OT_VoicesBuild(Operator):
         voices_dir = slug_dir / "voices"
         voices_dir.mkdir(exist_ok=True)
 
-        copied, skipped = [], []
+        copied, already_in_place, skipped = [], [], []
         for event, _label, _desc in VOICE_EVENTS:
             src = (getattr(st, event, "") or "").strip()
             if not src:
@@ -54,9 +54,11 @@ class NFR_OT_VoicesBuild(Operator):
                 continue
             dst = voices_dir / f"{event}.wav"
             try:
-                # If the picker already points to the destination, skip.
+                # If the picker already points to the destination, no copy
+                # is needed. This is the normal case for auto-detected
+                # entries, so we must not treat it as "nothing to do".
                 if src_path.resolve() == dst.resolve():
-                    skipped.append(event)
+                    already_in_place.append(event)
                     continue
             except OSError:
                 pass
@@ -67,9 +69,10 @@ class NFR_OT_VoicesBuild(Operator):
                 self.report({'ERROR'}, f"{event}: copy failed: {e}")
                 return {'CANCELLED'}
 
-        if not copied:
+        if not copied and not already_in_place:
             self.report({'ERROR'},
-                        "No WAVs to copy. Pick at least one file.")
+                        "No WAVs to copy. Pick at least one file "
+                        "(or run Auto-detect from folder).")
             return {'CANCELLED'}
 
         repo = Path(DEFAULT_REPO)
@@ -111,14 +114,77 @@ class NFR_OT_VoicesBuild(Operator):
             )
             return {'CANCELLED'}
 
-        msg = f"Built {len(copied)} voice track(s)"
+        n_used = len(copied) + len(already_in_place)
+        msg = f"Built {n_used} voice track(s)"
+        if copied and already_in_place:
+            msg += f" ({len(copied)} copied, {len(already_in_place)} in place)"
+        elif copied:
+            msg += f" ({len(copied)} copied)"
+        elif already_in_place:
+            msg += f" ({len(already_in_place)} already in place)"
         if skipped:
-            msg += f" ({len(skipped)} event(s) skipped)"
+            msg += f", {len(skipped)} event(s) skipped"
         self.report({'INFO'}, msg)
         return {'FINISHED'}
 
 
-_classes = (NFR_OT_VoicesBuild,)
+class NFR_OT_VoicesAutoDetect(Operator):
+    bl_idname = "nfr.voices_auto_detect"
+    bl_label = "Auto-detect from folder"
+    bl_description = (
+        "Scan the Source Folder for WAVs matching the 18 canonical "
+        "event names (boost_01.wav, ..., menu_ouch.wav) and the "
+        "legacy <group>.wav fallback for *_01 slots. Fills the "
+        "pickers; missing events are cleared"
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_voices
+
+        source_str = (st.source_dir or "").strip()
+        if not source_str:
+            self.report({'ERROR'},
+                        "Set the Source Folder first "
+                        "(where your WAVs live)")
+            return {'CANCELLED'}
+
+        source_dir = Path(bpy.path.abspath(source_str))
+        if not source_dir.is_dir():
+            self.report({'ERROR'},
+                        f"Source folder not found: {source_dir}")
+            return {'CANCELLED'}
+
+        found = _auto_detect_wavs(source_dir)
+
+        # Overwrite every picker: the source folder is the source of
+        # truth. Events without a matching WAV are cleared (silent,
+        # same as the pipeline's null entries).
+        hit, miss = 0, 0
+        for event, _label, _desc in VOICE_EVENTS:
+            path = found.get(event)
+            if path is not None:
+                setattr(st, event, str(path))
+                hit += 1
+            else:
+                setattr(st, event, "")
+                miss += 1
+
+        if hit == 0:
+            self.report(
+                {'WARNING'},
+                f"No matching WAVs in {source_dir.name}/. Expected "
+                f"names like boost_01.wav, ..., menu_ouch.wav "
+                f"(or legacy boost.wav for *_01 slots)"
+            )
+            return {'CANCELLED'}
+
+        self.report({'INFO'},
+                    f"Auto-detected {hit}/{len(VOICE_EVENTS)} events "
+                    f"({miss} empty)")
+        return {'FINISHED'}
+
+
+_classes = (NFR_OT_VoicesBuild, NFR_OT_VoicesAutoDetect)
 
 
 def register():

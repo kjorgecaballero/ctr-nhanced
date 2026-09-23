@@ -665,14 +665,25 @@ class NFR_PT_Racer(Panel):
         if slug:
             slug_dir = prefs.racers_dir() / slug
             if slug_dir.is_dir():
-                layout.label(text=f"Folder exists: {slug}",
+                layout.label(text=f"Racer folder exists: {slug}",
                              icon="CHECKMARK")
             else:
-                layout.label(text=f"Folder not found: {slug}",
+                layout.label(text=f"Racer folder not found: {slug}",
                              icon="ERROR")
         elif active_slug:
             layout.label(text=f"Active racer: {active_slug}",
                          icon="INFO")
+
+        # Source folder: pick any folder on disk with the source WAVs.
+        src_box = layout.box()
+        src_box.label(text="Source Folder", icon="FILE_FOLDER")
+        src_box.prop(st, "source_dir", text="")
+        row = src_box.row(align=True)
+        row.scale_y = 1.3
+        src_str = (st.source_dir or "").strip()
+        row.enabled = bool(src_str) and Path(bpy.path.abspath(src_str)).is_dir()
+        row.operator("nfr.voices_auto_detect",
+                     text="Auto-detect from folder", icon="FILE_REFRESH")
 
         layout.separator()
 
