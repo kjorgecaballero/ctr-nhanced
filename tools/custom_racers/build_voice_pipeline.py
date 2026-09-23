@@ -601,7 +601,15 @@ def cmd_build(verbose):
             bank_path.write_bytes(bank)
 
         base = DANCE_SFX_TRACK_BASE + i * DANCE_SFX_MAX
-        for e_idx in range(DANCE_SFX_MAX):
+        # Only emit entries for the SFX that actually exist. The XNF
+        # lookup uses xaID = firstSongGAME + xaID, so the track table
+        # only needs to be dense up to the last real dance-SFX slot;
+        # the sidecar sfx.bin tells the C-side how many slots to look
+        # for (base+0 .. base+count-1). Iterating over DANCE_SFX_MAX
+        # would index chunk_counts out of range when the custom has
+        # fewer than CHUNK_SIZE SFX (build_banks returns ceil(n/8)
+        # chunks, not ceil(16/8)).
+        for e_idx in range(len(track_bytes)):
             ci = e_idx // CHUNK_SIZE
             ch = e_idx % CHUNK_SIZE
             n_sectors = chunk_counts[ci][ch]
