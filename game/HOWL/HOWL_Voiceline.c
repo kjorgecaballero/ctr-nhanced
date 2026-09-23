@@ -180,11 +180,11 @@ void Voiceline_RequestPlay(u32 voiceID, u32 characterID, u32 characterID2)
 	 * custom xaID via NativeCustomRacer_GetVoiceTrackBase. Mirrors
 	 * Ziggy's ziggy_voice.c: group filter, 60-frame guard, 1/4 & 1/8
 	 * RNG. Retail engine handles cooldown, XA_State, streaming. */
-	if (characterID >= NATIVE_CUSTOM_ID_BASE)
-	{
-		int group;
-		u32 frame;
-		int idx;
+if (characterID >= NATIVE_CUSTOM_ID_BASE)
+{
+    int group;
+    u32 frame;
+    int idx;
 
 		if (characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 			return;
@@ -447,13 +447,24 @@ void Voiceline_StartPlay(struct Item *voiceLine)
                         int variant = (int)(rng % NATIVE_VOICE_VARIANTS_PER_GROUP);
                         trackId = base + group * NATIVE_VOICE_VARIANTS_PER_GROUP + variant;
                 }
-                if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
-		{
-			sdata->voicelineCooldown = 0x1e;
-			return;
-		}
-		sdata->voicelineCooldown =
-			(s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, trackId) / 5) + 0x1e;
+    if (CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, trackId) == 0)
+    {
+        sdata->voicelineCooldown = 0x1e;
+        return;
+    }
+    sdata->voicelineCooldown =
+        (s16)(CDSYS_XAGetTrackLength(CDSYS_XA_TYPE_GAME, trackId) / 5) + 0x1e;        if (sdata->XA_State != 0)
+        {
+                static u32 s_lastXAStuckLog = 0;
+                u32 _now = sdata->gGT->frameTimer_MainFrame_ResetDB;
+                if (_now - s_lastXAStuckLog > 180) {
+                        fprintf(stderr, "[VoiStuck] XA_State=%d cooldown=%d queueHead=%p\n",
+                                (int)sdata->XA_State, (int)sdata->voicelineCooldown,
+                                (void*)sdata->Voiceline2.first);
+                        s_lastXAStuckLog = _now;
+                }
+                return;
+        }
 		s_customVoiceLastFrame[idx] = sdata->gGT->frameTimer_MainFrame_ResetDB;
 		s_customVoiceHasSpoken[idx] = 1;
 		return;
@@ -514,12 +525,12 @@ void Voiceline_Update(void)
 		}
 	}
 
-	if (sdata->XA_State != 0)
-	{
-		return;
-	}
+        if (sdata->XA_State != 0)
+        {
+                return;
+        }
 
-	if (sdata->boolCanPlayWrongWaySFX != 0)
+        if (sdata->boolCanPlayWrongWaySFX != 0)
 	{
 		if ((sdata->WrongWayDirection_bool != 0) && (sdata->framesDrivingSameDirection > 0x1e))
 		{
