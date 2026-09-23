@@ -814,9 +814,20 @@ void CS_Podium_FullScene_Init(void)
 		// Default music is Tiny Tiger's
 		podiumMusic = PODIUM_MUSIC_TINY;
 		break;
-	}
+        }
 
-	CDSYS_XAPlay(CDSYS_XA_TYPE_MUSIC, podiumMusic);
+        /* Custom podium music (v1): try the custom track first. If
+         * there's no music/podium.wav for the rank-0 custom, the
+         * pipeline wrote a null track entry -> CDSYS_XAPlay returns 0
+         * and we fall back to the retail switch result above. */
+        {
+            int customMusic = NativeCustomRacer_GetPodiumMusicTrackForFirstPlace();
+            if (customMusic > 0 &&
+                CDSYS_XAPlay(CDSYS_XA_TYPE_MUSIC, customMusic) != 0)
+                return;
+        }
 
-	return;
+        CDSYS_XAPlay(CDSYS_XA_TYPE_MUSIC, podiumMusic);
+
+        return;
 }

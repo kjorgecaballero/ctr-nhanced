@@ -143,6 +143,18 @@ void  NativeCustomRacer_FixPodiumModel(struct Thread *t, int rank);
 struct Model;
 u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 
+
+/* === Custom podium music (v1) ==========================================
+ * One track per custom. xaID = 13 + roster_index (retail MUSIC occupies
+ * 0..12). The pipeline inserts custom music entries right after the
+ * retail MUSIC block and bumps firstSongEXTRA/GAME accordingly.
+ * Returns 0 if the rank-0 driver has no custom, or the roster entry has
+ * no music/podium.wav (the pipeline writes a null entry -> CDSYS_XAPlay
+ * returns 0 -> caller falls back to the retail switch). */
+#define NATIVE_MUSIC_TRACK_BASE 13
+
+int NativeCustomRacer_GetPodiumMusicTrackForFirstPlace(void);
+
 /* Applies textures.vrm for the given character to the player's VRAM region. */
 void NativeCustomRacer_ApplySlot(int playerIndex, int characterID);
 

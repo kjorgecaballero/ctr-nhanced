@@ -188,6 +188,7 @@ static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
  * The engine's extended ENG.XNF maps those xaIDs to the custom banks
  * built by tools/custom_racers/build_voice_pipeline.py. */
 static int s_customVoiceBase[NATIVE_CUSTOM_COUNT];
+static int s_customMusicBase[NATIVE_CUSTOM_COUNT];
 
 static int ParseEngineID(const char *s)
 {
@@ -350,6 +351,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_customVoiceBase, 0, sizeof(s_customVoiceBase));
+    memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
     s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
@@ -424,6 +426,11 @@ void NativeCustomRacer_ReloadRoster(void)
                 s_customVoiceBase[idx] = NATIVE_VOICE_TRACK_BASE
                                        + (s_pageEntryCount - 1)
                                        * NATIVE_VOICE_EVENT_COUNT;
+
+                /* Custom podium music: 1 track per roster entry.
+                 * xaID = NATIVE_MUSIC_TRACK_BASE + roster_index. */
+                s_customMusicBase[idx] = NATIVE_MUSIC_TRACK_BASE
+                                       + (s_pageEntryCount - 1);
 
                 {
                     const char *dn = (e.displayName[0] != '\0') ? e.displayName : e.folder;
@@ -1193,6 +1200,20 @@ int NativeCustomRacer_GetVoiceTrackBase(int characterID)
 		characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 		return 0;
 	return s_customVoiceBase[characterID - NATIVE_CUSTOM_ID_BASE];
+}
+
+
+int NativeCustomRacer_GetPodiumMusicTrackForFirstPlace(void)
+{
+    if (!s_podiumRankHasCharID[0])
+        return 0;
+
+    int charID = (int)s_podiumRankCharID[0];
+    if (charID <  NATIVE_CUSTOM_ID_BASE ||
+        charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return 0;
+
+    return s_customMusicBase[charID - NATIVE_CUSTOM_ID_BASE];
 }
 
 void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
