@@ -598,6 +598,32 @@ class NFR_PT_Racer(Panel):
         row.operator("nfr.dance_build_music",
                      text="Build Music Bank", icon="PLAY")
 
+        # --- Dance SFX (per-frame) ---
+        sfx_box = layout.box()
+        sfx_box.label(text="Dance SFX (per-frame)", icon="SPEAKER")
+        sfx_box.label(text="Fires a WAV when the dance hits a frame.",
+                      icon="INFO")
+        sfx_box.label(text="Frames are 0-based within the dance clip.")
+
+        if len(st.sfx_entries) == 0:
+            sfx_box.label(text="(none — click Add SFX to create one)",
+                          icon="INFO")
+        else:
+            for i, e in enumerate(st.sfx_entries):
+                row = sfx_box.row(align=True)
+                row.prop(e, "frame", text="")
+                row.prop(e, "wav_path", text="")
+                op = row.operator("nfr.dance_sfx_remove",
+                                  text="", icon="X")
+                op.index = i
+
+        row = sfx_box.row(align=True)
+        row.scale_y = 1.2
+        row.enabled = bool(st.slug)
+        row.operator("nfr.dance_sfx_add", text="Add SFX", icon="ADD")
+        row.operator("nfr.dance_build_sfx",
+                     text="Build Dance SFX", icon="PLAY")
+
         # --- Actions ---
         layout.separator()
         row = layout.row(align=True)

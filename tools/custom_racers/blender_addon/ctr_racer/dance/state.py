@@ -14,8 +14,32 @@ Both variants share the same mesh, materials and Sentinel textures.
 Only the timeline (frame range) and the output filename change.
 """
 import bpy
-from bpy.props import IntProperty, StringProperty
+from bpy.props import CollectionProperty, IntProperty, StringProperty
 from bpy.types import PropertyGroup
+
+
+class NFR_DanceSfxEntry(PropertyGroup):
+    """One per-frame SFX trigger for a custom podium dance.
+
+    Mirrors the sfx.bin layout written by NFR_OT_DanceBuildSfx:
+    entries are sorted by frame at build time, and the slot index in
+    sfx.bin matches the file name sfx_<slot>.wav. The C-side
+    (NativeCustomRacer_TickDanceSfx) fires CDSYS_XAPlay on the first
+    frame transition that matches a target."""
+
+    frame: IntProperty(
+        name="Frame",
+        min=0,
+        default=0,
+        description="Frame index within the dance clip (0-based, "
+                    "same as the Blender timeline when Start=0)",
+    )
+    wav_path: StringProperty(
+        name="WAV",
+        subtype="FILE_PATH",
+        default="",
+        description="WAV played when the dance reaches this frame",
+    )
 
 
 class NFR_DanceState(PropertyGroup):
@@ -55,8 +79,13 @@ class NFR_DanceState(PropertyGroup):
         default="",
     )
 
+    # Per-frame SFX list (up to NATIVE_DANCE_SFX_MAX = 16). The build
+    # operator sorts by frame, dedups, writes sfx.bin + sfx_<i>.wav,
+    # then runs the pipeline. Win and loose share this list.
+    sfx_entries: CollectionProperty(type=NFR_DanceSfxEntry)
 
-_classes = (NFR_DanceState,)
+
+_classes = (NFR_DanceSfxEntry, NFR_DanceState)
 
 
 def register():

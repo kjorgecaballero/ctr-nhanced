@@ -8,16 +8,38 @@ timeline. Win = rank 0, Loose = rank 1-2. Both variants share the same
 mesh, materials and Sentinel textures; only the timeline and the output
 filename differ.
 """
+import struct
 from pathlib import Path
 import subprocess
 
 import bpy
-from bpy.props import EnumProperty
+from bpy.props import EnumProperty, IntProperty
 from bpy.types import Operator
 
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
 from ..export.mesh_json import export_mesh_json, _bake_timeline_clips
+
+
+def _resolve_blender_path(p):
+    """Resolve a FILE_PATH property to an absolute Path, or None.
+
+    Blender stores relative paths as '//...' (relative to the .blend).
+    bpy.path.abspath() resolves them, but ONLY if the .blend has been
+    saved: with no filepath it returns a broken '\\..' prefix that
+    Path() cannot use. We detect both cases and return None so the
+    operator can surface a clear error instead of silently skipping."""
+    if not p:
+        return None
+    if p.startswith("//"):
+        if not bpy.data.filepath:
+            return None
+        return Path(bpy.path.abspath(p))
+    if p.startswith("\\"):
+        # Blender gave us a corrupted "relative" path because the .blend
+        # is unsaved; there is no way to resolve it.
+        return None
+    return Path(p)
 
 
 class NFR_OT_DanceExport(Operator):
@@ -186,7 +208,14 @@ class NFR_OT_DanceBuildMusic(Operator):
         music_dir.mkdir(parents=True, exist_ok=True)
         dst = music_dir / "podium.wav"
 
-        src_path = Path(src)
+        src_path = _resolve_blender_path(src)
+        if src_path is None:
+            self.report(
+                {"ERROR"},
+                f"Cannot resolve WAV path {src!r}. Either save the "
+                ".blend (File > Save) or uncheck 'Relative Path' in "
+                "the file picker and re-pick the WAV.")
+            return {"CANCELLED"}
         if not src_path.is_file():
             self.report({"ERROR"}, f"WAV not found: {src_path}")
             return {"CANCELLED"}
@@ -219,7 +248,158 @@ class NFR_OT_DanceBuildMusic(Operator):
         return {"FINISHED"}
 
 
-_classes = (NFR_OT_DanceExport, NFR_OT_DanceBuildMusic)
+class NFR_OT_DanceSfxAdd(Operator):
+    bl_idname = "nfr.dance_sfx_add"
+    bl_label = "Add Dance SFX"
+    bl_description = "Add a new per-frame SFX entry to the dance"
+
+    def execute(self, context):
+        st = context.scene.nfr_dance
+        st.sfx_entries.add()
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+class NFR_OT_DanceSfxRemove(Operator):
+    bl_idname = "nfr.dance_sfx_remove"
+    bl_label = "Remove Dance SFX"
+    bl_description = "Remove this SFX entry"
+
+    index: IntProperty(default=-1)
+
+    def execute(self, context):
+        st = context.scene.nfr_dance
+        if 0 <= self.index < len(st.sfx_entries):
+            st.sfx_entries.remove(self.index)
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+class NFR_OT_DanceBuildSfx(Operator):
+    bl_idname = "nfr.dance_build_sfx"
+    bl_label = "Build Dance SFX"
+    bl_description = (
+        "Write <slug>/dance/sfx.bin, copy each WAV to sfx_<i>.wav, "
+        "and rebuild ENG.XNF (GAME category, track base 4096)"
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_dance
+        prefs = _get_prefs(context)
+
+        # bpy.path.abspath() below resolves Blender-relative paths
+        # ("//.." = relative to the .blend file's directory) so a WAV
+        # picked with Relative Path enabled still resolves correctly.
+        slug = (st.slug or "").strip()
+        if not slug:
+            self.report({"ERROR"}, "Set the racer slug first")
+            return {"CANCELLED"}
+
+        slug_dir = prefs.racers_dir() / slug
+        if not slug_dir.is_dir():
+            self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
+            return {"CANCELLED"}
+
+        if len(st.sfx_entries) == 0:
+            self.report({"ERROR"}, "No SFX entries. Add at least one.")
+            return {"CANCELLED"}
+
+        # Sort by frame, dedup, drop entries without a WAV.
+        entries = []
+        seen = set()
+        skipped_empty = 0
+        skipped_dup = 0
+        skipped_missing = 0
+        for e in st.sfx_entries:
+            if not e.wav_path:
+                skipped_empty += 1
+                continue
+            f = int(e.frame)
+            if f in seen:
+                skipped_dup += 1
+                continue
+            src = _resolve_blender_path(e.wav_path)
+            if src is None:
+                self.report(
+                    {"ERROR"},
+                    f"Cannot resolve WAV path {e.wav_path!r}. Either "
+                    "save the .blend (File > Save) or uncheck "
+                    "'Relative Path' in the file picker and re-pick "
+                    "the WAV.")
+                return {"CANCELLED"}
+            if not src.is_file():
+                skipped_missing += 1
+                continue
+            seen.add(f)
+            entries.append((f, src))
+
+        entries.sort(key=lambda x: x[0])
+
+        if not entries:
+            self.report({"ERROR"},
+                        "No valid entries (missing WAV, empty, or all dup)")
+            return {"CANCELLED"}
+
+        dance_dir = slug_dir / "dance"
+        dance_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy WAVs to sfx_<i>.wav, index-aligned with sfx.bin.
+        import shutil as _sh
+        copied = 0
+        for i, (_frame, src) in enumerate(entries):
+            dst = dance_dir / f"sfx_{i}.wav"
+            try:
+                if src.resolve() != dst.resolve():
+                    _sh.copy2(src, dst)
+                    copied += 1
+            except Exception as ex:
+                self.report({"ERROR"}, f"Copy failed for {src}: {ex}")
+                return {"CANCELLED"}
+
+        # Write sfx.bin (magic SFX1 + u32 count + u32 frames[]).
+        frames = [f for f, _ in entries]
+        sfx_bin = dance_dir / "sfx.bin"
+        sfx_bin.write_bytes(
+            b"SFX1"
+            + struct.pack("<I", len(frames))
+            + struct.pack(f"<{len(frames)}I", *frames)
+        )
+
+        # Run the pipeline (writes XNF + banks + sidecar).
+        build_py = (Path(prefs.repo_path) / "tools" / "custom_racers"
+                    / "build_voice_pipeline.py")
+        if not build_py.is_file():
+            self.report({"ERROR"},
+                        f"build_voice_pipeline.py not found: {build_py}")
+            return {"CANCELLED"}
+        res = subprocess.run(
+            [prefs.python_exe, str(build_py), "-v"],
+            cwd=str(prefs.repo_path),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if res.returncode != 0:
+            self.report({"ERROR"},
+                        f"Pipeline failed ({res.returncode}):\n"
+                        f"{res.stderr[-400:]}")
+            return {"CANCELLED"}
+
+        msg = (f"Dance SFX built for '{slug}': "
+               f"{len(entries)} trigger(s), {copied} WAV(s) copied")
+        if skipped_dup:
+            msg += f", {skipped_dup} dup dropped"
+        if skipped_empty:
+            msg += f", {skipped_empty} empty dropped"
+        if skipped_missing:
+            msg += f", {skipped_missing} missing dropped"
+        self.report({"INFO"}, msg)
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+_classes = (NFR_OT_DanceExport, NFR_OT_DanceBuildMusic,
+            NFR_OT_DanceSfxAdd, NFR_OT_DanceSfxRemove,
+            NFR_OT_DanceBuildSfx)
 
 
 def register():
