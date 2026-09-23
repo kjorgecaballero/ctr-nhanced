@@ -366,6 +366,20 @@ def cmd_build(verbose):
         shutil.copy(XNF, bak)
         print(f"Backup: {bak}")
     original = bak.read_bytes()
+    
+    # Guard: .bak must be pristine. If the pipeline is run against a
+    # previously-patched XNF the header will accumulate counts and
+    # produce a silently-corrupted result. Bail with a clear message.
+    _songs_m = struct.unpack_from('<I', original, OFF_SONGS_MUSIC)[0]
+    _first_g = struct.unpack_from('<I', original, OFF_FIRST_GAME)[0]
+    if _songs_m != 13 or _first_g != 100:
+        sys.exit(
+            "ENG.XNF.bak is not pristine "
+            f"(numSongsMUSIC={_songs_m}, firstSongGAME={_first_g}). "
+            "Restore with:\n"
+            "  rm assets/XA/ENG.XNF assets/XA/ENG.XNF.bak\n"
+            "  python extract_xnf.py"
+        )
 
     roster = read_roster()
     print(f"Roster: {len(roster)} entries")
