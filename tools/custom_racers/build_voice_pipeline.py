@@ -29,8 +29,9 @@ XNF layout (post-build):
     [MUSIC retail (13)]         xaID 0..12      physical 0..12
     [MUSIC custom (N)]          xaID 13..12+N   physical 13..12+N
     [EXTRA retail (87)]         xaID 0..86      physical 13+N..99+N
-    [GAME retail (764)]         xaID 0..763     physical 100+N..863+N
-    [GAME custom voices (V)]    xaID 314..      physical 864+N..863+N+V
+    [GAME retail (314)]         xaID 0..313     physical 100+N..413+N
+    [GAME custom voices (V)]    xaID 314..      physical 414+N..413+N+V
+    [GAME dance SFX (D)]        xaID 4096..     physical 100+N+4096..
 
 If N == 0 the output is byte-identical to the voice-only pipeline.
 
@@ -59,8 +60,9 @@ RACERS           = ROOT / "assets" / "mods" / "racers"
 XNF              = ROOT / "assets" / "XA" / "ENG.XNF"
 BANKS            = ROOT / "assets" / "XA" / "ENG" / "GAME"
 MUSIC_BANKS      = ROOT / "assets" / "XA" / "MUSIC"
-SIDECAR          = XNF.parent / (XNF.name + ".voices.json")
-MUSIC_SIDECAR    = XNF.parent / (XNF.name + ".music.json")
+SIDECAR           = XNF.parent / (XNF.name + ".voices.json")
+MUSIC_SIDECAR     = XNF.parent / (XNF.name + ".music.json")
+DANCE_SFX_SIDECAR = XNF.parent / (XNF.name + ".dance_sfx.json")
 CACHE_DIR        = ROOT / "assets" / "XA" / ".voices_cache"
 MUSIC_CACHE_DIR  = ROOT / "assets" / "XA" / ".music_cache"
 
@@ -71,6 +73,16 @@ CHUNK_SIZE        = 8   # XA Form2 audio channels per bank
 
 MUSIC_TRACK_BASE  = 13
 MUSIC_BANK_BASE   = 18
+
+# Dance SFX: up to 16 per-frame XA triggers attached to a custom podium
+# dance. trackId = DANCE_SFX_TRACK_BASE + roster_index * DANCE_SFX_MAX + slot.
+# DANCE_SFX_TRACK_BASE sits well above the voice range so the pipeline pads
+# the track table between the last voice track and the first dance-SFX
+# track with null entries. Mirrors NATIVE_DANCE_SFX_* in
+# include/platform/native_custom_racer.h.
+DANCE_SFX_TRACK_BASE      = 4096
+DANCE_SFX_MAX             = 16
+DANCE_SFX_SIDECAR_VERSION = 1
 
 EVENTS = [
     "boost_01", "boost_02",
@@ -136,6 +148,25 @@ def roster_fingerprint(roster):
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
+def parse_sfx_bin(path):
+    """Read <slug>/dance/sfx.bin.
+
+    Format: b'SFX1' (4 bytes) + u32 count + u32 frames[count], LE.
+    Returns a list of frame indices, or None if missing/malformed.
+    Mirrors the C-side LoadDanceSfxSidecar."""
+    if not path.is_file():
+        return None
+    data = path.read_bytes()
+    if len(data) < 8 or data[:4] != b"SFX1":
+        return None
+    count = struct.unpack_from("<I", data, 4)[0]
+    if count == 0 or count > DANCE_SFX_MAX:
+        return None
+    if len(data) < 8 + count * 4:
+        return None
+    return list(struct.unpack_from(f"<{count}I", data, 8))
+
+
 def write_sidecar(roster, banks_written, tracks_written):
     data = {
         "version": SIDECAR_VERSION,
@@ -165,6 +196,22 @@ def write_music_sidecar(roster, banks_written, tracks_written):
     }
     MUSIC_SIDECAR.write_text(json.dumps(data, indent=2) + "\n")
     print(f"Wrote {MUSIC_SIDECAR.name} ({banks_written} bank(s))")
+
+
+def write_dance_sfx_sidecar(roster, banks_written, tracks_written):
+    data = {
+        "version": DANCE_SFX_SIDECAR_VERSION,
+        "roster_hash": roster_fingerprint(roster),
+        "roster_count": len(roster),
+        "track_base": DANCE_SFX_TRACK_BASE,
+        "max_per_custom": DANCE_SFX_MAX,
+        "chunk_size": CHUNK_SIZE,
+        "banks_written": banks_written,
+        "tracks_written": tracks_written,
+        "generated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+    }
+    DANCE_SFX_SIDECAR.write_text(json.dumps(data, indent=2) + "\n")
+    print(f"Wrote {DANCE_SFX_SIDECAR.name} ({banks_written} bank(s))")
 
 
 def silent_sector():
@@ -254,7 +301,7 @@ def _pack_entry(entry):
     return struct.pack('<BBH', ch & 0xFF, fn & 0xFF, se & 0xFFFF)
 
 
-def patch_xnf(original, music_tracks, voice_tracks):
+def patch_xnf(original, music_tracks, voice_tracks, dance_sfx_tracks):
     if len(original) < XNF_HEADER:
         sys.exit("XNF too small")
     if struct.unpack_from('<I', original, 0)[0] != XNF_MAGIC:
@@ -275,16 +322,30 @@ def patch_xnf(original, music_tracks, voice_tracks):
 
     n_music  = len(music_tracks)
     n_voice  = len(voice_tracks)
+    n_dance  = len(dance_sfx_tracks)
     banks_m  = len({fn for _, fn, _ in music_tracks if fn})
     banks_v  = len({fn for _, fn, _ in voice_tracks if fn})
-    n_banks  = banks_m + banks_v
+    banks_d  = len({fn for _, fn, _ in dance_sfx_tracks if fn})
+    n_banks  = banks_m + banks_v + banks_d
+
+    # Dance SFX tracks live at xaID DANCE_SFX_TRACK_BASE. The GAME
+    # category must be dense from xaID 0 up to that base, so we pad
+    # the track table between the last voice track and the first
+    # dance-SFX track with null entries. No pad is emitted when the
+    # build has no dance-SFX tracks, so the output stays byte-identical
+    # to the previous voice-only / voice+music pipelines in that case.
+    pad_entries = 0
+    if n_dance > 0:
+        pad_entries = max(0, DANCE_SFX_TRACK_BASE - songs_g - n_voice)
 
     header = bytearray(original[:XNF_HEADER])
     struct.pack_into('<I', header, OFF_NUM_XAS,     num_xas    + n_banks)
-    struct.pack_into('<I', header, OFF_NUM_TRACKS,  num_tracks + n_music + n_voice)
+    struct.pack_into('<I', header, OFF_NUM_TRACKS,
+                     num_tracks + n_music + n_voice + n_dance + pad_entries)
     struct.pack_into('<I', header, OFF_AUX,         aux        + n_banks * 4)
     struct.pack_into('<I', header, OFF_SONGS_MUSIC, songs_m    + n_music)
-    struct.pack_into('<I', header, OFF_SONGS_GAME,  songs_g    + n_voice)
+    struct.pack_into('<I', header, OFF_SONGS_GAME,
+                     songs_g + n_voice + n_dance + pad_entries)
     struct.pack_into('<I', header, OFF_FIRST_EXTRA, first_e    + n_music)
     struct.pack_into('<I', header, OFF_FIRST_GAME,  first_g    + n_music)
     # firstSongMUSIC stays at 0. firstSongEXTRA/GAME shift by n_music.
@@ -311,6 +372,10 @@ def patch_xnf(original, music_tracks, voice_tracks):
     out += extra_retail
     out += game_retail
     for e in voice_tracks:
+        out += _pack_entry(e)
+    if pad_entries > 0:
+        out += b"\x00" * (pad_entries * 4)
+    for e in dance_sfx_tracks:
         out += _pack_entry(e)
     return bytes(out)
 
@@ -346,6 +411,9 @@ def cmd_restore():
     if MUSIC_SIDECAR.is_file():
         MUSIC_SIDECAR.unlink()
         print(f"Removed {MUSIC_SIDECAR.name}")
+    if DANCE_SFX_SIDECAR.is_file():
+        DANCE_SFX_SIDECAR.unlink()
+        print(f"Removed {DANCE_SFX_SIDECAR.name}")
     # Caches are intentionally NOT cleaned here.
 
 
@@ -480,22 +548,100 @@ def cmd_build(verbose):
         for t in range(VOICE_TRACK_BASE, max_track + 1):
             voice_tracks.append(voice_entries.get(t, (0, 0, 0)))
 
-    if not music_tracks and not voice_tracks:
+    voice_bank_count = bank_idx  # snapshot before dance SFX continues the counter
+
+    # ------- DANCE SFX -------
+    # <slug>/dance/sfx.bin holds the target frame per slot; sfx_<slot>.wav
+    # are the source WAVs (encoded to XA in the same bank namespace as
+    # voices, continuing the S{18+}.XA counter).
+    dance_sfx_entries = {}
+    max_dance_sfx_track = DANCE_SFX_TRACK_BASE - 1
+
+    for i, (page, slot, slug) in enumerate(roster):
+        if not _roster_filter(page, slot):
+            continue
+
+        dance_dir = RACERS / slug / "dance"
+        if not dance_dir.is_dir():
+            continue
+
+        frames = parse_sfx_bin(dance_dir / "sfx.bin")
+        if not frames:
+            if verbose:
+                print(f"  [{i}] {slug}: no dance/sfx.bin, skip")
+            continue
+
+        track_bytes = []
+        any_present = False
+        for j in range(len(frames)):
+            wav = dance_dir / f"sfx_{j}.wav"
+            if wav.is_file():
+                track_bytes.append(
+                    encode_track_cached(wav,
+                        channel=len(track_bytes) % CHUNK_SIZE,
+                        verbose=verbose)
+                )
+                any_present = True
+            else:
+                track_bytes.append(None)
+
+        if not any_present:
+            if verbose:
+                print(f"  [{i}] {slug}: sfx.bin but no WAVs, skip")
+            continue
+
+        banks, chunk_counts = build_banks(track_bytes)
+        n_chunks = len(banks)
+        base_file = VOICE_BANK_BASE + bank_idx
+
+        for ci, bank in enumerate(banks):
+            fn = base_file + ci
+            bank_path = BANKS / f"S{fn:02d}.XA"
+            bank_path.parent.mkdir(parents=True, exist_ok=True)
+            bank_path.write_bytes(bank)
+
+        base = DANCE_SFX_TRACK_BASE + i * DANCE_SFX_MAX
+        for e_idx in range(DANCE_SFX_MAX):
+            ci = e_idx // CHUNK_SIZE
+            ch = e_idx % CHUNK_SIZE
+            n_sectors = chunk_counts[ci][ch]
+            sector_end = (n_sectors + 1) * 16
+            fn = base_file + ci
+            dance_sfx_entries[base + e_idx] = (ch, fn, sector_end)
+            if base + e_idx > max_dance_sfx_track:
+                max_dance_sfx_track = base + e_idx
+
+        bank_idx += n_chunks
+        print(f"  [{i}] {slug}: {n_chunks} dance-SFX bank(s) "
+              f"(S{base_file:02d}+), {len(frames)} frame(s)")
+
+    dance_sfx_tracks = []
+    if dance_sfx_entries:
+        for t in range(DANCE_SFX_TRACK_BASE, max_dance_sfx_track + 1):
+            dance_sfx_tracks.append(dance_sfx_entries.get(t, (0, 0, 0)))
+
+    dance_sfx_bank_count = bank_idx - voice_bank_count
+
+    if not music_tracks and not voice_tracks and not dance_sfx_tracks:
         print("No tracks to add.")
         write_sidecar(roster, banks_written=0, tracks_written=0)
         write_music_sidecar(roster, banks_written=0, tracks_written=0)
+        write_dance_sfx_sidecar(roster, banks_written=0, tracks_written=0)
         return
 
-    new_xnf = patch_xnf(original, music_tracks, voice_tracks)
+    new_xnf = patch_xnf(original, music_tracks, voice_tracks, dance_sfx_tracks)
     XNF.write_bytes(new_xnf)
     print(f"\nPatched {XNF.name}: {len(original)} -> {len(new_xnf)}B, "
           f"+{len(music_tracks)} music, +{len(voice_tracks)} voice, "
-          f"+{music_bank_idx + bank_idx} banks total")
+          f"+{len(dance_sfx_tracks)} dance-sfx, "
+          f"+{music_bank_idx + voice_bank_count + dance_sfx_bank_count} banks total")
 
-    write_sidecar(roster, banks_written=bank_idx,
+    write_sidecar(roster, banks_written=voice_bank_count,
                   tracks_written=len(voice_tracks))
     write_music_sidecar(roster, banks_written=music_bank_idx,
                         tracks_written=len(music_tracks))
+    write_dance_sfx_sidecar(roster, banks_written=dance_sfx_bank_count,
+                            tracks_written=len(dance_sfx_tracks))
 
 
 def main():
