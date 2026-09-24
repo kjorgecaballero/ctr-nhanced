@@ -20,3 +20,9 @@ _slot_sel_slot = -1
 
 # Materials tab: currently displayed page (1..total_pages)
 _mat_view_page = 1
+
+# Settings tab: whether the Issues box is expanded.
+# Default False so the panel stays uncluttered. Toggled by
+# NFR_OT_ToggleValidationDetails. Does NOT re-run validation — that
+# is what the [check] Validate button is for.
+_validation_show_details = False

@@ -15,7 +15,8 @@ from ..prefs import _get_prefs
 from ..core.helpers import _find_object_by_slug, _active_racer
 from ..core.roster import _read_roster, _group_by_page
 from ..core.icons import _get_icon, _get_original_icon, _image_preview_icon_id
-from ..core.validate import validate_racer
+from ..core.validate import validate_racer, _uv_out_of_range
+
 from ..slots.state import _resolve_cells
 from ..kart.templates import KART_TEMPLATES
 from ..kart.presets import scan_presets
@@ -90,9 +91,64 @@ class NFR_PT_Racer(Panel):
                 icon='CHECKMARK' if ok else 'ERROR',
             )
 
+            # Separate toggle: shows/hides the Issues box below.
+            # Does NOT re-run validation — that is what the [check]
+            # button above is for.
+            det = row.row(align=True)
+            det.operator(
+                "nfr.toggle_validation_details",
+                text="",
+                icon='TRIA_DOWN' if state._validation_show_details else 'TRIA_RIGHT',
+            )
+
         if not r.is_racer:
             layout.label(text="Check 'Is Racer' to configure", icon="INFO")
             return
+
+        # Issues box (opt-in). Recomputes on draw only when expanded;
+        # the UV check is the expensive part, so it is gated here too.
+        # Each item is (level, short, long): the row shows `short`,
+        # the click popup shows `long`.
+        if state._validation_show_details:
+            try:
+                _ok, warns, errs = validate_racer(obj)
+            except Exception:
+                warns, errs = [], []
+
+            items = []
+            for short, long in errs:
+                items.append(("ERROR", short, long))
+            for short, long in warns:
+                items.append(("WARNING", short, long))
+
+            n_oob, min_u, max_u, min_v, max_v = _uv_out_of_range(obj)
+            if n_oob > 0:
+                items.append((
+                    "WARNING",
+                    "UV out of range",
+                    f"UV out of [0,1]: {n_oob} loops "
+                    f"(u: {min_u:.3f}..{max_u:.3f}, "
+                    f"v: {min_v:.3f}..{max_v:.3f}). "
+                    f"CTR clamps UVs to the texture edge before "
+                    f"quantizing to u8. If you used tiling or mirroring, "
+                    f"the in-game render will not match the Blender "
+                    f"preview."
+                ))
+
+            box = layout.box()
+            if not items:
+                box.label(text="All checks passed", icon='CHECKMARK')
+            else:
+                for level, short, long in items:
+                    r2 = box.row()
+                    if level == "ERROR":
+                        r2.alert = True
+                    op = r2.operator(
+                        "nfr.show_issue",
+                        text=short,
+                        icon='CANCEL' if level == "ERROR" else 'ERROR',
+                    )
+                    op.issue_text = long
 
         col = layout.column(align=True)
         slug_row = col.row(align=True)
@@ -737,6 +793,7 @@ class NFR_PT_Racer(Panel):
         row.enabled = bool(slug)
         row.operator("nfr.voices_build",
                      text="Build Voice Banks", icon="PLAY")
+
 
 _classes = (NFR_PT_Racer,)
 

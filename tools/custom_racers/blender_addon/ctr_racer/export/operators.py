@@ -4,11 +4,13 @@
 """The eight racer-panel operators (validate / export / save-load / build-run)."""
 import bpy
 import json
+import textwrap
 from pathlib import Path
 
 from bpy.props import StringProperty
 from bpy.types import Operator
 
+from .. import state as ui_state
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
 from ..core.icons import _teardown_previews
@@ -27,13 +29,12 @@ class NFR_OT_Validate(Operator):
             self.report({"ERROR"}, "Select a mesh first")
             return {"CANCELLED"}
         ok, warns, errs = validate_racer(obj)
-        for e in errs:
-            self.report({"ERROR"}, e)
-        for w in warns:
-            print(f"[Racer Validate] {obj.name}: {w}")
+        for _short, long in errs:
+            self.report({"ERROR"}, long)
+        for _short, long in warns:
+            print(f"[Racer Validate] {obj.name}: {long}")
 
         n_oob, min_u, max_u, min_v, max_v = _uv_out_of_range(obj)
-
         if n_oob > 0:
             self.report(
                 {"WARNING"},
@@ -63,8 +64,8 @@ class NFR_OT_Export(Operator):
 
         ok, _warns, errs = validate_racer(obj)
         if not ok:
-            for e in errs:
-                self.report({"ERROR"}, e)
+            for short, _long in errs:
+                self.report({"ERROR"}, short)
             return {"CANCELLED"}
 
         try:
@@ -96,7 +97,8 @@ class NFR_OT_ExportAll(Operator):
             ok, _w, errs = validate_racer(obj)
             if not ok:
                 fail_count += 1
-                print(f"[Racer Export All] SKIP {obj.name}: {'; '.join(errs)}")
+                texts = "; ".join(long for _s, long in errs)
+                print(f"[Racer Export All] SKIP {obj.name}: {texts}")
                 continue
             try:
                 _do_export(context, obj)
@@ -237,6 +239,40 @@ class NFR_OT_FixSlug(Operator):
         return {"FINISHED"}
 
 
+class NFR_OT_ToggleValidationDetails(Operator):
+    bl_idname = "nfr.toggle_validation_details"
+    bl_label = "Toggle Validation Details"
+    bl_description = (
+        "Show/hide the Issues box. When open, the box lists the "
+        "errors and warnings from validate_racer plus the "
+        "out-of-[0,1] UV check. Does not re-run validation."
+    )
+
+    def execute(self, context):
+        ui_state._validation_show_details = not ui_state._validation_show_details
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+class NFR_OT_ShowIssue(Operator):
+    bl_idname = "nfr.show_issue"
+    bl_label = "Issue"
+    bl_description = "Click to see the full text"
+
+    issue_text: StringProperty()
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_popup(self, width=520)
+
+    def draw(self, context):
+        col = self.layout.column(align=True)
+        for line in textwrap.wrap(self.issue_text, 80):
+            col.label(text=line)
+
+    def execute(self, context):
+        return {"FINISHED"}
+
+
 _classes = (
     NFR_OT_Validate,
     NFR_OT_Export,
@@ -247,6 +283,8 @@ _classes = (
     NFR_OT_RunGame,
     NFR_OT_BuildAndRun,
     NFR_OT_FixSlug,
+    NFR_OT_ToggleValidationDetails,
+    NFR_OT_ShowIssue,
 )
 
 
