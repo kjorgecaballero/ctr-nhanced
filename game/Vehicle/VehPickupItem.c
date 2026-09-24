@@ -218,7 +218,33 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 
 	s32 modelID = STATIC_UKAUKA - boolGoodGuy;
 
+	// === Custom mask model =========================================
+	// If the roster entry says mask=custom_good|custom_bad and the
+	// mask.ctr file exists, temporarily swap the retail Aku/Uka model
+	// in gGT->modelPtr[modelID] with the custom Model*. The swap is
+	// scoped to this INSTANCE_BirthWithThread call so it does NOT
+	// affect CS_Credits.c (which also reads gGT->modelPtr[STATIC_AKUAKU])
+	// nor VehTalkMask.c (adventure talking mask, reads modelPtr[modelID]).
+	// t->modelIndex is set inside BirthWithThread from modelID, so it
+	// stays 0x39/0x3A — the "existing mask" loop above and the soundID
+	// computation below keep working unchanged.
+	struct Model *customMask = NULL;
+	struct Model *savedModel = NULL;
+	{
+		s32 charID = data.characterIDs[driver->driverID];
+		customMask = NativeCustomRacer_GetMaskModelForChar(charID);
+		if (customMask != NULL)
+		{
+			savedModel = gGT->modelPtr[modelID];
+			gGT->modelPtr[modelID] = customMask;
+		}
+	}
+
 	instance = INSTANCE_BirthWithThread(modelID, sdata->s_doctor1, SMALL, OTHER, RB_MaskWeapon_ThTick, sizeof(struct MaskHeadWeapon), t);
+
+	if (customMask != NULL)
+		gGT->modelPtr[modelID] = savedModel;
+	// === end custom mask ===========================================
 
 	soundID = modelID + MASK_SOUND_ID_OFFSET_FROM_MODEL;
 

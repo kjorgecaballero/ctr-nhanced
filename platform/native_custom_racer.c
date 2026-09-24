@@ -48,6 +48,7 @@ s32 g_debugForcedPodiumRank = -1;
 enum {
     NATIVE_SENTINEL_KIND_MODEL = 0,
     NATIVE_SENTINEL_KIND_DANCE = 1,
+    NATIVE_SENTINEL_KIND_MASK  = 2,
 };
 
 /* Width in VRAM words assigned to each player slot. */
@@ -110,6 +111,7 @@ typedef struct
     u32  color[4];       /* packed vertex-color codes (all 4 identical) */
     int  hasColor;       /* 1 if #RRGGBB was present in roster.txt */
     int  maskIsGoodGuy;  /* 1 = Aku Aku, 0 = Uka Uka; default 1 */
+    int  maskCustom;     /* 1 = custom mask model (<slug>/mask/mask.ctr) */
     int  hasWheels;      /* 1 = wheels visible, 0 = hidden; default 1 */
 } PageEntry;
 
@@ -149,6 +151,16 @@ static u8  s_customHasColor[NATIVE_CUSTOM_COUNT];
 /* Per-custom mask polarity (roster.txt optional mask=good|bad). 1 = good. */
 static u8  s_customMaskIsGoodGuy[NATIVE_CUSTOM_COUNT];
 
+/* Custom mask model (roster mask=custom_good | custom_bad).
+ * s_customMaskIsCustom[idx] = 1 if the roster entry opted in.
+ * s_customMaskLoaded[idx]   = 1 once we attempted a lazy load
+ *                             (even if it failed — do not retry).
+ * s_customMaskModel[idx]    = the loaded Model* (offset by
+ *                             LOAD_MODEL_FILE_HEADER_BYTES), or NULL. */
+static u8              s_customMaskIsCustom[NATIVE_CUSTOM_COUNT];
+static u8              s_customMaskLoaded  [NATIVE_CUSTOM_COUNT];
+static struct Model   *s_customMaskModel   [NATIVE_CUSTOM_COUNT];
+
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
 
@@ -179,6 +191,7 @@ static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
 static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
 static s16 s_sentinelTexMap     [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_maskSentinelTexMap [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 
 
 
@@ -320,16 +333,23 @@ static int Page_ParseLine(char *line, PageEntry *out)
         }
     }
 
-    /* Optional tokens after color: mask=good|bad, wheels=yes|no.
-     * Order-independent, defaults: mask=good, wheels=yes. */
+    /* Optional tokens after color: mask=good|bad|custom_good|custom_bad,
+     * wheels=yes|no. Order-independent.
+     * Defaults: maskIsGoodGuy=1, maskCustom=0, hasWheels=1. */
     out->maskIsGoodGuy = 1;
-    out->hasWheels = 1;
+    out->maskCustom    = 0;
+    out->hasWheels     = 1;
     while (*p == ' ' || *p == '\t') p++;
     while (*p && *p != '\n' && *p != '\r')
     {
         if (strncmp(p, "mask=", 5) == 0)
         {
             p += 5;
+            if (strncmp(p, "custom_", 7) == 0)
+            {
+                out->maskCustom = 1;
+                p += 7;
+            }
             if (strncmp(p, "bad", 3) == 0)
                 out->maskIsGoodGuy = 0;
         }
@@ -358,9 +378,13 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMeta, 0, sizeof(s_customMeta));
     memset(s_customHasColor, 0, sizeof(s_customHasColor));
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
+    memset(s_customMaskIsCustom, 0, sizeof(s_customMaskIsCustom));
+    memset(s_customMaskLoaded, 0, sizeof(s_customMaskLoaded));
+    memset(s_customMaskModel, 0, sizeof(s_customMaskModel));
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
+    memset(s_maskSentinelTexMap,  0xFF, sizeof(s_maskSentinelTexMap));  /* -1 = unset */
     memset(s_customVoiceBase, 0, sizeof(s_customVoiceBase));
     memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
     memset(s_customDanceSfxBase, 0, sizeof(s_customDanceSfxBase));
@@ -426,6 +450,7 @@ void NativeCustomRacer_ReloadRoster(void)
                 memcpy(s_customColor[idx], e.color, sizeof(e.color));
                 s_customHasColor[idx] = (u8)e.hasColor;
                 s_customMaskIsGoodGuy[idx] = (u8)e.maskIsGoodGuy;
+                s_customMaskIsCustom[idx]  = (u8)e.maskCustom;
                 s_customHasWheels[idx] = (u8)e.hasWheels;
 
                 s_customMenuID[idx] = (s16)e.slot;
@@ -765,12 +790,27 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
         return;
 
     /* On-disk subfolder + cache array + log tag depend on the kind. */
-    const char *subdir    = (kind == NATIVE_SENTINEL_KIND_DANCE) ? "dance/" : "";
-    const char *kind_name = (kind == NATIVE_SENTINEL_KIND_DANCE) ? "dance" : "model";
-    s16 (*cache)[NATIVE_MODEL_TEX_MAX] =
-        (kind == NATIVE_SENTINEL_KIND_DANCE)
-            ? s_danceSentinelTexMap
-            : s_sentinelTexMap;
+    const char *subdir;
+    const char *kind_name;
+    s16 (*cache)[NATIVE_MODEL_TEX_MAX];
+    switch (kind)
+    {
+    case NATIVE_SENTINEL_KIND_DANCE:
+        subdir    = "dance/";
+        kind_name = "dance";
+        cache     = s_danceSentinelTexMap;
+        break;
+    case NATIVE_SENTINEL_KIND_MASK:
+        subdir    = "mask/";
+        kind_name = "mask";
+        cache     = s_maskSentinelTexMap;
+        break;
+    default:
+        subdir    = "";
+        kind_name = "model";
+        cache     = s_sentinelTexMap;
+        break;
+    }
 
     /* Probe: sentinel_00.bin must exist, otherwise this is not Sentinel. */
     char probe[256];
@@ -858,6 +898,83 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
         u16 newClut = (u16)(0x8000 | globalIdx);
         memcpy(layout + 2, &newClut, 2);
     }
+}
+
+/* === Custom mask model ================================================
+ * Optional per-custom mask model (roster mask=custom_good | custom_bad).
+ * Loaded lazily on first mask pickup and cached for the session. The
+ * caller (VehPickupItem_MaskUseWeapon) temporarily swaps the entry in
+ * gGT->modelPtr[STATIC_AKUAKU/UKAUKA] around INSTANCE_BirthWithThread,
+ * then restores the retail pointer so the credits path and the
+ * adventure talking-mask path keep seeing the retail model. */
+int NativeCustomRacer_HasCustomMask(int characterID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return 0;
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    return s_customMaskIsCustom[idx] ? 1 : 0;
+}
+
+struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (!s_customMaskIsCustom[idx])
+        return NULL;
+
+    /* Already attempted? Return whatever we got (may be NULL on a
+     * previous failure — do not retry every spawn). */
+    if (s_customMaskLoaded[idx])
+        return s_customMaskModel[idx];
+    s_customMaskLoaded[idx] = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+        return NULL;
+
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/mask/mask.ctr", folder);
+
+    /* Probe first so we distinguish "missing" from "too large". */
+    FILE *probe = fopen(path, "rb");
+    if (!probe)
+    {
+        Log("[CustomRacer] mask.ctr not found: %s\n", path);
+        return NULL;
+    }
+    fseek(probe, 0, SEEK_END);
+    long file_sz = ftell(probe);
+    fclose(probe);
+
+    if (file_sz > NATIVE_CTR_MAX_BYTES)
+    {
+        Log("[CustomRacer] mask.ctr too large: %s (%ld bytes, max %ld)\n",
+            path, file_sz, (long)NATIVE_CTR_MAX_BYTES);
+        return NULL;
+    }
+
+    long sz = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] mask.ctr load failed: %s\n", path);
+        return NULL;
+    }
+
+    ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK);
+
+    struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
+    s_customMaskModel[idx] = m;
+
+    Log("[CustomRacer] mask.ctr loaded: %s (%ld bytes)\n", path, sz);
+    return m;
 }
 
 /* === Custom podium dance ==============================================

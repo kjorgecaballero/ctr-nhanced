@@ -273,6 +273,19 @@ void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
  * Default for customs without a mask= field in roster.txt is good. */
 int NativeCustomRacer_GetMaskIsGoodGuy(int characterID);
 
+/* Custom mask model (roster mask=custom_good | custom_bad).
+ * Returns 1 if the custom opted in. Returns 0 for originals and for
+ * customs with mask=good|bad. */
+int NativeCustomRacer_HasCustomMask(int characterID);
+
+/* Lazy-loads <slug>/mask/mask.ctr on first call, registers its
+ * Sentinel textures (KIND_MASK), caches the Model*, and returns it.
+ * Returns NULL if the character is not a custom, the roster entry
+ * has no mask=custom_* field, or the file is missing / too large /
+ * fails to load. Safe to call on every mask spawn; the model is
+ * loaded once per session. */
+struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID);
+
 /* === Wheels visible flag ===
  * Returns 1 = wheels visible, 0 = wheels hidden (Oxide-style), -1 = not a custom.
  * Default for customs without a wheels= field in roster.txt is 1. */
