@@ -168,6 +168,14 @@ static struct Model   *s_customMaskModel   [NATIVE_CUSTOM_COUNT];
 static u8              s_customMaskBeamLoaded[NATIVE_CUSTOM_COUNT];
 static struct Model   *s_customMaskBeamModel [NATIVE_CUSTOM_COUNT];
 
+/* Custom mask HUD icon (optional <slug>/mask/icon.bin, RGBA8 + header
+ * <II w h>). One per custom, built lazily on first HUD draw. The
+ * struct Icon reuses the Sentinel CLUT path: clut = 0x8000 | globalIdx
+ * where globalIdx is a slot in the shared GL texture pool. */
+static u8              s_customMaskIconAttempted[NATIVE_CUSTOM_COUNT];
+static s16             s_customMaskIconTexIdx   [NATIVE_CUSTOM_COUNT];
+static struct Icon     s_customMaskIcon          [NATIVE_CUSTOM_COUNT];
+
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
 
@@ -391,6 +399,8 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMaskModel, 0, sizeof(s_customMaskModel));
     memset(s_customMaskBeamLoaded, 0, sizeof(s_customMaskBeamLoaded));
     memset(s_customMaskBeamModel, 0, sizeof(s_customMaskBeamModel));
+    memset(s_customMaskIconAttempted, 0, sizeof(s_customMaskIconAttempted));
+    memset(s_customMaskIconTexIdx, 0xFF, sizeof(s_customMaskIconTexIdx)); /* -1 = unset */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
@@ -1069,6 +1079,77 @@ struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID)
 
     Log("[CustomRacer] beam.ctr loaded: %s (%ld bytes)\n", path, sz);
     return m;
+}
+
+/* Custom mask HUD icon. Loads <slug>/mask/icon.bin (RGBA8 + <II w h>
+ * header), registers it as a GL texture in the shared pool, and fills
+ * a per-custom struct Icon with the Sentinel CLUT path. Returns NULL
+ * for originals, for customs without mask=custom_*, or if icon.bin is
+ * missing. Lazy-loaded once per session; a missing file is remembered
+ * so we do not probe the disk on every HUD frame. */
+struct Icon *NativeCustomRacer_GetMaskIcon(int characterID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (!s_customMaskIsCustom[idx])
+        return NULL;
+
+    if (s_customMaskIconAttempted[idx])
+    {
+        if (s_customMaskIconTexIdx[idx] < 0)
+            return NULL;
+        return &s_customMaskIcon[idx];
+    }
+    s_customMaskIconAttempted[idx] = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+    {
+        s_customMaskIconTexIdx[idx] = -1;
+        return NULL;
+    }
+
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/mask/icon.bin", folder);
+
+    int w = 0, h = 0;
+    GLuint tex = LoadSentinelBin(path, &w, &h);
+    if (tex == 0)
+    {
+        /* No icon.bin - fall back to retail icon silently. */
+        s_customMaskIconTexIdx[idx] = -1;
+        return NULL;
+    }
+
+    int globalIdx = AllocModelTexIdx();
+    if (globalIdx < 0)
+    {
+        Log("[CustomRacer] mask icon: texture pool full (max=%d)\n",
+            NATIVE_MODEL_TEX_END);
+        s_customMaskIconTexIdx[idx] = -1;
+        return NULL;
+    }
+
+    NativeGpu_RegisterCustomTexture((u16)globalIdx, (TextureID)tex, w, h);
+
+    struct Icon *icon = &s_customMaskIcon[idx];
+    memset(icon, 0, sizeof(*icon));
+    icon->texLayout.u0 = 0;  icon->texLayout.v0 = 0;
+    icon->texLayout.u1 = (u8)(w & 0xFF);  icon->texLayout.v1 = 0;
+    icon->texLayout.u2 = 0;  icon->texLayout.v2 = (u8)(h & 0xFF);
+    icon->texLayout.u3 = (u8)(w & 0xFF);  icon->texLayout.v3 = (u8)(h & 0xFF);
+    icon->texLayout.clut = (u16)(0x8000 | globalIdx);
+    icon->texLayout.tpage = 0;
+
+    s_customMaskIconTexIdx[idx] = (s16)globalIdx;
+
+    Log("[CustomRacer] mask icon loaded: charID=%d %dx%d global=%d\n",
+        characterID, w, h, globalIdx);
+    return icon;
 }
 
 /* === Custom podium dance ==============================================

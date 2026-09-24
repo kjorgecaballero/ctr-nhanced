@@ -43,6 +43,9 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 	int iconID;
 	SVec2 pos;
 
+	/* Custom mask icon override: NULL = use the retail path. */
+	struct Icon *maskIconOverride = NULL;
+
 	struct GameTracker *gGT = sdata->gGT;
 	itemID = d->heldItemID;
 
@@ -177,9 +180,18 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 		posY = pos.y;
 	}
 
+	/* Custom mask icon: query d->heldItemID (the original held
+	 * item), not itemID - on the roulette path itemID is
+	 * reassigned to a random weapon id. */
+	if (d->heldItemID == UI_WEAPON_ITEM_MASK)
+	{
+		maskIconOverride = NativeCustomRacer_GetMaskIcon(
+		    (int)data.characterIDs[d->driverID]);
+	}
+
 	DecalHUD_DrawWeapon(
 	    // pointer to icon, from array of icon pointers
-	    gGT->ptrIcons[iconID],
+	    (maskIconOverride != NULL) ? maskIconOverride : gGT->ptrIcons[iconID],
 
 	    (int)posX, (int)posY,
 

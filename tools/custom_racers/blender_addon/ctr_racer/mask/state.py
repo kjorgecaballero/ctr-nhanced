@@ -24,6 +24,18 @@ class NFR_MaskState(PropertyGroup):
         default="",
     )
 
+    # Optional HUD icon. PNG that build_icon_bin.py converts to
+    # <slug>/mask/icon.bin (RGBA8 + <II w h>). When present, the HUD
+    # draws this instead of the retail Aku/Uka icon while the mask is
+    # held. ~32x32 or 44x26 recommended; the C-side accepts any size
+    # up to 4096x4096.
+    icon_path: StringProperty(
+        name="HUD Icon",
+        description="Optional PNG for the mask item-slot icon",
+        subtype="FILE_PATH",
+        default="",
+    )
+
 
 _classes = (NFR_MaskState,)
 

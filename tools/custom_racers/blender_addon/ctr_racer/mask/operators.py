@@ -156,7 +156,83 @@ class NFR_OT_MaskExport(Operator):
         return {"FINISHED"}
 
 
-_classes = (NFR_OT_MaskExport,)
+class NFR_OT_MaskExportIcon(Operator):
+    bl_idname = "nfr.mask_export_icon"
+    bl_label = "Export Mask Icon"
+    bl_description = (
+        "Copy the picked PNG to <slug>/mask/icon.png and convert it to "
+        "<slug>/mask/icon.bin. The runtime uses it as the mask's HUD "
+        "icon, replacing the retail Aku/Uka face while the mask is "
+        "held."
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_mask
+        prefs = _get_prefs(context)
+
+        slug = (st.slug or "").strip()
+        if not slug:
+            self.report({"ERROR"}, "Set the racer slug first")
+            return {"CANCELLED"}
+
+        src_str = (st.icon_path or "").strip()
+        if not src_str:
+            self.report({"ERROR"}, "Pick an icon PNG first")
+            return {"CANCELLED"}
+
+        slug_dir = prefs.racers_dir() / slug
+        if not slug_dir.is_dir():
+            self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
+            return {"CANCELLED"}
+
+        src = _resolve_blender_path(src_str)
+        if src is None or not src.is_file():
+            self.report({"ERROR"},
+                        f"Cannot resolve icon path: {src_str!r}. Save "
+                        "the .blend or uncheck 'Relative Path'.")
+            return {"CANCELLED"}
+
+        mask_dir = slug_dir / "mask"
+        mask_dir.mkdir(parents=True, exist_ok=True)
+
+        png_dst = mask_dir / "icon.png"
+        bin_dst = mask_dir / "icon.bin"
+
+        try:
+            if src.resolve() != png_dst.resolve():
+                import shutil as _sh
+                _sh.copy2(src, png_dst)
+        except Exception as ex:
+            self.report({"ERROR"}, f"Copy failed: {ex}")
+            return {"CANCELLED"}
+
+        script = (Path(prefs.repo_path) / "tools" / "custom_racers"
+                  / "build_icon_bin.py")
+        if not script.is_file():
+            self.report({"ERROR"},
+                        f"build_icon_bin.py not found: {script}")
+            return {"CANCELLED"}
+
+        res = subprocess.run(
+            [prefs.python_exe, str(script), str(png_dst), str(bin_dst)],
+            cwd=str(prefs.repo_path),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if res.returncode != 0:
+            self.report({"ERROR"},
+                        f"build_icon_bin failed ({res.returncode}):\n"
+                        f"{res.stderr[-400:]}")
+            return {"CANCELLED"}
+
+        size = bin_dst.stat().st_size if bin_dst.is_file() else 0
+        self.report({"INFO"},
+                    f"Mask icon exported: icon.bin ({size} B)")
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+_classes = (NFR_OT_MaskExport, NFR_OT_MaskExportIcon)
 
 
 def register():

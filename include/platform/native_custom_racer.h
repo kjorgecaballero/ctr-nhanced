@@ -301,6 +301,11 @@ struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID);
  * <= 40 frames. A 1-frame beam always reads maskPosArr[0]. */
 struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID);
 
+/* Returns the custom HUD icon for the mask (the little face in the
+ * item slot), or NULL for originals, for customs without
+ * mask=custom_*, or if <slug>/mask/icon.bin is missing. */
+struct Icon *NativeCustomRacer_GetMaskIcon(int characterID);
+
 /* === Wheels visible flag ===
  * Returns 1 = wheels visible, 0 = wheels hidden (Oxide-style), -1 = not a custom.
  * Default for customs without a wheels= field in roster.txt is 1. */

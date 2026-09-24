@@ -752,6 +752,18 @@ class NFR_PT_Racer(Panel):
                 layout.label(text=f"Racer folder not found: {slug}",
                              icon="ERROR")
 
+        # --- HUD Icon (optional) ---
+        icon_box = layout.box()
+        icon_box.label(text="HUD Icon (optional)", icon="IMAGE_DATA")
+        icon_box.label(text="Replaces the retail Aku/Uka face while")
+        icon_box.label(text="the mask is held. ~32x32 PNG.")
+        icon_box.prop(st, "icon_path", text="PNG")
+        row = icon_box.row(align=True)
+        row.scale_y = 1.3
+        row.enabled = bool(slug) and bool((st.icon_path or "").strip())
+        row.operator("nfr.mask_export_icon",
+                     text="Export Icon", icon="PLAY")
+
         # --- Actions ---
         layout.separator()
         row = layout.row(align=True)
