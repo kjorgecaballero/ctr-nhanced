@@ -12,7 +12,7 @@ from bpy.types import Operator
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
 from ..core.icons import _teardown_previews
-from ..core.validate import validate_racer
+from ..core.validate import validate_racer, _slugify, _uv_out_of_range
 from .mesh_json import _do_export, _racer_objects
 from .native_build import _build_exe, _run_game
 
@@ -31,6 +31,18 @@ class NFR_OT_Validate(Operator):
             self.report({"ERROR"}, e)
         for w in warns:
             print(f"[Racer Validate] {obj.name}: {w}")
+
+        n_oob, min_u, max_u, min_v, max_v = _uv_out_of_range(obj)
+
+        if n_oob > 0:
+            self.report(
+                {"WARNING"},
+                f"UV out of [0,1]: {n_oob} loops "
+                f"(u: {min_u:.3f}..{max_u:.3f}, v: {min_v:.3f}..{max_v:.3f}). "
+                f"CTR clamps UVs to the texture edge — the model may look "
+                f"different in-game than in Blender."
+            )
+
         if ok:
             self.report({"INFO"}, f"{obj.name}: OK")
         return {"FINISHED"}
@@ -201,6 +213,30 @@ class NFR_OT_BuildAndRun(Operator):
         return {"FINISHED"} if ok else {"CANCELLED"}
 
 
+class NFR_OT_FixSlug(Operator):
+    bl_idname = "nfr.fix_slug"
+    bl_label = "Fix Slug"
+    bl_description = (
+        "Rewrite the slug: spaces -> underscores, lowercase, "
+        "strip non-alphanumeric characters"
+    )
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            self.report({"ERROR"}, "Select a mesh first")
+            return {"CANCELLED"}
+        old = obj.racer.slug
+        new = _slugify(old)
+        if new == old:
+            self.report({"INFO"}, f"Slug already clean: '{old}'")
+            return {"FINISHED"}
+        obj.racer.slug = new
+        _redraw_view3d(context)
+        self.report({"INFO"}, f"Slug: '{old}' -> '{new}'")
+        return {"FINISHED"}
+
+
 _classes = (
     NFR_OT_Validate,
     NFR_OT_Export,
@@ -210,6 +246,7 @@ _classes = (
     NFR_OT_BuildExe,
     NFR_OT_RunGame,
     NFR_OT_BuildAndRun,
+    NFR_OT_FixSlug,
 )
 
 

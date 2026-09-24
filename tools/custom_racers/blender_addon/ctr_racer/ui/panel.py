@@ -95,7 +95,11 @@ class NFR_PT_Racer(Panel):
             return
 
         col = layout.column(align=True)
-        col.prop(r, "slug")
+        slug_row = col.row(align=True)
+        slug_row.prop(r, "slug")
+        if " " in (r.slug or ""):
+            slug_row.alert = True
+            slug_row.operator("nfr.fix_slug", text="Fix", icon="FILE_REFRESH")
 
         info = col.row(align=True)
         info.alignment = "EXPAND"

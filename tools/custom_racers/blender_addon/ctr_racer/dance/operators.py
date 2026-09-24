@@ -116,6 +116,7 @@ class NFR_OT_DanceExport(Operator):
         res = subprocess.run(
             cmd, cwd=str(prefs.repo_path),
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
         )
         if res.returncode != 0:
             self.report({"ERROR"},
