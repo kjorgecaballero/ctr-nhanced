@@ -20,6 +20,7 @@ from bpy.types import Operator
 
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
+from ..dance.operators import _resolve_blender_path
 from ..export.mesh_json import export_mesh_json, _bake_timeline_clips
 
 
