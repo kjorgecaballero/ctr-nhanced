@@ -61,6 +61,7 @@ def register():
             ('PRESETS',   "Presets",   "Apply saved kart presets to racers"),
             ('ANIM',      "Anim",      "Animation clips and timeline markers"),
             ('DANCE',     "Dance",     "Custom podium dance export"),
+            ('MASK',      "Mask",      "Custom mask model + beam export"),
             ('VOICES',    "Voices",    "Custom voiceline WAV export"),
         ],
         default='SETTINGS',

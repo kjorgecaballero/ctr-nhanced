@@ -39,7 +39,7 @@ class NFR_PT_Racer(Panel):
             (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
              ('MATERIALS', 'Materials')),
             (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
-            (('DANCE', 'Dance'), ('VOICES', 'Voices')),
+            (('DANCE', 'Dance'), ('MASK', 'Mask'), ('VOICES', 'Voices')),
         ):
             row = layout.row(align=True)
             row.scale_y = 1.3
@@ -63,6 +63,8 @@ class NFR_PT_Racer(Panel):
             self._draw_anim(context, layout)
         elif tab == 'DANCE':
             self._draw_dance(context, layout)
+        elif tab == 'MASK':
+            self._draw_mask(context, layout)
         elif tab == 'VOICES':
             self._draw_voices(context, layout)
 
@@ -704,6 +706,64 @@ class NFR_PT_Racer(Panel):
         row = layout.row(align=True)
         row.scale_y = 1.4
         op = row.operator("nfr.dance_export",
+                          text="Export Both", icon="DUPLICATE")
+        op.variant = 'BOTH'
+
+    def _draw_mask(self, context, layout):
+        st = context.scene.nfr_mask
+
+        layout.label(text="Custom Mask Model", icon="MESH_DATA")
+        layout.label(text="Exports <slug>/mask/mask.ctr (the shield that",
+                     icon="INFO")
+        layout.label(text="rotates around the kart) and optionally")
+        layout.label(text="<slug>/mask/beam.ctr (the light beam above it).")
+        layout.label(text="Both are static — retail rotates them per-tick.")
+        layout.label(text="Roster must say mask=custom_good | custom_bad.")
+
+        layout.separator()
+
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            layout.label(text="Select the mask mesh first", icon="ERROR")
+        else:
+            layout.label(text=f"Mesh: {obj.name} "
+                              f"({len(obj.data.vertices)} verts)",
+                         icon="MESH_DATA")
+
+        col = layout.column(align=True)
+        col.prop(st, "slug", text="Slug")
+
+        slug = (st.slug or "").strip()
+        if slug:
+            prefs = _get_prefs(context)
+            slug_dir = prefs.racers_dir() / slug
+            if slug_dir.is_dir():
+                mask_dir = slug_dir / "mask"
+                existing = []
+                if (mask_dir / "mask.ctr").is_file():
+                    existing.append("mask.ctr")
+                if (mask_dir / "beam.ctr").is_file():
+                    existing.append("beam.ctr")
+                if existing:
+                    layout.label(text="Existing: " + ", ".join(existing),
+                                 icon="CHECKMARK")
+                layout.label(text=f"Racer folder: {slug}", icon="CHECKMARK")
+            else:
+                layout.label(text=f"Racer folder not found: {slug}",
+                             icon="ERROR")
+
+        # --- Actions ---
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.3
+        op = row.operator("nfr.mask_export", text="Export Mask", icon="EXPORT")
+        op.variant = 'MASK'
+        op = row.operator("nfr.mask_export", text="Export Beam")
+        op.variant = 'BEAM'
+
+        row = layout.row(align=True)
+        row.scale_y = 1.4
+        op = row.operator("nfr.mask_export",
                           text="Export Both", icon="DUPLICATE")
         op.variant = 'BOTH'
 

@@ -2,7 +2,7 @@
 
 Usage:
     python build_character.py <source_mesh.json> <internal_name> <output.ctr>
-                              [--player_slot N] [--sentinel] [--static] [--dance] [--mask]
+                              [--player_slot N] [--sentinel] [--static] [--dance] [--mask] [--mask-beam]
 
                               --dance generates a single-clip .ctr for the custom podium dance
 feature (see docs/DANCE_CONTEXT.md). It replaces SLOT_NAMES with
@@ -20,6 +20,13 @@ rotation is applied by RB_MaskWeapon_ThTick as a per-tick transform,
 not as an animation frame advance. Requires --sentinel (the mask uses
 its own sentinel_NN.bin side-cars in <slug>/mask/, separate from the
 model's).
+
+                              --mask-beam generates a single-clip .ctr for the custom mask beam
+(the "akubeam1" that rises from the mask). It replaces SLOT_NAMES
+with ['beam'] and disables the shape-key fallback. Its Sentinel
+side-cars use the "beam_sentinel_" prefix so they coexist with the
+mask's "sentinel_" files in the same <slug>/mask/ folder. Requires
+--sentinel.
 
 The --player_slot argument (0-3) shifts the atlas to the VRAM region that
 the runtime assigns to that player index. The runtime writes the VRM at
@@ -93,6 +100,7 @@ SENTINEL_MODE = False
 STATIC_MODE = False
 DANCE_MODE = False
 MASK_MODE = False
+MASK_BEAM_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
@@ -104,6 +112,8 @@ for i, a in enumerate(argv):
         DANCE_MODE = True
     elif a == '--mask':
         MASK_MODE = True
+    elif a == '--mask-beam':
+        MASK_BEAM_MODE = True
 
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
@@ -123,12 +133,18 @@ if not OUT_PATH.is_absolute():
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
-if MASK_MODE:
+if MASK_BEAM_MODE:
+    SLOT_NAMES = ['beam']
+elif MASK_MODE:
     SLOT_NAMES = ['mask']
 elif DANCE_MODE:
     SLOT_NAMES = ['dance']
 else:
     SLOT_NAMES = ['turn', 'reverse', 'bump', 'jump']
+
+# Sentinel file prefix. "sentinel" for model / dance / mask; "beam_sentinel"
+# for the mask beam (same <slug>/mask/ folder, disjoint file names).
+SENTINEL_FILE_PREFIX = "beam_sentinel" if MASK_BEAM_MODE else "sentinel"
 
 
 # Shape key aliases recognized by the animated-mode auto-detector.
@@ -306,8 +322,8 @@ def prepare_textures(mesh):
                 max(0, min(255, int(round(v * 255.0))))
                 for px in rgba for v in px)
             PIL_Image.frombytes('RGBA', (w, h), bytes_rgba).save(
-                out_dir / f'sentinel_{idx:02d}.png')
-            (out_dir / f'sentinel_{idx:02d}.bin').write_bytes(
+                out_dir / f'{SENTINEL_FILE_PREFIX}_{idx:02d}.png')
+            (out_dir / f'{SENTINEL_FILE_PREFIX}_{idx:02d}.bin').write_bytes(
                 struct.pack('<II', w, h) + bytes_rgba)
             sentinel[name] = {'localIdx': idx, 'w': w, 'h': h}
             print(f"  sentinel_{idx:02d}: {name} {w}x{h}")
@@ -608,9 +624,10 @@ def build():
                     u = max(0, min(255, round(c['uv'][0] * (w-1))))
                     v = max(0, min(255, round((1 - c['uv'][1]) * (h-1))))
                     coords.append((u, v))
+                abr = ABR_MAP.get(material.get('blend_mode', 'half'), 0)
                 layout = struct.pack('<BBHBBHBBBB',
                     *coords[0], 0x8000 | tex['localIdx'],
-                    *coords[1], 0,
+                    *coords[1], (abr << 5),
                     *coords[2], *coords[2])
                 ti = get_index(layouts, layout, True)
             else:
@@ -742,7 +759,8 @@ def build():
     # Priority 2: shape keys (Ziggy convention).
     # Disabled in --dance and --mask modes: those carry exactly one
     # clip ('dance' / 'mask') and shape keys are irrelevant.
-    if clips is None and not STATIC_MODE and not DANCE_MODE and not MASK_MODE:
+    if (clips is None and not STATIC_MODE and not DANCE_MODE
+            and not MASK_MODE and not MASK_BEAM_MODE):
         clips = make_clips_from_keys(mesh, records, quantize)
 
     if clips is None:
