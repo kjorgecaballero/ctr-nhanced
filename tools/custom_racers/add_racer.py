@@ -45,8 +45,12 @@ def main():
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
     ap.add_argument("--color", default=None,
                     help="optional minimap color #RRGGBB")
-    ap.add_argument("--mask", choices=["good", "bad"], default="good",
-                    help="Aku Aku (good, default) or Uka Uka (bad)")
+    ap.add_argument("--mask", choices=["good", "bad", "custom_good", "custom_bad"],
+                    default="good",
+                    help="Aku Aku (good, default), Uka Uka (bad), or a custom model "
+                         "(custom_good / custom_bad) loaded from <slug>/mask/mask.ctr. "
+                         "The custom model only replaces the gameplay shield mask "
+                         "(items); the adventure talking mask stays retail.")
     ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
                     help="wheels visible (default) or hidden (Oxide-style)")
     ap.add_argument("--no-clean-stale", action="store_true",

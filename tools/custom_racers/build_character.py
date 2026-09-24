@@ -2,7 +2,7 @@
 
 Usage:
     python build_character.py <source_mesh.json> <internal_name> <output.ctr>
-                              [--player_slot N] [--sentinel] [--static] [--dance]
+                              [--player_slot N] [--sentinel] [--static] [--dance] [--mask]
 
                               --dance generates a single-clip .ctr for the custom podium dance
 feature (see docs/DANCE_CONTEXT.md). It replaces SLOT_NAMES with
@@ -10,6 +10,15 @@ feature (see docs/DANCE_CONTEXT.md). It replaces SLOT_NAMES with
 carries exactly one animation clip named 'dance' at index 0 — the
 slot the podium spawns. Requires --sentinel (the dance uses its own
 sentinel_NN.bin side-cars in <slug>/dance/, separate from the
+model's).
+
+                              --mask generates a single-clip .ctr for the custom mask model
+feature. It replaces SLOT_NAMES with ['mask'] and disables the
+shape-key fallback, so the output .ctr carries exactly one animation
+clip named 'mask' at index 0. The mask model is static — the mask
+rotation is applied by RB_MaskWeapon_ThTick as a per-tick transform,
+not as an animation frame advance. Requires --sentinel (the mask uses
+its own sentinel_NN.bin side-cars in <slug>/mask/, separate from the
 model's).
 
 The --player_slot argument (0-3) shifts the atlas to the VRAM region that
@@ -83,6 +92,7 @@ PLAYER_SLOT = 0
 SENTINEL_MODE = False
 STATIC_MODE = False
 DANCE_MODE = False
+MASK_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
@@ -92,6 +102,8 @@ for i, a in enumerate(argv):
         STATIC_MODE = True
     elif a == '--dance':
         DANCE_MODE = True
+    elif a == '--mask':
+        MASK_MODE = True
 
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
@@ -111,7 +123,13 @@ if not OUT_PATH.is_absolute():
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
-SLOT_NAMES       = ['dance'] if DANCE_MODE else ['turn', 'reverse', 'bump', 'jump']
+if MASK_MODE:
+    SLOT_NAMES = ['mask']
+elif DANCE_MODE:
+    SLOT_NAMES = ['dance']
+else:
+    SLOT_NAMES = ['turn', 'reverse', 'bump', 'jump']
+
 
 # Shape key aliases recognized by the animated-mode auto-detector.
 # Each entry is (target_name_in_script, [accepted Blender shape key names]).
@@ -710,7 +728,7 @@ def build():
         baked = {}
         for name, frames in mesh['clips'].items():
             if name not in SLOT_NAMES:
-                continue  # engine only knows 4 slots
+                continue  # engine only knows the slots in SLOT_NAMES
             baked[name] = [
                 [quantize(frame[vi]) for vi in records]
                 for frame in frames
@@ -722,9 +740,9 @@ def build():
                 print(f"  {name}: {len(frames)} frames")
 
     # Priority 2: shape keys (Ziggy convention).
-    # Disabled in --dance mode: the dance carries exactly one clip
-    # ('dance') and shape keys are irrelevant.
-    if clips is None and not STATIC_MODE and not DANCE_MODE:
+    # Disabled in --dance and --mask modes: those carry exactly one
+    # clip ('dance' / 'mask') and shape keys are irrelevant.
+    if clips is None and not STATIC_MODE and not DANCE_MODE and not MASK_MODE:
         clips = make_clips_from_keys(mesh, records, quantize)
 
     if clips is None:
