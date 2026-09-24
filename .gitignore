@@ -52,3 +52,8 @@ VRAM.TGA
 tools/custom_racers/blender_addon/ctr_racer.zip
 assets/XA/.voices_cache/tools/custom_racers/blender_addon/ctr_racer.zip
 tools/custom_racers/blender_addon/ctr_racer.zip
+
+# Exception: build_*.py scripts under tools/custom_racers/ ARE source code,
+# not build artifacts. Without this, the broad "build*" rule above silently
+# ignores any new helper script the pipeline adds.
+!tools/custom_racers/build_*.py
