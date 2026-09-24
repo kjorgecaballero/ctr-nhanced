@@ -10,7 +10,6 @@ errors are lists of (short, long) tuples:
   - short: one-line label for the panel row (~30 chars)
   - long:  full explanation, shown in the click popup
 """
-import math
 import os
 import re
 
@@ -18,6 +17,11 @@ import bpy
 
 
 _SLUG_BAD_CHARS = re.compile(r"[^a-z0-9_]+")
+
+# build_character.py:670 asserts len(palettes) <= 128. `palettes`
+# there is a list of UNIQUE RGB555 colors (get_index appends on miss),
+# so the limit is 128 colors, not 128*15. Match it here.
+_BUILDER_COLOR_LIMIT = 128
 
 
 def _slugify(name):
@@ -60,33 +64,171 @@ def _uv_out_of_range(obj, tol=1e-4):
     return n_oob, min_u, max_u, min_v, max_v
 
 
-def _estimate_palette_count(obj):
-    """Approximate how many RGB555 palettes the .ctr builder will need.
+def _count_unique_loop_colors(obj):
+    """Count unique per-loop vertex colors.
 
-    The builder quantizes opaque vertex colors to RGB555 (5 bits per
-    channel) and groups unique values into palettes of 15 usable slots
-    (index 0 is reserved for transparency). This mirrors the
-    quantization but not the exact grouping heuristic, so treat the
-    result as approximate."""
+    Uses the same source as report_vcol_(2).py:
+    obj.data.vertex_colors.active.data[i].color (LINEAR RGBA),
+    rounded to 4 decimals. Matches what build_character.py groups
+    into its `palettes` list before asserting <= 128."""
     m = obj.data
-    if "Color" not in m.color_attributes:
+    layer = m.vertex_colors.active
+    if layer is None:
         return 0
-    ca = m.color_attributes["Color"]
-    n = len(ca.data)
+    n = len(layer.data)
     if n == 0:
         return 0
     buf = [0.0] * (n * 4)
-    ca.data.foreach_get("color_srgb", buf)
-    unique = set()
+    layer.data.foreach_get("color", buf)
+    seen = set()
     for i in range(0, len(buf), 4):
-        if buf[i + 3] < 0.5:
-            continue
-        r = int(round(buf[i] * 255))
-        g = int(round(buf[i + 1] * 255))
-        b = int(round(buf[i + 2] * 255))
-        rgb555 = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)
-        unique.add(rgb555)
-    return math.ceil(len(unique) / 15) if unique else 0
+        key = (round(buf[i], 4), round(buf[i + 1], 4),
+               round(buf[i + 2], 4), round(buf[i + 3], 4))
+        seen.add(key)
+    return len(seen)
+
+
+def _estimate_palette_count(obj):
+    """Return the unique vertex-color count the .ctr builder will see.
+
+    build_character.py:670 asserts `len(palettes) <= 128`, where
+    `palettes` is the list of unique RGB555 vertex colors that
+    `get_index(palettes, color)` grows. The limit is therefore 128
+    UNIQUE COLORS, not 128 palettes of 15. We return the raw unique
+    count and compare it against _BUILDER_COLOR_LIMIT.
+
+    (Name kept for backwards compatibility — it predates knowing the
+    builder's exact limit.)"""
+    return _count_unique_loop_colors(obj)
+
+
+def _kmeans_pp_init(data, k, seed=0):
+    """k-means++ init. Returns a (k', D) array of centers with k' <= k.
+
+    k' < k only if the input has fewer than k distinct points (which
+    the caller guards against) — in practice it returns exactly k."""
+    import numpy as np
+    rng = np.random.default_rng(seed)
+    centers = [data[rng.integers(len(data))]]
+    for _ in range(1, k):
+        dists = np.min(
+            np.stack([np.sum((data - c) ** 2, axis=1) for c in centers]),
+            axis=0,
+        )
+        s = float(dists.sum())
+        if s <= 0.0:
+            break
+        centers.append(data[rng.choice(len(data), p=dists / s)])
+    return np.vstack(centers)
+
+
+def _kmeans_numpy(data, k, iterations=10, seed=0):
+    """Plain k-means on an (N, D) float array. Returns (k', D) centers
+    where k' == len(centers) after init (could be < k only if the
+    dataset has fewer than k distinct rows)."""
+    import numpy as np
+    centers = _kmeans_pp_init(data, k, seed)
+    for _ in range(iterations):
+        dists = np.sum((data[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+        labels = np.argmin(dists, axis=1)
+        new_centers = []
+        for i in range(len(centers)):
+            pts = data[labels == i]
+            new_centers.append(pts.mean(axis=0) if len(pts) else centers[i])
+        centers = np.vstack(new_centers)
+    return centers
+
+
+def _reduce_vertex_colors(obj, target_clusters=None):
+    """Reduce vertex colors to at most `target_clusters` unique values.
+
+    Direct port of report_vcol_(2).py's Report + Convert flow:
+      1. Collect unique per-loop colors (round 4) and their loop ids.
+      2. k-means the unique colors down to `target_clusters` centers.
+      3. Assign each unique color to its nearest center.
+      4. Snap every loop of that unique color to the center's RGBA.
+
+    Returns (old_unique, new_unique) or None on error."""
+    if target_clusters is None:
+        target_clusters = _BUILDER_COLOR_LIMIT
+
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+
+    m = obj.data
+    layer = m.vertex_colors.active
+    if layer is None or len(layer.data) == 0:
+        return None
+
+    n = len(layer.data)
+    buf = [0.0] * (n * 4)
+    layer.data.foreach_get("color", buf)
+
+    # Step 1 — group loops by unique color.
+    seen = {}
+    unique = []
+    loop_map = []
+    for li in range(n):
+        i = li * 4
+        key = (round(buf[i], 4), round(buf[i + 1], 4),
+               round(buf[i + 2], 4), round(buf[i + 3], 4))
+        idx = seen.get(key)
+        if idx is None:
+            idx = len(unique)
+            seen[key] = idx
+            unique.append(key)
+            loop_map.append([li])
+        else:
+            loop_map[idx].append(li)
+
+    old_unique = len(unique)
+    target = min(int(target_clusters), old_unique)
+    if target >= old_unique:
+        return (old_unique, old_unique)
+
+    # Step 2 — k-means over the unique colors (4D, includes alpha).
+    data = np.array(unique, dtype=float)
+    centers = _kmeans_numpy(data, target, iterations=10, seed=0)
+
+    # If k-means returned fewer than `target` rows (empty clusters
+    # dropped during init, or the input had < target distinct rows),
+    # pad with random data points so `centers` has exactly `target`
+    # rows. This keeps the assignment step positional.
+    if centers.shape[0] < target:
+        rng = np.random.default_rng(1)
+        extra = target - centers.shape[0]
+        pick = rng.choice(len(data), extra, replace=False)
+        centers = np.vstack([centers, data[pick]])
+
+    # Step 3 — assign each unique color to its nearest center. `picks`
+    # has len(unique) entries, each in [0, len(centers)).
+    dists = np.sum(
+        (data[:, None, :] - centers[None, :, :]) ** 2, axis=2)
+    picks = np.argmin(dists, axis=1)
+
+    # Step 4 — snap every loop of each unique color to its center.
+    for idx, loop_indices in enumerate(loop_map):
+        c = centers[picks[idx]]
+        for li in loop_indices:
+            i = li * 4
+            buf[i]     = float(c[0])
+            buf[i + 1] = float(c[1])
+            buf[i + 2] = float(c[2])
+            buf[i + 3] = float(c[3])
+
+    layer.data.foreach_set("color", buf)
+    m.update()
+
+    # Recount from the written buffer.
+    new_seen = set()
+    for i in range(0, len(buf), 4):
+        key = (round(buf[i], 4), round(buf[i + 1], 4),
+               round(buf[i + 2], 4), round(buf[i + 3], 4))
+        new_seen.add(key)
+
+    return (old_unique, len(new_seen))
 
 
 def validate_racer(obj):
@@ -167,15 +309,9 @@ def validate_racer(obj):
                 if im.name not in unpacked:
                     unpacked.append(im.name)
             else:
-                # Diagnostic only — printed to the console, not added
-                # to `warnings`. A racer .blend has 30+ packed images;
-                # listing each one would drown the real warnings.
                 print(f"[Racer Validate] {im.name}: "
                       f"{im.size[0]}x{im.size[1]} packed")
 
-    # One aggregated error instead of one row per unpacked image:
-    # the short label stays compact, and the popup lists every
-    # offending name plus the fix.
     if unpacked:
         n = len(unpacked)
         noun = "image" if n == 1 else "images"
@@ -205,17 +341,23 @@ def validate_racer(obj):
             "Settings tab."
         ))
 
-    n_pal = _estimate_palette_count(obj)
-    if n_pal > 128:
-        warnings.append((
-            "Palette overflow",
-            f"Estimated {n_pal} RGB555 palettes (builder max: 128). The "
-            f".ctr builder groups unique vertex colors into palettes of "
-            f"15 usable slots and will fail with "
-            f"'assert len(palettes) <= 128'. Reduce unique vertex colors "
-            f"(quantize the Color attribute or use fewer shades) before "
-            f"exporting. This is an estimate, not the exact builder "
-            f"count."
+    # Vertex-color overflow. build_character.py:670 asserts
+    # `len(palettes) <= 128`, where `palettes` is the list of unique
+    # RGB555 vertex colors the builder collects. The cap is 128
+    # unique colors, not 128 * 15. This BLOCKS the export, so it is
+    # an error (red alert), not a warning — the panel shows it with
+    # r2.alert = True and NFR_OT_Export bails out before invoking
+    # build_character.py.
+    n_unique = _count_unique_loop_colors(obj)
+    if n_unique > _BUILDER_COLOR_LIMIT:
+        errors.append((
+            "Vertex colors: too many",
+            f"Mesh has {n_unique} unique vertex colors. The .ctr "
+            f"builder caps at {_BUILDER_COLOR_LIMIT} (build_character.py:670 "
+            f"asserts len(palettes) <= 128) and will fail with "
+            f"'AssertionError'. Click the Fix button to the right to "
+            f"run a k-means reduction down to {_BUILDER_COLOR_LIMIT} "
+            f"unique colors. Destructive — Ctrl+Z to revert."
         ))
 
     return (len(errors) == 0, warnings, errors)

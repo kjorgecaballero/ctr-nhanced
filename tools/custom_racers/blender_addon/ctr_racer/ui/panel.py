@@ -140,7 +140,7 @@ class NFR_PT_Racer(Panel):
                 box.label(text="All checks passed", icon='CHECKMARK')
             else:
                 for level, short, long in items:
-                    r2 = box.row()
+                    r2 = box.row(align=True)
                     if level == "ERROR":
                         r2.alert = True
                     op = r2.operator(
@@ -149,6 +149,14 @@ class NFR_PT_Racer(Panel):
                         icon='CANCEL' if level == "ERROR" else 'ERROR',
                     )
                     op.issue_text = long
+                    # Vertex-color overflow has an automatic fix: run
+                    # the k-means reduction down to the builder's limit
+                    # (128 unique colors, build_character.py:670).
+                    if short == "Vertex colors: too many":
+                        r2.operator(
+                            "nfr.fix_vertex_colors",
+                            text="", icon="FILE_REFRESH",
+                        )
 
         col = layout.column(align=True)
         slug_row = col.row(align=True)

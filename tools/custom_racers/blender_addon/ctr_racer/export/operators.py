@@ -14,7 +14,10 @@ from .. import state as ui_state
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
 from ..core.icons import _teardown_previews
-from ..core.validate import validate_racer, _slugify, _uv_out_of_range
+from ..core.validate import (
+    validate_racer, _slugify, _uv_out_of_range, _reduce_vertex_colors,
+    _BUILDER_COLOR_LIMIT,
+)
 from .mesh_json import _do_export, _racer_objects
 from .native_build import _build_exe, _run_game
 
@@ -239,6 +242,49 @@ class NFR_OT_FixSlug(Operator):
         return {"FINISHED"}
 
 
+class NFR_OT_FixVertexColors(Operator):
+    """Reduce vertex colors to 128 unique values so the .ctr builder
+    fits under its `assert len(palettes) <= 128`
+    (build_character.py:670).
+
+    Destructive: rewrites every loop's RGBA to its nearest cluster
+    center. Same algorithm as report_vcol_(2).py's Report + Convert
+    flow. Ctrl+Z reverts it."""
+    bl_idname = "nfr.fix_vertex_colors"
+    bl_label = "Fix Vertex Colors"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != "MESH":
+            self.report({"ERROR"}, "Select a mesh first")
+            return {"CANCELLED"}
+
+        try:
+            result = _reduce_vertex_colors(obj)
+        except Exception as ex:
+            self.report({"ERROR"}, f"Reduction failed: {ex}")
+            return {"CANCELLED"}
+
+        if result is None:
+            self.report({"ERROR"},
+                        f"{obj.name}: no vertex colors, or numpy missing.")
+            return {"CANCELLED"}
+
+        old_n, new_n = result
+        if old_n == new_n:
+            self.report({"INFO"},
+                        f"{obj.name}: {old_n} unique colors — already "
+                        f"under the {_BUILDER_COLOR_LIMIT} limit.")
+            return {"FINISHED"}
+
+        self.report({"INFO"},
+                    f"{obj.name}: reduced vertex colors {old_n} -> "
+                    f"{new_n} (limit {_BUILDER_COLOR_LIMIT}).")
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
 class NFR_OT_ToggleValidationDetails(Operator):
     bl_idname = "nfr.toggle_validation_details"
     bl_label = "Toggle Validation Details"
@@ -283,6 +329,7 @@ _classes = (
     NFR_OT_RunGame,
     NFR_OT_BuildAndRun,
     NFR_OT_FixSlug,
+    NFR_OT_FixVertexColors,
     NFR_OT_ToggleValidationDetails,
     NFR_OT_ShowIssue,
 )
