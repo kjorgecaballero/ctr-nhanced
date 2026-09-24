@@ -286,6 +286,21 @@ int NativeCustomRacer_HasCustomMask(int characterID);
  * loaded once per session. */
 struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID);
 
+/* Lazy-loads <slug>/mask/beam.ctr (the mesh above the mask, the
+ * retail "akubeam1"), registers its Sentinel textures (KIND_MASK_BEAM
+ * -> file prefix "beam_sentinel_"), and returns its Model*. Returns
+ * NULL if the character is not a custom, the roster entry has no
+ * mask=custom_* flag, or the file is missing / too large / fails to
+ * load — the caller then falls back to the retail beam.
+ *
+ * Only fires when the roster entry has mask=custom_*: a custom beam
+ * without a custom mask is not supported. Loads once per session.
+ *
+ * Frame count: the beam animation cycles 0..numFrames-1, and the tick
+ * reads R231.maskPosArr[animFrame] (table of 40). Keep custom beams
+ * <= 40 frames. A 1-frame beam always reads maskPosArr[0]. */
+struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID);
+
 /* === Wheels visible flag ===
  * Returns 1 = wheels visible, 0 = wheels hidden (Oxide-style), -1 = not a custom.
  * Default for customs without a wheels= field in roster.txt is 1. */

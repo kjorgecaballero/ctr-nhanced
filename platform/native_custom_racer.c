@@ -46,9 +46,10 @@ s32 g_debugForcedPodiumRank = -1;
 /* Selects which .ctr is being processed: on-disk subfolder, probe path,
  * and cache array used by RegisterModelTextures. */
 enum {
-    NATIVE_SENTINEL_KIND_MODEL = 0,
-    NATIVE_SENTINEL_KIND_DANCE = 1,
-    NATIVE_SENTINEL_KIND_MASK  = 2,
+    NATIVE_SENTINEL_KIND_MODEL     = 0,
+    NATIVE_SENTINEL_KIND_DANCE     = 1,
+    NATIVE_SENTINEL_KIND_MASK      = 2,
+    NATIVE_SENTINEL_KIND_MASK_BEAM = 3,
 };
 
 /* Width in VRAM words assigned to each player slot. */
@@ -156,10 +157,16 @@ static u8  s_customMaskIsGoodGuy[NATIVE_CUSTOM_COUNT];
  * s_customMaskLoaded[idx]   = 1 once we attempted a lazy load
  *                             (even if it failed — do not retry).
  * s_customMaskModel[idx]    = the loaded Model* (offset by
- *                             LOAD_MODEL_FILE_HEADER_BYTES), or NULL. */
+ *                             LOAD_MODEL_FILE_HEADER_BYTES), or NULL.
+ *
+ * Same trio for the optional custom beam (<slug>/mask/beam.ctr).
+ * The beam loads independently of the mask mesh: if beam.ctr is
+ * missing, the retail beam is used even when the mask is custom. */
 static u8              s_customMaskIsCustom[NATIVE_CUSTOM_COUNT];
 static u8              s_customMaskLoaded  [NATIVE_CUSTOM_COUNT];
 static struct Model   *s_customMaskModel   [NATIVE_CUSTOM_COUNT];
+static u8              s_customMaskBeamLoaded[NATIVE_CUSTOM_COUNT];
+static struct Model   *s_customMaskBeamModel [NATIVE_CUSTOM_COUNT];
 
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
@@ -189,9 +196,10 @@ static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
  * localIdx caches (below) are separate so a dance's textures do not
  * alias the model's. */
 static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
-static s16 s_sentinelTexMap     [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
-static s16 s_danceSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
-static s16 s_maskSentinelTexMap [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_sentinelTexMap       [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_danceSentinelTexMap  [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_maskSentinelTexMap   [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_maskBeamSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 
 
 
@@ -381,10 +389,13 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMaskIsCustom, 0, sizeof(s_customMaskIsCustom));
     memset(s_customMaskLoaded, 0, sizeof(s_customMaskLoaded));
     memset(s_customMaskModel, 0, sizeof(s_customMaskModel));
+    memset(s_customMaskBeamLoaded, 0, sizeof(s_customMaskBeamLoaded));
+    memset(s_customMaskBeamModel, 0, sizeof(s_customMaskBeamModel));
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_maskSentinelTexMap,  0xFF, sizeof(s_maskSentinelTexMap));  /* -1 = unset */
+    memset(s_maskBeamSentinelTexMap, 0xFF, sizeof(s_maskBeamSentinelTexMap)); /* -1 = unset */
     memset(s_customVoiceBase, 0, sizeof(s_customVoiceBase));
     memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
     memset(s_customDanceSfxBase, 0, sizeof(s_customDanceSfxBase));
@@ -789,33 +800,46 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
     if (folder == NULL)
         return;
 
-    /* On-disk subfolder + cache array + log tag depend on the kind. */
+    /* On-disk subfolder + file prefix + cache array + log tag depend on
+     * the kind. file_prefix distinguishes "sentinel_NN.bin" (model /
+     * dance / mask) from "beam_sentinel_NN.bin" (mask beam), which share
+     * the <slug>/mask/ subdir. */
     const char *subdir;
     const char *kind_name;
+    const char *file_prefix;
     s16 (*cache)[NATIVE_MODEL_TEX_MAX];
     switch (kind)
     {
     case NATIVE_SENTINEL_KIND_DANCE:
-        subdir    = "dance/";
-        kind_name = "dance";
-        cache     = s_danceSentinelTexMap;
+        subdir      = "dance/";
+        kind_name   = "dance";
+        file_prefix = "sentinel";
+        cache       = s_danceSentinelTexMap;
         break;
     case NATIVE_SENTINEL_KIND_MASK:
-        subdir    = "mask/";
-        kind_name = "mask";
-        cache     = s_maskSentinelTexMap;
+        subdir      = "mask/";
+        kind_name   = "mask";
+        file_prefix = "sentinel";
+        cache       = s_maskSentinelTexMap;
+        break;
+    case NATIVE_SENTINEL_KIND_MASK_BEAM:
+        subdir      = "mask/";
+        kind_name   = "mask_beam";
+        file_prefix = "beam_sentinel";
+        cache       = s_maskBeamSentinelTexMap;
         break;
     default:
-        subdir    = "";
-        kind_name = "model";
-        cache     = s_sentinelTexMap;
+        subdir      = "";
+        kind_name   = "model";
+        file_prefix = "sentinel";
+        cache       = s_sentinelTexMap;
         break;
     }
 
-    /* Probe: sentinel_00.bin must exist, otherwise this is not Sentinel. */
+    /* Probe: <prefix>_00.bin must exist, otherwise not Sentinel. */
     char probe[256];
     snprintf(probe, sizeof(probe),
-             "assets/mods/racers/%s/%ssentinel_00.bin", folder, subdir);
+             "assets/mods/racers/%s/%s%s_00.bin", folder, subdir, file_prefix);
     FILE *pf = fopen(probe, "rb");
     if (!pf)
         return;
@@ -875,8 +899,8 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
 
             char path[256];
             snprintf(path, sizeof(path),
-                     "assets/mods/racers/%s/%ssentinel_%02d.bin",
-                     folder, subdir, localIdx);
+                     "assets/mods/racers/%s/%s%s_%02d.bin",
+                     folder, subdir, file_prefix, localIdx);
 
             int w = 0, h = 0;
             GLuint tex = LoadSentinelBin(path, &w, &h);
@@ -974,6 +998,76 @@ struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID)
     s_customMaskModel[idx] = m;
 
     Log("[CustomRacer] mask.ctr loaded: %s (%ld bytes)\n", path, sz);
+    return m;
+}
+
+/* Custom mask beam: lazy-load <slug>/mask/beam.ctr and return its
+ * Model*, or NULL if the character is not a custom, the roster entry
+ * has no mask=custom_* flag, or the file is missing / too large /
+ * fails to load. Loading is one-shot per session: a failed attempt is
+ * remembered and not retried on every mask spawn. The beam is
+ * optional — GetMaskModelForChar can succeed while this returns NULL,
+ * in which case the retail beam is used.
+ *
+ * Frame count note: RB_MaskWeapon_ThTick cycles the beam's animFrame
+ * from 0..numFrames-1 and reads R231.maskPosArr[animFrame]. That table
+ * has 40 entries, so a custom beam must have <= 40 frames. A 1-frame
+ * beam stays at maskPosArr[0] forever, which is safe. */
+struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (!s_customMaskIsCustom[idx])
+        return NULL;
+
+    if (s_customMaskBeamLoaded[idx])
+        return s_customMaskBeamModel[idx];
+    s_customMaskBeamLoaded[idx] = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+        return NULL;
+
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/mask/beam.ctr", folder);
+
+    FILE *probe = fopen(path, "rb");
+    if (!probe)
+    {
+        /* No beam.ctr — fall back to the retail beam silently. */
+        return NULL;
+    }
+    fseek(probe, 0, SEEK_END);
+    long file_sz = ftell(probe);
+    fclose(probe);
+
+    if (file_sz > NATIVE_CTR_MAX_BYTES)
+    {
+        Log("[CustomRacer] beam.ctr too large: %s (%ld bytes, max %ld)\n",
+            path, file_sz, (long)NATIVE_CTR_MAX_BYTES);
+        return NULL;
+    }
+
+    long sz = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] beam.ctr load failed: %s\n", path);
+        return NULL;
+    }
+
+    ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK_BEAM);
+
+    struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
+    s_customMaskBeamModel[idx] = m;
+
+    Log("[CustomRacer] beam.ctr loaded: %s (%ld bytes)\n", path, sz);
     return m;
 }
 

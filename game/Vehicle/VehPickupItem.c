@@ -269,7 +269,24 @@ struct MaskHeadWeapon *VehPickupItem_MaskUseWeapon(struct Driver *driver, b32 bo
 		}
 	}
 
-	modelPtr = gGT->modelPtr[STATIC_AKUBEAM + ((modelID - STATIC_AKUAKU) * MASK_BEAM_MODEL_STRIDE)];
+	s32 beamModelID = STATIC_AKUBEAM + ((modelID - STATIC_AKUAKU) * MASK_BEAM_MODEL_STRIDE);
+	modelPtr = gGT->modelPtr[beamModelID];
+
+	// === Custom mask beam =========================================
+	// Lazily load <slug>/mask/beam.ctr and use it in place of the
+	// retail beam for this instance only. INSTANCE_Birth3D takes a
+	// Model* directly (it does not consult gGT->modelPtr), so a local
+	// override is sufficient — no save/restore needed.
+	// GetMaskBeamModelForChar returns NULL for originals, for customs
+	// without mask=custom_*, and when beam.ctr is missing: in all
+	// those cases the retail beam is used unchanged.
+	{
+		s32 charID = data.characterIDs[driver->driverID];
+		struct Model *customBeam = NativeCustomRacer_GetMaskBeamModelForChar(charID);
+		if (customBeam != NULL)
+			modelPtr = customBeam;
+	}
+	// === end custom mask beam =====================================
 
 	t = instance->thread;
 
