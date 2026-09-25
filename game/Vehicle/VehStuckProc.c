@@ -320,7 +320,10 @@ void VehStuckProc_MaskGrab_Animate(struct Thread *t, struct Driver *d)
 			d->KartStates.MaskGrab.boolWhistle = true;
 
 			// "falling" sound, like a whistle
-			OtherFX_Play(VEH_STUCK_MASK_GRAB_WHISTLE_FX, 1);
+			if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_MASK_GRAB))
+			{
+				OtherFX_Play(VEH_STUCK_MASK_GRAB_WHISTLE_FX, 1);
+			}
 		}
 
 
@@ -937,7 +940,10 @@ void VehStuckProc_RevEngine_Animate(struct Thread *t, struct Driver *d)
 				d->KartStates.RevEngine.chargeState = REV_ENGINE_CHARGE_IDLE;
 				d->KartStates.RevEngine.lockoutFlags |= REV_ENGINE_LOCKOUT_ALL;
 
-				OtherFX_Play_Echo(VEH_STUCK_REV_OVERREV_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+				if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_OVERREV))
+				{
+					OtherFX_Play_Echo(VEH_STUCK_REV_OVERREV_FX, 1, d->actionsFlagSet & ACTION_ENGINE_ECHO);
+				}
 			}
 		}
 		goto LAB_80067dec;
@@ -1730,7 +1736,10 @@ void VehStuckProc_Warp_Init(struct Thread *th, struct Driver *d)
 	d->KartStates.Warp.quadHeight = d->quadBlockHeight;
 
 	// Warp sound?
-	OtherFX_Play(VEH_WARP_SOUND_ID, 1);
+	if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_WARP))
+	{
+		OtherFX_Play(VEH_WARP_SOUND_ID, 1);
+	}
 
 	OtherFX_Stop1((int)d->driverAudioPtrs[1]);
 	d->driverAudioPtrs[1] = 0;

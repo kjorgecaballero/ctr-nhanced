@@ -14,13 +14,17 @@
  * If out_size is non-NULL, receives the ADPCM byte size. */
 u32 NativeVag_Load(const char *path, u32 spu_addr, u32 *out_size);
 
-/* Trigger a VAG on a specific SPU voice (0..23).
+/* Trigger a VAG on a specific SPU voice (0..31).
  * spu_addr: value returned by NativeVag_Load.
  * volume_l, volume_r: 0..0x3FFF (0x3FFF = max).
- * pitch: 0x1000 = 1.0x. */
+ * pitch: 0x1000 = 1.0x.
+ * loop: 0 = one-shot (attack/release). 1 = hold at sustain level
+ *       indefinitely. The VAG must have been encoded with --loop
+ *       so the SPU jumps back to the loop-start block when it
+ *       hits the loop-end flag. */
 void NativeVag_Play(u32 spu_addr, int voice,
-                    int volume_l, int volume_r, int pitch);
-
+                    int volume_l, int volume_r, int pitch,
+                    int loop);
 /* Stop a voice. */
 void NativeVag_Stop(int voice);
 

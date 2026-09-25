@@ -189,6 +189,54 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 
 
+/* === Custom kart SFX (Fase 4, VAG) ====================================
+ * Per-character one-shot SFX for kart events (boost, weapons, warp,
+ * etc). Same UX as voicelines: each custom ships WAVs in
+ * <slug>/sfx/<event>.wav. The pipeline encodes them to .vag at
+ * 11025 Hz; the C-side loads them into SPU at race start and fires
+ * them at the corresponding driver event.
+ *
+ * Voices: 25 + (driverID & 3) -> 4 voices, one per split-screen
+ * slot. Avoids cut-off when two players fire the same event on the
+ * same frame. Voice 24 is dance SFX; 29-31 free for future features.
+ *
+ * Range: 0x100000-0x180000 (512 KB). See VAG_CONTEXT.md Fase 4.
+ * Fallback: if the .vag is missing or the driver is not a custom,
+ * PlayKartSfx returns 0 and the caller uses the retail
+ * OtherFX_Play / PlaySound3D. */
+#define NATIVE_KART_SFX_SPU_BASE      0x100000u
+#define NATIVE_KART_SFX_SPU_END       0x180000u
+#define NATIVE_KART_SFX_VOICE_BASE    25
+#define NATIVE_KART_SFX_MAX           11
+
+enum {
+    NATIVE_KART_SFX_BOOST          = 0,
+    NATIVE_KART_SFX_WARP           = 1,
+    NATIVE_KART_SFX_OVERREV        = 2,
+    NATIVE_KART_SFX_MASK_GRAB      = 3,
+    NATIVE_KART_SFX_MISSILE_LAUNCH = 4,
+    NATIVE_KART_SFX_BOMB_LAUNCH    = 5,
+    NATIVE_KART_SFX_MINE_DROP      = 6,
+    NATIVE_KART_SFX_SHIELD         = 7,
+    NATIVE_KART_SFX_CLOCK          = 8,
+    NATIVE_KART_SFX_WARPBALL       = 9,
+    NATIVE_KART_SFX_INVISIBILITY   = 10,
+};
+
+/* Preload the per-character kart SFX VAGs for the current race.
+ * Called once from MainMain.c after VehBirth_EngineAudio_AllPlayers.
+ * Iterates gGT->threadBuckets[PLAYER], and for each custom reads
+ * <slug>/sfx/<event>.vag and loads it to SPU at [0x100000, 0x180000).
+ * Also stops voices 25-28 to clean up the previous race. No-op for
+ * originals and for customs without a <slug>/sfx/ directory. */
+void NativeCustomRacer_PreloadKartSfx(struct GameTracker *gGT);
+
+/* Try to play a custom kart SFX for this driver.
+ * Returns 1 if a custom VAG was fired (caller must NOT play the
+ * retail SFX). Returns 0 if the caller should fall back to retail. */
+int  NativeCustomRacer_PlayKartSfx(struct Driver *d, int slot);
+
+
 /* === Custom podium music (v1) ==========================================
  * One track per custom. xaID = 13 + roster_index (retail MUSIC occupies
  * 0..12). The pipeline inserts custom music entries right after the

@@ -65,7 +65,9 @@ class NFR_PT_Racer(Panel):
             self._draw_dance(context, layout)
         elif tab == 'MASK':
             self._draw_mask(context, layout)
-        elif tab == 'VOICES':
+        elif context.scene.nfr_ui_tab == 'SFX':
+            self._draw_sfx(context, layout)
+        elif context.scene.nfr_ui_tab == 'VOICES':
             self._draw_voices(context, layout)
 
     def _draw_settings(self, context, layout):
@@ -772,6 +774,28 @@ class NFR_PT_Racer(Panel):
         op.variant = 'MASK'
         op = row.operator("nfr.mask_export", text="Export Beam")
         op.variant = 'BEAM'
+
+    def _draw_sfx(self, context, layout):
+        st = context.scene.nfr_sfx
+
+        box = layout.box()
+        box.label(text="Custom Kart SFX", icon="SPEAKER")
+        box.label(text="Per-character SFX for kart events.")
+        box.label(text="Encoded to VAG @ 11025 Hz, played on SPU.")
+        box.label(text="Missing slots fall back to retail.")
+
+        col = box.column(align=True)
+        col.prop(st, "slug", text="Slug")
+
+        from ..sfx.state import SFX_EVENTS
+        events_box = box.box()
+        events_box.label(text="Event SFX:")
+        for event, label in SFX_EVENTS:
+            row = events_box.row(align=True)
+            row.label(text=f"{label}:")
+            row.prop(st, f"wav_{event}", text="")
+
+        box.operator("nfr.sfx_build", icon="SOUND")
 
     def _draw_voices(self, context, layout):
         st = context.scene.nfr_voices

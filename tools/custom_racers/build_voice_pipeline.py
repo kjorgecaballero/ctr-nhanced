@@ -31,7 +31,10 @@ XNF layout (post-build):
     [EXTRA retail (87)]         xaID 0..86      physical 13+N..99+N
     [GAME retail (314)]         xaID 0..313     physical 100+N..413+N
     [GAME custom voices (V)]    xaID 314..      physical 414+N..413+N+V
-    [GAME dance SFX (D)]        xaID 4096..     physical 100+N+4096..
+
+Note: dance SFX and kart SFX no longer live in the XNF. Since
+d9a7ee990 (dance) and Fase 4 (kart), they are SPU VAG, loaded
+by path. The old [GAME dance SFX (D)] row is gone.
 
 If N == 0 the output is byte-identical to the voice-only pipeline.
 
@@ -88,6 +91,16 @@ DANCE_SFX_SIDECAR_VERSION = 1
 # Path to the VAG codec used to encode dance SFX WAVs. The C-side
 # loads <slug>/dance/sfx_<i>.vag directly into SPU RAM (no XNF).
 VAG_CODEC = ROOT / "tools" / "custom_racers" / "vag_codec.py"
+
+# Custom kart SFX (Fase 4). Same shape as dance SFX: the addon writes
+# <slug>/sfx/<event>.wav, the pipeline encodes to .vag at 11025 Hz,
+# the C-side loads into SPU at [0x100000, 0x180000) voice 25-28.
+# Naming mirrors NATIVE_KART_SFX_* in native_custom_racer.h.
+KART_SFX_EVENTS = [
+    "boost", "warp", "overrev", "mask_grab",
+    "missile_launch", "bomb_launch", "mine_drop",
+    "shield", "clock", "warpball", "invisibility",
+]
 
 EVENTS = [
     "boost_01", "boost_02",
@@ -608,6 +621,42 @@ def cmd_build(verbose):
 
     dance_sfx_tracks = []
 
+    # ------- KART SFX (VAG, no XNF) -------
+    # Encode <slug>/sfx/<event>.wav to <slug>/sfx/<event>.vag. The
+    # C-side loads these into SPU at race start; no XNF tracks.
+    # Skipped when the .vag is newer than the .wav.
+    kart_sfx_vag_count = 0
+
+    for i, (page, slot, slug) in enumerate(roster):
+        if not _roster_filter(page, slot):
+            continue
+
+        sfx_dir = RACERS / slug / "sfx"
+        if not sfx_dir.is_dir():
+            continue
+
+        for event in KART_SFX_EVENTS:
+            wav = sfx_dir / f"{event}.wav"
+            vag = sfx_dir / f"{event}.vag"
+            if not wav.is_file():
+                continue
+            if vag.is_file() and vag.stat().st_mtime >= wav.stat().st_mtime:
+                kart_sfx_vag_count += 1
+                continue
+            r = subprocess.run(
+                [sys.executable, str(VAG_CODEC), "encode",
+                 "--rate", "11025",
+                 str(wav), str(vag)],
+                cwd=str(ROOT), capture_output=True,
+                encoding="utf-8", errors="replace",
+            )
+            if r.returncode != 0:
+                print(f"  [{i}] {slug}: VAG encode failed for {event}.wav: "
+                      f"{r.stderr[-200:]}")
+                continue
+            print(f"  [{i}] {slug}: {event}.wav -> {event}.vag")
+            kart_sfx_vag_count += 1
+
     if not music_tracks and not voice_tracks:
         print("No tracks to add.")
         write_sidecar(roster, banks_written=0, tracks_written=0)
@@ -620,7 +669,8 @@ def cmd_build(verbose):
     XNF.write_bytes(new_xnf)
     print(f"\nPatched {XNF.name}: {len(original)} -> {len(new_xnf)}B, "
           f"+{len(music_tracks)} music, +{len(voice_tracks)} voice, "
-          f"{dance_sfx_vag_count} dance-sfx VAG(s) encoded "
+          f"{dance_sfx_vag_count} dance-sfx VAG(s) present, "
+          f"{kart_sfx_vag_count} kart-sfx VAG(s) present "
           f"(no XNF tracks)")
 
     write_sidecar(roster, banks_written=voice_bank_count,

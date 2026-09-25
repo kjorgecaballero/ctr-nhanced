@@ -4,7 +4,7 @@
 #include <psx/libspu.h>
 
 #include <stdio.h>
-#include <string.h>ng.h>
+#include <string.h>
 
 #define VAG_HEADER_SIZE 48
 
@@ -74,7 +74,7 @@ u32 NativeVag_Load(const char *path, u32 spu_addr, u32 *out_size)
     return spu_addr;
 }
 
-void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pitch)
+void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pitch, int loop)
 {
     if (voice < 0 || voice >= 32) return;
     if (spu_addr == 0) return;
@@ -85,8 +85,8 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
     attr.mask  = SPU_VOICE_WDSA
                | SPU_VOICE_VOLL | SPU_VOICE_VOLR
                | SPU_VOICE_PITCH
-               | SPU_VOICE_ADSR_AR | SPU_VOICE_ADSR_DR
-               | SPU_VOICE_ADSR_SR | SPU_VOICE_ADSR_SL
+               | SPU_VOICE_ADSR_AR | SPU_VOICE_ADSR_DR   
+               | SPU_VOICE_ADSR_SR | SPU_VOICE_ADSR_SL   
                | SPU_VOICE_ADSR_RR
                | SPU_VOICE_ADSR_AMODE | SPU_VOICE_ADSR_SMODE
                | SPU_VOICE_ADSR_RMODE;
@@ -96,15 +96,26 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
     attr.volume.right = (short)volume_r;
     attr.pitch        = (u16)pitch;
 
-    /* Attack/decay/sustain/release — mirror HOWL_Voiceline.c:64 pattern. */
+    /* Envelope: one-shot (attack/release) for loop==0, sustain-held
+     * for loop==1. The VAG data must carry the loop-start / loop-end
+     * block flags (vag_codec.py --loop) for the SPU to actually
+     * wrap; the envelope only decides whether the voice keeps
+     * producing sound after the wrap. */
     attr.ar = 0x00;   /* fastest attack */
     attr.dr = 0x0F;
-    attr.sr = 0x7F;
-    attr.sl = 0x02;
-    attr.rr = 0x0F;
+    if (loop) {
+        attr.sr = 0x00;
+        attr.sl = 0x0F;   /* sustain at max level forever */
+        attr.rr = 0x00;
+        attr.r_mode = 0x01;
+    } else {
+        attr.sr = 0x7F;
+        attr.sl = 0x02;
+        attr.rr = 0x0F;
+        attr.r_mode = 0x03;
+    }
     attr.a_mode = 0x05;
     attr.s_mode = 0x01;
-    attr.r_mode = 0x03;
 
     /* Key off any previous state, set attr, then key on. */
     NativeAudio_SpuSetKey(0, 1u << voice);
@@ -113,8 +124,8 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     if (voice == NATIVE_DANCE_SFX_SPU_VOICE)
-        fprintf(stderr, "[VAG24] play addr=0x%X pitch=0x%X\n",
-                (unsigned)spu_addr, (unsigned)pitch);
+        fprintf(stderr, "[VAG24] play addr=0x%X pitch=0x%X loop=%d\n",
+                (unsigned)spu_addr, (unsigned)pitch, loop);    
 #endif
 }
 
@@ -144,6 +155,7 @@ void NativeVag_TestPlay(void)
 
     NativeVag_Play(s_loaded_addr, NATIVE_VAG_TEST_VOICE,
                    0x2000, 0x2000,   /* ~50% volume */
-                   0x1000);          /* 1.0x pitch */
+                   0x1000,           /* 1.0x pitch */
+                   0);               /* one-shot */
     fprintf(stderr, "[VAG-TEST] played on voice %d\n", NATIVE_VAG_TEST_VOICE);
 }

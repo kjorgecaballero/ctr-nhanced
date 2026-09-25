@@ -247,6 +247,16 @@ static u32 s_danceSfxSpuNext;
 static u8 s_danceSfxCooldown[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
 static u32 s_danceSfxCooldownLen;    /* ticks, común a todos los slots */
 
+/* === Custom kart SFX (Fase 4, VAG) ===
+ * Per-custom one-shot SFX for kart events. Same allocation pattern
+ * as the dance SFX: a shared cursor bumps through the reserved
+ * SPU range, one entry per [charIdx][slot]. s_kartSfxSpuAddr==0
+ * means "not loaded", and PlayKartSfx returns 0 for that slot
+ * (caller falls back to retail). */
+static u32 s_kartSfxSpuAddr [NATIVE_CUSTOM_COUNT][NATIVE_KART_SFX_MAX];
+static u16 s_kartSfxSpuPitch[NATIVE_CUSTOM_COUNT][NATIVE_KART_SFX_MAX];
+static u32 s_kartSfxSpuNext;
+
 static int ParseEngineID(const char *s)
 {
     if (strcmp(s, "SPEED")    == 0) return SPEED;
@@ -1246,6 +1256,135 @@ void NativeCustomRacer_ResetPodiumDance(void)
     NativeVag_Stop(NATIVE_DANCE_SFX_SPU_VOICE);
 }
 
+
+/* === Custom kart SFX (Fase 4, VAG) === */
+
+static const char *s_kartSfxNames[NATIVE_KART_SFX_MAX] = {
+    "boost", "warp", "overrev", "mask_grab",
+    "missile_launch", "bomb_launch", "mine_drop",
+    "shield", "clock", "warpball", "invisibility",
+};
+
+void NativeCustomRacer_PreloadKartSfx(struct GameTracker *gGT)
+{
+    if (gGT == NULL)
+        return;
+
+    /* Clean up the previous race's kart SFX voices. Voices 25-28
+     * are exclusively ours; nothing else should be keyed on. */
+    for (int v = 0; v < 4; v++)
+        NativeVag_Stop(NATIVE_KART_SFX_VOICE_BASE + v);
+
+    memset(s_kartSfxSpuAddr,  0, sizeof(s_kartSfxSpuAddr));
+    memset(s_kartSfxSpuPitch, 0, sizeof(s_kartSfxSpuPitch));
+    s_kartSfxSpuNext = NATIVE_KART_SFX_SPU_BASE;
+
+    for (struct Thread *th = gGT->threadBuckets[PLAYER].thread;
+         th != 0; th = th->siblingThread)
+    {
+        struct Driver *d = th->object;
+        if (d == NULL)
+            continue;
+
+        int charID = data.characterIDs[d->driverID];
+        if (charID < NATIVE_CUSTOM_ID_BASE)
+            continue;
+
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+            continue;
+
+        const char *folder = NativeCustomRacer_GetFolder(charID);
+        if (folder == NULL)
+            continue;
+
+        for (int slot = 0; slot < NATIVE_KART_SFX_MAX; slot++)
+        {
+            char path[256];
+            snprintf(path, sizeof(path),
+                     "assets/mods/racers/%s/sfx/%s.vag",
+                     folder, s_kartSfxNames[slot]);
+
+            FILE *f = fopen(path, "rb");
+            if (f == NULL)
+                continue;
+            u8 hdr[20] = {0};
+            size_t got = fread(hdr, 1, sizeof(hdr), f);
+            fseek(f, 0, SEEK_END);
+            long file_size = ftell(f);
+            fclose(f);
+            if (file_size <= 48 || got < 20)
+                continue;
+
+            u32 rate = (u32)hdr[0x10]
+                     | ((u32)hdr[0x11] << 8)
+                     | ((u32)hdr[0x12] << 16)
+                     | ((u32)hdr[0x13] << 24);
+            u16 pitch = 0x1000;
+            if (rate > 0)
+                pitch = (u16)(((u64)rate * 0x1000u) / 44100u);
+
+            u32 needed = (u32)(file_size - 48);
+            needed = (needed + 15u) & ~15u;
+
+            if (s_kartSfxSpuNext + needed > NATIVE_KART_SFX_SPU_END)
+            {
+                Log("[CustomRacer] kart sfx VAG: out of SPU RAM "
+                    "(need %u at 0x%X, ceiling 0x%X), dropped %s\n",
+                    needed, s_kartSfxSpuNext, NATIVE_KART_SFX_SPU_END,
+                    path);
+                continue;
+            }
+
+            u32 loaded = NativeVag_Load(path, s_kartSfxSpuNext, NULL);
+            if (loaded == 0)
+                continue;
+
+            s_kartSfxSpuAddr[idx][slot]  = loaded;
+            s_kartSfxSpuPitch[idx][slot] = pitch;
+            s_kartSfxSpuNext = loaded + needed;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+            Log("[CustomRacer] kart sfx VAG: charID=%d slot=%s "
+                "spu=0x%X size=%u rate=%u pitch=0x%X\n",
+                charID, s_kartSfxNames[slot], loaded, needed, rate, pitch);
+#endif
+        }
+    }
+}
+
+int NativeCustomRacer_PlayKartSfx(struct Driver *d, int slot)
+{
+    if (d == NULL || slot < 0 || slot >= NATIVE_KART_SFX_MAX)
+        return 0;
+
+    int charID = data.characterIDs[d->driverID];
+    if (charID < NATIVE_CUSTOM_ID_BASE)
+        return 0;  /* original -> caller uses retail */
+
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+    if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+        return 0;
+
+    u32 addr = s_kartSfxSpuAddr[idx][slot];
+    if (addr == 0)
+    {
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        Log("[KartSfx] charID=%d slot=%d no VAG -> retail\n", charID, slot);
+#endif
+        return 0;  /* custom without VAG for this slot -> retail */
+    }
+
+    int voice = NATIVE_KART_SFX_VOICE_BASE + (d->driverID & 3);
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+    Log("[KartSfx] play charID=%d slot=%d voice=%d spu=0x%X\n",
+        charID, slot, voice, addr);
+#endif
+    NativeVag_Play(addr, voice, 0x2000, 0x2000,
+                   s_kartSfxSpuPitch[idx][slot], /*loop=*/0);
+    return 1;
+}
+
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).
  * Returns the custom frame count for the given model, or 0 if the
  * model is not a custom dance (retail scripts keep their ranges). */
@@ -1332,7 +1471,8 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame)
 
         NativeVag_Play(spu_addr, NATIVE_DANCE_SFX_SPU_VOICE,
                        0x2000, 0x2000,  /* ~50% volume */
-                       s_danceSfxSpuPitch[idx][i]);
+                       s_danceSfxSpuPitch[idx][i],
+                       0);              /* one-shot */
     }
 }
 

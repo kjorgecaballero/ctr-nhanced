@@ -77,7 +77,10 @@ Skip:
 		echo = 1;
 	}
 
-	OtherFX_Play_LowLevel(VEH_FIRE_AUDIO_SFX, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, distortion, volume, echo));
+	if (!NativeCustomRacer_PlayKartSfx(driver, NATIVE_KART_SFX_BOOST))
+	{
+		OtherFX_Play_LowLevel(VEH_FIRE_AUDIO_SFX, 1, HowlSfx_Pack(HOWL_SFX_LR_CENTER, distortion, volume, echo));
+	}
 
 	// turbo audio cooldown 0.24s
 	driver->VehFire_AudioCooldown = VEH_FIRE_AUDIO_COOLDOWN;

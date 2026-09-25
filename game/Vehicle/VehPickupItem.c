@@ -643,7 +643,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 			tw->dir.y = rot.vx;
 			tw->dir.z = rot.vz;
 
-			PlaySound3D(SOUND_BOMB_LAUNCH, weaponInst);
+			if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_BOMB_LAUNCH))
+			{
+				PlaySound3D(SOUND_BOMB_LAUNCH, weaponInst);
+			}
 		}
 
 		// missile
@@ -659,7 +662,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 				}
 			}
 
-			PlaySound3D(SOUND_MISSILE_LAUNCH, weaponInst);
+			if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_MISSILE_LAUNCH))
+			{
+				PlaySound3D(SOUND_MISSILE_LAUNCH, weaponInst);
+			}
 		}
 
 		// if human and not AI
@@ -742,7 +748,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
-		PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_MINE_DROP))
+		{
+			PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		}
 
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
@@ -941,7 +950,11 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponInst->scale.y = SHIELD_SCALE;
 		weaponInst->scale.z = SHIELD_SCALE;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
-		OtherFX_Play(SOUND_SHIELD, 1);
+
+		if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_SHIELD))
+		{
+			OtherFX_Play(SOUND_SHIELD, 1);
+		}
 
 		modelID = DYNAMIC_SHIELD_GREEN;
 		if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
@@ -994,7 +1007,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 
 		d->numTimesClockWeaponUsed++;
 
-		OtherFX_Play(SOUND_CLOCK, 1);
+		if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_CLOCK))
+		{
+			OtherFX_Play(SOUND_CLOCK, 1);
+		}
 
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
 		{
@@ -1063,7 +1079,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponTh = weaponInst->thread;
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 
-		PlaySound3D(SOUND_WARPBALL, weaponInst);
+		if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_WARPBALL))
+		{
+			PlaySound3D(SOUND_WARPBALL, weaponInst);
+		}
 
 		// if human and not AI (AIs can not use Warpball)
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
@@ -1156,7 +1175,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 
 			d->instSelf->flags = (d->instSelf->flags & INVISIBILITY_CLEAR_DRAW_FLAGS) | GHOST_DRAW_TRANSPARENT;
 
-			OtherFX_Play(SOUND_INVISIBILITY, 1);
+			if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_INVISIBILITY))
+			{
+				OtherFX_Play(SOUND_INVISIBILITY, 1);
+			}
 		}
 
 		int time = INVISIBILITY_DURATION_NORMAL;
