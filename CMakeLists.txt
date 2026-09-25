@@ -98,6 +98,10 @@ target_compile_definitions(ctr_native PRIVATE
     # (START = 1st, L1+START = 2nd, L1+R1+START = 3rd).
     # See docs/DEBUG_PODIUM_JUMP.md
     # CTR_DEBUG_PODIUM_JUMP
+    # Uncomment to enable the SPU VAG test hotkey
+    # (L3 = left stick click plays assets/vag_test.vag).
+    # See docs/VAG_CONTEXT.md
+    CTR_DEBUG_VAG_TEST
     CTR_NATIVE_VERSION=\"${CTR_NATIVE_VERSION}\"
     CTR_NATIVE_BUILD_ID=\"${CTR_NATIVE_BUILD_ID}\"
 )

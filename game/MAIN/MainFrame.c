@@ -1,6 +1,7 @@
 #include <common.h>
 #include <stdio.h>
 #include <platform/native_custom_racer.h>
+#include "platform/native_vag.h"
 
 #if defined(CTR_NATIVE)
 static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
@@ -150,6 +151,19 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 			g_debugForcedPodiumRank = rank;
 			fprintf(stderr, "[DBG-PODIUM] jump rank=%d\n", rank);
 			NativeDebug_ForcePodium(rank);
+		}
+	}
+#endif
+
+#if defined(CTR_DEBUG_VAG_TEST)
+	/* Debug: press L3 (left stick click) to load + play
+	 * assets/vag_test.vag through the emulated SPU.
+	 * See docs/VAG_CONTEXT.md. */
+	{
+		struct GamepadBuffer *vagPad = &sdata->gGamepads->gamepad[0];
+		if (vagPad->buttonsTapped & BTN_L3)
+		{
+			NativeVag_TestPlay();
 		}
 	}
 #endif

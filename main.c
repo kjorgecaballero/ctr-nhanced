@@ -55,6 +55,7 @@
 #include "platform/native_libgpu.c"
 #include "platform/native_libpad.c"
 #include "platform/native_libspu.c"
+#include "platform/native_vag.c"
 #include "platform/native_log.c"
 #include "platform/native_memcard.c"
 #include "platform/native_memcard_adapter.c"
