@@ -773,12 +773,6 @@ class NFR_PT_Racer(Panel):
         op = row.operator("nfr.mask_export", text="Export Beam")
         op.variant = 'BEAM'
 
-        row = layout.row(align=True)
-        row.scale_y = 1.4
-        op = row.operator("nfr.mask_export",
-                          text="Export Both", icon="DUPLICATE")
-        op.variant = 'BOTH'
-
     def _draw_voices(self, context, layout):
         st = context.scene.nfr_voices
         prefs = _get_prefs(context)

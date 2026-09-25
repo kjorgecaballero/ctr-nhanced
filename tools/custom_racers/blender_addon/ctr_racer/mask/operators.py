@@ -29,17 +29,16 @@ class NFR_OT_MaskExport(Operator):
     bl_label = "Export Mask.ctr"
     bl_description = (
         "Export the active mesh as <slug>/mask/mask.ctr (the shield) "
-        "and/or <slug>/mask/beam.ctr (the beam above the mask). Both "
-        "are static: the runtime rotates them per-tick. Roster entry "
-        "must say mask=custom_good | mask=custom_bad."
+        "or <slug>/mask/beam.ctr (the beam above the mask), depending "
+        "on the chosen variant. Both are static: the runtime rotates "
+        "them per-tick. Roster entry must say mask=custom_good | "
+        "mask=custom_bad."
     )
-
     variant: EnumProperty(
         name="Variant",
         items=[
             ('MASK', "Mask", "Export mask.ctr (the shield that rotates around the kart)"),
             ('BEAM', "Beam", "Export beam.ctr (the light beam above the mask)"),
-            ('BOTH', "Both", "Export both in one go"),
         ],
         default='MASK',
     )
@@ -123,35 +122,24 @@ class NFR_OT_MaskExport(Operator):
             self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
             return {"CANCELLED"}
 
-        results = []
+        is_mask = (self.variant == 'MASK')
+        out = self._export_one(context, obj, slug_dir, slug, is_mask=is_mask)
+        if out is None:
+            return {"CANCELLED"}
 
-        if self.variant in ('MASK', 'BOTH'):
-            out = self._export_one(context, obj, slug_dir, slug, is_mask=True)
-            if out is None:
-                return {"CANCELLED"}
-            results.append(out)
-
-        if self.variant in ('BEAM', 'BOTH'):
-            out = self._export_one(context, obj, slug_dir, slug, is_mask=False)
-            if out is None:
-                return {"CANCELLED"}
-            results.append(out)
-
-        # Report (mask/ has both sets of sentinels).
+        # Report (mask/ holds both sets of sentinels, so count both).
         mask_dir = slug_dir / "mask"
         n_mask_bins = len([p for p in mask_dir.glob("sentinel_*.bin")
                            if not p.name.startswith("beam_")])
         n_beam_bins = len(list(mask_dir.glob("beam_sentinel_*.bin")))
 
-        parts = []
-        for out in results:
-            size = out.stat().st_size if out.is_file() else 0
-            parts.append(f"{out.name} ({size} B)")
-
-        msg = ("Mask exported: " + ", ".join(parts)
-               + f" — {n_mask_bins} mask textures")
-        if n_beam_bins:
-            msg += f", {n_beam_bins} beam textures"
+        size = out.stat().st_size if out.is_file() else 0
+        stem = "Mask" if is_mask else "Beam"
+        msg = f"{stem} exported: {out.name} ({size} B)"
+        if is_mask:
+            msg += f" — {n_mask_bins} mask textures"
+        else:
+            msg += f" — {n_beam_bins} beam textures"
         self.report({"INFO"}, msg)
         _redraw_view3d(context)
         return {"FINISHED"}
