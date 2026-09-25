@@ -5,7 +5,7 @@
 
 Format:
     page  slot  folder  engine  "Display Name"  [#RRGGBB]
-        [mask=good|bad]  [wheels=yes|no]
+        [mask=good|bad|custom_good|custom_bad]  [wheels=yes|no]
 
 Pure functions. No classes, no registration.
 """
@@ -45,7 +45,7 @@ def _parse_roster_line(line):
     for tok in rest:
         if tok.startswith("mask="):
             v = tok[5:]
-            if v in ("good", "bad"):
+            if v in ("good", "bad", "custom_good", "custom_bad"):
                 mask = v
         elif tok.startswith("wheels="):
             v = tok[7:]

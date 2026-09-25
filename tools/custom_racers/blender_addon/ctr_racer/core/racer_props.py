@@ -25,8 +25,10 @@ class NFR_RacerProps(PropertyGroup):
     mask:       EnumProperty(
         name="Mask",
         description="Which mask this racer receives from item boxes",
-        items=[("good", "Good (Aku Aku)", ""),
-               ("bad",  "Bad (Uka Uka)",  "")],
+        items=[("good",        "Good (Aku Aku)",   ""),
+               ("bad",         "Bad (Uka Uka)",    ""),
+               ("custom_good", "Custom (Aku Aku)", ""),
+               ("custom_bad",  "Custom (Uka Uka)", "")],
         default="good")
     wheels:     EnumProperty(
         name="Wheels",
