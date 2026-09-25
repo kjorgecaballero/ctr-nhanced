@@ -127,13 +127,16 @@ def _encode_block_best(target, old, older):
     return best
 
 
-def encode_vag(pcm, sample_rate=44100, name="vag_sample"):
+def encode_vag(pcm, sample_rate=44100, name="vag_sample", loop=False):
     """
     Encode mono int16 PCM to VAG bytes.
 
     pcm: numpy int16 1D array (mono)
     sample_rate: header field only (no resampling)
     name: 16-char ASCII name for the header
+    loop: if True, mark the first block as loop-start and the last
+          block as loop-end + loop-repeat, so the SPU emulator
+          loops the sample indefinitely when loop_addr is set.
     Returns: bytes (the full VAG file)
     """
     pcm = np.asarray(pcm, dtype=np.int16)
@@ -173,8 +176,16 @@ def encode_vag(pcm, sample_rate=44100, name="vag_sample"):
         older = decoded[-2]
         old = decoded[-1]
 
+        is_first = bi == 0
         is_last = bi == n_blocks - 1
-        flags = 0x01 if is_last else 0x00
+        if loop:
+            # Bit 0 = last block (stop), bit 1 = loop end,
+            # bit 2 = loop start, bit 3 = loop repeat.
+            flags = 0x00
+            if is_first: flags |= 0x04
+            if is_last:  flags |= 0x03   # loop end + last block
+        else:
+            flags = 0x01 if is_last else 0x00
         body.append(((filt & 0x0F) << 4) | (shift & 0x0F))
         body.append(flags)
         for i in range(0, VAG_SAMPLES_PER_BLOCK, 2):
@@ -307,7 +318,7 @@ def _snr_db(reference, test):
 def cmd_encode(args):
     pcm, sr = _read_wav_mono16(args.input)
     name = Path(args.output).stem[:16]
-    vag = encode_vag(pcm, sample_rate=sr, name=name)
+    vag = encode_vag(pcm, sample_rate=sr, name=name, loop=getattr(args, "loop", False))
     Path(args.output).write_bytes(vag)
     print(f"encode: {args.input} -> {args.output}")
     print(f"  input:  {len(pcm)} samples, {sr} Hz, {pcm.nbytes} bytes")
@@ -368,6 +379,8 @@ def main(argv=None):
     p_enc = sub.add_parser("encode", help="encode WAV -> VAG")
     p_enc.add_argument("input")
     p_enc.add_argument("output")
+    p_enc.add_argument("--loop", action="store_true",
+                       help="mark the sample for infinite looping")
     p_enc.set_defaults(func=cmd_encode)
 
     p_dec = sub.add_parser("decode", help="decode VAG -> WAV")
