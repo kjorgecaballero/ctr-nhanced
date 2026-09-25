@@ -12,8 +12,14 @@
 
 #define NATIVE_AUDIO_SAMPLE_RATE             44100
 #define NATIVE_AUDIO_CHANNELS                2
-#define NATIVE_AUDIO_SPU_VOICE_COUNT         24
-#define NATIVE_AUDIO_SPU_MEMSIZE             (512 * 1024)
+/* Emulated SPU voice count. The PS1 had 24 voices. The port
+ * expands to 32 so custom features can use the extra voices
+ * (24-31) without CSEQ (HOWL_Channel.c) ever touching them.
+ * HOWL_Channel.c still iterates only the first 24
+ * (NUM_SFX_CHANNELS in regionsEXE.h), so retail audio is
+ * byte-identical to PS1. */
+#define NATIVE_AUDIO_SPU_VOICE_COUNT         32
+#define NATIVE_AUDIO_SPU_MEMSIZE             (2048 * 1024)
 // streaming ADPCM decode like the real SPU: 16-byte blocks decoded on the fly
 // per voice, reading SPU RAM live (psx-spx "SPU ADPCM Samples/Pitch") -penta3
 #define NATIVE_AUDIO_ADPCM_BLOCK_BYTES       16
