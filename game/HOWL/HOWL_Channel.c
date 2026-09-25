@@ -472,16 +472,16 @@ void Channel_UpdateChannels()
 	struct ChannelAttr *new;
 	u32 *ptrFlag;
 
-	for (vNum = 0, ptrFlag = &sdata->ChannelUpdateFlags[0];
+        for (vNum = 0, ptrFlag = &sdata->ChannelUpdateFlags[0];
 
-	     vNum < NUM_SFX_CHANNELS;
+             vNum < NUM_SFX_CHANNELS;
 
-	     vNum++, ptrFlag++)
-	{
-		u32 updateFlags = *ptrFlag;
+             vNum++, ptrFlag++)
+        {
+                u32 updateFlags = *ptrFlag;
 
-		// if need to turn off
-		if ((updateFlags & HOWL_CHANNEL_UPDATE_OFF) != 0)
+                // if need to turn off
+                if ((updateFlags & HOWL_CHANNEL_UPDATE_OFF) != 0)
 		{
 			voiceBitOff |= 1 << vNum;
 
@@ -499,16 +499,16 @@ void Channel_UpdateChannels()
 
 	SpuSetKey(0, voiceBitOff);
 
-	for (vNum = 0, cur = &sdata->channelAttrCur[0], new = &sdata->channelAttrNew[0], ptrFlag = &sdata->ChannelUpdateFlags[0];
+        for (vNum = 0, cur = &sdata->channelAttrCur[0], new = &sdata->channelAttrNew[0], ptrFlag = &sdata->ChannelUpdateFlags[0];
 
-	     vNum < NUM_SFX_CHANNELS;
+             vNum < NUM_SFX_CHANNELS;
 
-	     vNum++, cur++, new++, ptrFlag++)
-	{
-		u32 updateFlags = *ptrFlag;
+             vNum++, cur++, new++, ptrFlag++)
+        {
+                u32 updateFlags = *ptrFlag;
 
-		// if need to turn on
-		if ((updateFlags & HOWL_CHANNEL_UPDATE_KEY_ON) != 0)
+                // if need to turn on
+                if ((updateFlags & HOWL_CHANNEL_UPDATE_KEY_ON) != 0)
 		{
 			voiceBitOn |= 1 << vNum;
 		}

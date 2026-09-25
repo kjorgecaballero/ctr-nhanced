@@ -76,7 +76,7 @@ u32 NativeVag_Load(const char *path, u32 spu_addr, u32 *out_size)
 
 void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pitch)
 {
-    if (voice < 0 || voice >= 24) return;
+    if (voice < 0 || voice >= 32) return;
     if (spu_addr == 0) return;
 
     SpuVoiceAttr attr;
@@ -110,12 +110,23 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
     NativeAudio_SpuSetKey(0, 1u << voice);
     NativeAudio_SpuSetVoiceAttr(&attr);
     NativeAudio_SpuSetKey(1, 1u << voice);
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+    if (voice == NATIVE_DANCE_SFX_SPU_VOICE)
+        fprintf(stderr, "[VAG24] play addr=0x%X pitch=0x%X\n",
+                (unsigned)spu_addr, (unsigned)pitch);
+#endif
 }
 
 void NativeVag_Stop(int voice)
 {
-    if (voice < 0 || voice >= 24) return;
+    if (voice < 0 || voice >= 32) return;
     NativeAudio_SpuSetKey(0, 1u << voice);
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+    if (voice == NATIVE_DANCE_SFX_SPU_VOICE)
+        fprintf(stderr, "[VAG24] stop\n");
+#endif
 }
 
 void NativeVag_TestPlay(void)

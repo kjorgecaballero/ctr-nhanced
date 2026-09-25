@@ -281,7 +281,7 @@ class NFR_OT_DanceBuildSfx(Operator):
     bl_label = "Build Dance SFX"
     bl_description = (
         "Write <slug>/dance/sfx.bin, copy each WAV to sfx_<i>.wav, "
-        "and rebuild ENG.XNF (GAME category, track base 4096)"
+        "and encode them to VAG for SPU RAM playback"
     )
 
     def execute(self, context):
@@ -386,7 +386,8 @@ class NFR_OT_DanceBuildSfx(Operator):
             return {"CANCELLED"}
 
         msg = (f"Dance SFX built for '{slug}': "
-               f"{len(entries)} trigger(s), {copied} WAV(s) copied")
+               f"{len(entries)} trigger(s), {copied} WAV(s) copied, "
+               f"VAGs encoded")
         if skipped_dup:
             msg += f", {skipped_dup} dup dropped"
         if skipped_empty:

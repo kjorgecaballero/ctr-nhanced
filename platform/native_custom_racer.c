@@ -9,6 +9,8 @@
 #include <platform/native_gpu.h>
 #include <platform/native_glad.h>
 #include <platform/native_audio.h>
+#include <platform/native_vag.h>
+#include <psx/libspu.h>
 #include <ovr_230.h>
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
@@ -225,8 +227,25 @@ static int s_customDanceSfxBase[NATIVE_CUSTOM_COUNT];
  * 0xFF (=-1) at the top of each race so the first tick at frame 0
  * fires. Values are signed so -1 is not a valid frame. */
 static u32 s_danceSfxFrames  [NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
-static u8  s_danceSfxCount   [NATIVE_CUSTOM_COUNT];
-static s16 s_danceSfxPrevFrame[NATIVE_CUSTOM_COUNT];
+static u8  s_danceSfxCount   [NATIVE_CUSTOM_COUNT];      
+static s16 s_danceSfxPrevFrame[NATIVE_CUSTOM_COUNT];     
+
+/* SPU addresses of the loaded dance SFX VAGs, per [charIdx][slot].
+ * 0 means "not loaded" (missing file or out of SPU RAM).
+ * s_danceSfxSpuNext is the global allocator cursor shared by all
+ * three podium ranks; reset to NATIVE_DANCE_SFX_SPU_BASE at the top
+ * of each PreloadPodiumDanceModels call. */
+static u32 s_danceSfxSpuAddr[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
+static u16 s_danceSfxSpuPitch[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
+static u32 s_danceSfxSpuNext;
+
+/* Anti-rebote: después de disparar un slot, bloquearlo N ticks.
+ * El CS thread del dance oscila alrededor del frame target (48 → 47
+ * → 48 → ...), así que un filtro "rising edge" solo no alcanza. El
+ * valor se calcula al cargar el VAG (ver PreloadDanceSfxVags) desde
+ * el tamaño y rate del sample. */
+static u8 s_danceSfxCooldown[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
+static u32 s_danceSfxCooldownLen;    /* ticks, común a todos los slots */
 
 static int ParseEngineID(const char *s)
 {
@@ -1220,6 +1239,11 @@ void NativeCustomRacer_ResetPodiumDance(void)
 {
     s_podiumDanceLoaded = 0;
     memset(s_podiumDanceByChar, 0, sizeof(s_podiumDanceByChar));
+
+    /* Kill the dance SFX VAG so it doesn't bleed into the next race.
+     * No reservation machinery needed: voice 24 is not touched by
+     * CSEQ (HOWL_Channel.c iterates only NUM_SFX_CHANNELS = 24). */
+    NativeVag_Stop(NATIVE_DANCE_SFX_SPU_VOICE);
 }
 
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).
@@ -1268,23 +1292,47 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame)
     if (count == 0)
         return;
 
-    /* Fire only on frame transitions. A looping anim that holds the
-     * same frame for multiple ticks fires once; on the next loop the
-     * transition from prev != frame re-arms it. */
+    /* Snapshot the previous frame, then update. prev is used below
+     * for the rising-edge filter. */
     s16 prev = s_danceSfxPrevFrame[idx];
-    if (prev == (s16)frame)
-        return;
     s_danceSfxPrevFrame[idx] = (s16)frame;
 
-    int base = s_customDanceSfxBase[idx];
-    if (base <= 0)
-        return;
+    /* Advance all cooldowns once per tick. */
+    for (int i = 0; i < (int)NATIVE_DANCE_SFX_MAX; i++)
+    {
+        if (s_danceSfxCooldown[idx][i] > 0)
+            s_danceSfxCooldown[idx][i]--;
+    }
+
+    /* (Voice hold decrement moved to the top of the function so it
+     * runs even when the podium is over and no dance model matches.) */
 
     for (int i = 0; i < (int)count; i++)
     {
         if ((int)s_danceSfxFrames[idx][i] != frame)
             continue;
-        CDSYS_XAPlay(CDSYS_XA_TYPE_GAME, base + i);
+        if (s_danceSfxCooldown[idx][i] > 0)
+            continue;
+        if (prev >= (s16)frame)
+            continue;   /* require rising edge into the target */
+
+        u32 spu_addr = s_danceSfxSpuAddr[idx][i];
+        if (spu_addr == 0)
+            continue;
+
+        s_danceSfxCooldown[idx][i] = (u8)s_danceSfxCooldownLen;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        fprintf(stderr,
+                "[DanceSfx] fire idx=%d slot=%d frame=%d prev=%d "
+                "spu=0x%X pitch=0x%X\n",
+                idx, i, frame, (int)prev, spu_addr,
+                s_danceSfxSpuPitch[idx][i]);
+#endif
+
+        NativeVag_Play(spu_addr, NATIVE_DANCE_SFX_SPU_VOICE,
+                       0x2000, 0x2000,  /* ~50% volume */
+                       s_danceSfxSpuPitch[idx][i]);
     }
 }
 
@@ -1468,6 +1516,92 @@ void NativeDebug_ForcePodium(s32 targetRank)
 }
 #endif
 
+/* Loads <slug>/dance/sfx_<i>.vag into SPU RAM for every slot that
+ * has one, using a shared allocator cursor. Called from
+ * PreloadPodiumDanceModels for each custom at the podium. Slots
+ * without a VAG, or that don't fit in the reserved SPU range, are
+ * left at 0 and won't fire (TickDanceSfx checks). */
+static void PreloadDanceSfxVags(int charID)
+{
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+    if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+        return;
+
+    memset(s_danceSfxSpuAddr[idx], 0, sizeof(s_danceSfxSpuAddr[idx]));
+
+    u8 count = s_danceSfxCount[idx];
+    if (count == 0)
+        return;
+
+    const char *folder = NativeCustomRacer_GetFolder(charID);
+    if (folder == NULL)
+        return;
+
+    for (int i = 0; i < (int)count; i++)
+    {
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "assets/mods/racers/%s/dance/sfx_%d.vag", folder, i);
+
+        /* Probe size + sample rate before committing SPU range. */
+        FILE *f = fopen(path, "rb");
+        if (f == NULL)
+            continue;
+        u8 hdr[20] = {0};
+        size_t got = fread(hdr, 1, sizeof(hdr), f);
+        fseek(f, 0, SEEK_END);
+        long file_size = ftell(f);
+        fclose(f);
+        if (file_size <= 48 || got < 20)
+            continue;
+
+        u32 rate = (u32)hdr[0x10]
+                 | ((u32)hdr[0x11] << 8)
+                 | ((u32)hdr[0x12] << 16)
+                 | ((u32)hdr[0x13] << 24);
+        /* SPU base rate is 44100 Hz; pitch 0x1000 = 1.0x.
+         * A 22050 Hz sample needs pitch 0x0800 for natural speed. */
+        u16 pitch = 0x1000;
+        if (rate > 0)
+            pitch = (u16)(((u64)rate * 0x1000u) / 44100u);
+
+        u32 needed = (u32)(file_size - 48);
+        needed = (needed + 15u) & ~15u;     /* 16-byte SPU alignment */
+
+        /* Compute playback duration in ticks. Each 16-byte block is
+         * 28 samples. Playback rate = 44100 * pitch / 4096 Hz.
+         * Engine tick = 60 fps. Add 12 ticks (~200 ms) of margin for
+         * ADSR release and scheduling jitter. */
+        u64 samples = ((u64)needed / 16u) * 28u;
+        u32 rate_hz = (rate > 0) ? rate : 44100u;
+        u32 dur_ticks = (u32)((samples * 60u + rate_hz - 1u) / rate_hz) + 6u;
+        if (dur_ticks > 250u) dur_ticks = 250u;   /* safety cap ~4 s */
+        s_danceSfxCooldownLen = dur_ticks;
+
+        if (s_danceSfxSpuNext + needed > NATIVE_DANCE_SFX_SPU_END)
+        {
+            Log("[CustomRacer] dance sfx VAG: out of SPU RAM "
+                "(need %u at 0x%X, ceiling 0x%X), dropped %s\n",
+                needed, s_danceSfxSpuNext, NATIVE_DANCE_SFX_SPU_END, path);
+            continue;
+        }
+
+        u32 loaded = NativeVag_Load(path, s_danceSfxSpuNext, NULL);
+        if (loaded == 0)
+            continue;
+
+        s_danceSfxSpuAddr[idx][i]  = loaded;
+        s_danceSfxSpuPitch[idx][i] = pitch;
+        s_danceSfxSpuNext = loaded + needed;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        Log("[CustomRacer] dance sfx VAG: charID=%d slot=%d spu=0x%X "
+            "size=%u rate=%u pitch=0x%X\n",
+            charID, i, loaded, needed, rate, pitch);
+#endif
+    }
+}
+
 void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
 {
     if (s_podiumDanceLoaded)
@@ -1477,6 +1611,13 @@ void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
     /* Reset the per-frame SFX guard so frame 0 can fire on the first
      * tick of a new race. 0xFF = -1 = "no previous frame". */
     memset(s_danceSfxPrevFrame, 0xFF, sizeof(s_danceSfxPrevFrame));
+
+    /* Reset the SPU allocator cursor for dance SFX VAGs. All three
+     * podium ranks share it; they are loaded sequentially below. */
+    s_danceSfxSpuNext = NATIVE_DANCE_SFX_SPU_BASE;
+
+    /* Reset all per-slot cooldowns so frame 0/48 can fire immediately. */
+    memset(s_danceSfxCooldown, 0, sizeof(s_danceSfxCooldown));
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     /* Debug: the rank forcer is overwritten between
@@ -1525,9 +1666,13 @@ void NativeCustomRacer_PreloadPodiumDanceModels(struct GameTracker *gGT)
             danceHdr->ptrAnimations[0] != NULL)
             nFrames = (u16)(danceHdr->ptrAnimations[0]->numFrames & 0x7FFF);
 
-        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;        
         s_podiumDanceByChar[idx].model  = m;
-        s_podiumDanceByChar[idx].frames = nFrames;
+        s_podiumDanceByChar[idx].frames = nFrames;       
+
+        /* Load dance SFX VAGs into SPU RAM now, so TickDanceSfx can
+         * just fire NativeVag_Play with the precomputed address. */
+        PreloadDanceSfxVags(charID);
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
         Log("[CustomRacer] podium dance preload: charID=%d rank=%d frames=%u (deferred attach)\n",

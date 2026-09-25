@@ -315,12 +315,36 @@ def _snr_db(reference, test):
 # CLI
 # ---------------------------------------------------------------------------
 
+def _resample_linear(pcm, src_rate, dst_rate):
+    """Linear-interpolation resample. pcm is int16 mono. Cheap, and
+    22050 vs 44100 halves the VAG size with acceptable quality for
+    short SFX. For music we would want a proper resampler, but this
+    is only used for dance SFX that need to fit in 24 KB of SPU RAM."""
+    if src_rate == dst_rate or len(pcm) == 0:
+        return pcm
+    ratio = float(dst_rate) / float(src_rate)
+    n_out = int(round(len(pcm) * ratio))
+    if n_out <= 0:
+        return pcm[:0]
+    x_src = np.arange(len(pcm), dtype=np.float64)
+    x_dst = np.arange(n_out, dtype=np.float64) / ratio
+    out = np.interp(x_dst, x_src, pcm.astype(np.float64))
+    return np.clip(np.round(out), -32768, 32767).astype(np.int16)
+
+
 def cmd_encode(args):
     pcm, sr = _read_wav_mono16(args.input)
+    src_sr = sr
+    target = getattr(args, "rate", 0) or 0
+    if target > 0 and target != sr:
+        pcm = _resample_linear(pcm, sr, target)
+        sr = target
     name = Path(args.output).stem[:16]
     vag = encode_vag(pcm, sample_rate=sr, name=name, loop=getattr(args, "loop", False))
     Path(args.output).write_bytes(vag)
     print(f"encode: {args.input} -> {args.output}")
+    if src_sr != sr:
+        print(f"  resample: {src_sr} Hz -> {sr} Hz")
     print(f"  input:  {len(pcm)} samples, {sr} Hz, {pcm.nbytes} bytes")
     print(f"  output: {len(vag)} bytes "
           f"({VAG_HEADER_SIZE} header + {len(vag) - VAG_HEADER_SIZE} data)")
@@ -379,8 +403,11 @@ def main(argv=None):
     p_enc = sub.add_parser("encode", help="encode WAV -> VAG")
     p_enc.add_argument("input")
     p_enc.add_argument("output")
-    p_enc.add_argument("--loop", action="store_true",
+    p_enc.add_argument("--loop", action="store_true",    
                        help="mark the sample for infinite looping")
+    p_enc.add_argument("--rate", type=int, default=0,
+                       help="resample to this rate before encoding "
+                            "(0 = keep the input rate)")
     p_enc.set_defaults(func=cmd_encode)
 
     p_dec = sub.add_parser("decode", help="decode VAG -> WAV")

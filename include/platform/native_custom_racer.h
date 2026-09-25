@@ -166,6 +166,26 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 #define NATIVE_DANCE_SFX_TRACK_BASE 4096
 #define NATIVE_DANCE_SFX_MAX        16
 
+/* === Dance SFX on SPU VAG (Fase 6) ===
+ * The dance SFX WAVs are encoded to .vag by the pipeline and loaded
+ * into SPU RAM at podium preload. They no longer go through the XNF.
+ * Range: 24 KB reserved just under the SPU ceiling (0x7E000). Voice 22
+ * is used for all slots (SFX are sequential, one per frame). */
+/* Dance SFX VAGs live in the expanded SPU RAM (see
+ * NATIVE_AUDIO_SPU_MEMSIZE in native_audio.c). Retail never writes
+ * above 0x7E000 (hardcoded in HOWL_Bank.c), so [0x80000, 0x100000)
+ * is safe. 512 KB is plenty for dozens of SFX per custom across
+ * multiple pods; [0x100000, 0x200000) stays free for future features
+ * (kart SFX, mask music). */
+#define NATIVE_DANCE_SFX_SPU_BASE   0x80000u
+#define NATIVE_DANCE_SFX_SPU_END    0x100000u
+/* Voices 24-31 are not iterated by HOWL_Channel.c (which uses
+ * NUM_SFX_CHANNELS = 24), so CSEQ never touches them. Custom
+ * features get their own voices without any reservation hack.
+ * Dance SFX uses 24; future features (kart SFX, mask music) will
+ * take 25, 26, etc. */
+#define NATIVE_DANCE_SFX_SPU_VOICE  24
+
 void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 
 
