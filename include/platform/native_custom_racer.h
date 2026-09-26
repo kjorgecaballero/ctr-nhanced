@@ -225,6 +225,35 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT);
 int  NativeCustomRacer_UpdateMaskMusic(void);
 void NativeCustomRacer_PauseMaskMusic(void);
+
+/* === Custom engine loop (v2 del Custom Kart SFX, ENGINE-LOOP) ===
+ * Continuous engine hum with pitch modulated by speed. One VAG
+ * loop per custom at <slug>/sfx/engine.vag (encoded --loop --rate
+ * 8000). When a driver with engine.vag is driving, the retail
+ * engine channel is skipped and the VAG loop plays on voice 30/31.
+ *
+ * Voices: 30 + (driverID & 1) -> 2 voices. 1P/2P only; 3P/4P falls
+ * back to retail (voice 32 would be out of range). Originals and
+ * customs without engine.vag also fall back to retail.
+ *
+ * SPU range 0x1A0000-0x1C0000 (128 KB, ~28 s of ADPCM @ 8000 Hz).
+ * Voice 29 is mask music; 24 dance SFX; 25-28 kart SFX. */
+#define NATIVE_ENGINE_SFX_SPU_BASE    0x1A0000u
+#define NATIVE_ENGINE_SFX_SPU_END     0x1C0000u
+#define NATIVE_ENGINE_SFX_VOICE_BASE  30
+#define NATIVE_ENGINE_SFX_VOICE_COUNT 2
+
+void NativeCustomRacer_PreloadEngineSfx(struct GameTracker *gGT);
+
+/* Called every frame from EngineSound_Player. Returns 1 if a custom
+ * engine VAG is now playing (caller must NOT call
+ * EngineAudio_Recalculate); 0 if the caller should fall back to retail.
+ *
+ * volume: retail volume, 0..0xe6. Split-screen scaling is applied here
+ *         (matches EngineAudio_Recalculate) and vol_FX is applied.
+ * pitch_mult16: 0x10000 = 1.0x, 0x20000 = 2.0x. */
+int  NativeCustomRacer_UpdateEngineSfx(struct Driver *d, int volume,
+                                       int pitch_mult16);
 #define NATIVE_KART_SFX_MAX           11
 
 enum {

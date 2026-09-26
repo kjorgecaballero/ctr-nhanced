@@ -655,7 +655,7 @@ def cmd_build(verbose):
                       f"{r.stderr[-200:]}")
                 continue
             print(f"  [{i}] {slug}: {event}.wav -> {event}.vag")
-            kart_sfx_vag_count += 1 1
+            kart_sfx_vag_count += 1
 
     # ------- MASK MUSIC (VAG, no XNF, --loop) -------
     # Encode <slug>/mask/mask_song.wav to <slug>/mask/mask_song.vag
@@ -692,6 +692,42 @@ def cmd_build(verbose):
         print(f"  [{i}] {slug}: mask_song.wav -> mask_song.vag (--loop --norm)")
         mask_music_vag_count += 1
 
+    # ------- ENGINE LOOP (VAG, no XNF, --loop, 8000 Hz) -------
+    # Encode <slug>/sfx/engine.wav to <slug>/sfx/engine.vag with
+    # --loop --rate 8000 --norm. The C-side plays it on SPU voice
+    # 30/31 (1P/2P) with pitch modulated by speed.
+    engine_vag_count = 0
+
+    for i, (page, slot, slug) in enumerate(roster):
+        if not _roster_filter(page, slot):
+            continue
+
+        sfx_dir = RACERS / slug / "sfx"
+        if not sfx_dir.is_dir():
+            continue
+
+        wav = sfx_dir / "engine.wav"
+        vag = sfx_dir / "engine.vag"
+        if not wav.is_file():
+            continue
+        if vag.is_file() and vag.stat().st_mtime >= wav.stat().st_mtime:
+            engine_vag_count += 1
+            continue
+        r = subprocess.run(
+            [sys.executable, str(VAG_CODEC), "encode",
+             "--rate", "8000", "--loop", "--norm",
+             str(wav), str(vag)],
+            cwd=str(ROOT), capture_output=True,
+            encoding="utf-8", errors="replace",
+        )
+        if r.returncode != 0:
+            print(f"  [{i}] {slug}: VAG encode failed for engine.wav: "
+                  f"{r.stderr[-200:]}")
+            continue
+        print(f"  [{i}] {slug}: engine.wav -> engine.vag "
+              f"(--rate 8000 --loop --norm)")
+        engine_vag_count += 1
+
     if not music_tracks and not voice_tracks:
         print("No tracks to add.")
         write_sidecar(roster, banks_written=0, tracks_written=0)
@@ -705,7 +741,8 @@ def cmd_build(verbose):
     print(f"\nPatched {XNF.name}: {len(original)} -> {len(new_xnf)}B, "
           f"+{len(music_tracks)} music, +{len(voice_tracks)} voice, "
           f"{kart_sfx_vag_count} kart-sfx VAG(s) present, "
-          f"{mask_music_vag_count} mask-music VAG(s) present "
+          f"{mask_music_vag_count} mask-music VAG(s) present, "
+          f"{engine_vag_count} engine VAG(s) present "
           f"(no XNF tracks)")
 
     write_sidecar(roster, banks_written=voice_bank_count,

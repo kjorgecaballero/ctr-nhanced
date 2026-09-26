@@ -137,6 +137,7 @@ u32 main(void)
       VehBirth_EngineAudio_AllPlayers();
       NativeCustomRacer_PreloadKartSfx(gGT);
       NativeCustomRacer_PreloadMaskMusic(gGT);
+      NativeCustomRacer_PreloadEngineSfx(gGT);
 
 			// 9 = intro cutscene
 			// 10 = traffic lights

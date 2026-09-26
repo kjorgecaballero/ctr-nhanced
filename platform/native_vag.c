@@ -147,6 +147,21 @@ void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r)
     NativeAudio_SpuSetVoiceAttr(&attr);
 }
 
+/* Update pitch of an already-playing voice without retriggering
+ * the key. Used for engine loop pitch-modulation (v2 kart SFX). */
+void NativeVag_UpdatePitch(int voice, int pitch)
+{
+    if (voice < 0 || voice >= 32) return;
+
+    SpuVoiceAttr attr;
+    memset(&attr, 0, sizeof(attr));
+    attr.voice = (u32)(1u << voice);
+    attr.mask  = SPU_VOICE_PITCH;
+    attr.pitch = (u16)pitch;
+
+    NativeAudio_SpuSetVoiceAttr(&attr);
+}
+
 void NativeVag_Stop(int voice)
 {
     if (voice < 0 || voice >= 32) return;

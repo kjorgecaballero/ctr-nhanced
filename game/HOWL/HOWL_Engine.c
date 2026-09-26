@@ -314,6 +314,28 @@ void EngineSound_Player(struct Driver *driver)
 
 	u32 echo = ((driver->actionsFlagSet & ACTION_ENGINE_ECHO) != 0) ? 1 : 0;
 
+	/* Custom engine loop (v2 del Custom Kart SFX): if this driver has a
+	 * custom <slug>/sfx/engine.vag loaded, drive it here and skip the
+	 * retail engine channel. Only 1P/2P (voices 30/31); originals and
+	 * 3P/4P fall through to EngineAudio_Recalculate. */
+	{
+		int pitchInput = driver->engineSoundPitchState;
+		int pitchMax   = driver->const_AccelSpeed_ClassStat
+		               + driver->const_SacredFireSpeed + 0xf00;
+		if (pitchMax <= 0) pitchMax = 1;
+		if (pitchInput < 0) pitchInput = 0;
+		if (pitchInput > pitchMax) pitchInput = pitchMax;
+
+		u32 pitchMult16 = 0x10000u
+		                + (u32)((u64)(u32)pitchInput * 0x10000u / (u32)pitchMax);
+
+		if (NativeCustomRacer_UpdateEngineSfx(driver, (int)volume,
+		                                      (int)pitchMult16) != 0)
+		{
+			return;
+		}
+	}
+
 	EngineAudio_Recalculate(((engine * 4) + id) & 0xffff, HowlSfx_Pack(lr, distortion, volume, echo));
 }
 

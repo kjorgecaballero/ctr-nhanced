@@ -31,6 +31,7 @@ SFX_EVENTS = [
     ("clock",           "Clock pickup"),
     ("warpball",        "Warpball launch"),
     ("invisibility",    "Invisibility pickup"),
+    ("engine",          "Engine loop (continuous, 8000 Hz, --loop)"),
 ]
 
 
@@ -84,6 +85,11 @@ class NFR_SfxState(PropertyGroup):
     wav_invisibility: StringProperty(
         name="Invisibility",
         description="Custom invisibility SFX (replaces retail SOUND 0x61)",
+        subtype="FILE_PATH", default="")
+    wav_engine: StringProperty(
+        name="Engine loop",
+        description=("Continuous engine hum, pitch-modulated by speed. "
+                     "Encoded to VAG @ 8000 Hz with --loop."),
         subtype="FILE_PATH", default="")
 
 

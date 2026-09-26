@@ -263,6 +263,11 @@ static u16 s_maskMusicSpuPitch[NATIVE_CUSTOM_COUNT];
 static int s_maskMusicPlaying;
 static int s_maskMusicCharIdx;
 
+/* === Custom engine loop (v2 del Custom Kart SFX, ENGINE-LOOP) === */
+static u32 s_engineSfxSpuAddr [NATIVE_CUSTOM_COUNT];
+static u16 s_engineSfxSpuPitch[NATIVE_CUSTOM_COUNT];
+static int s_engineSfxVoicePlaying[NATIVE_ENGINE_SFX_VOICE_COUNT];
+
 static int ParseEngineID(const char *s)
 {
     if (strcmp(s, "SPEED")    == 0) return SPEED;
@@ -445,6 +450,9 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
     memset(s_customDanceSfxBase, 0, sizeof(s_customDanceSfxBase));
     memset(s_danceSfxCount, 0, sizeof(s_danceSfxCount));
+    memset(s_engineSfxSpuAddr,  0, sizeof(s_engineSfxSpuAddr));
+    memset(s_engineSfxSpuPitch, 0, sizeof(s_engineSfxSpuPitch));
+    memset(s_engineSfxVoicePlaying, 0, sizeof(s_engineSfxVoicePlaying));
     s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
@@ -1582,6 +1590,159 @@ int NativeCustomRacer_UpdateMaskMusic(void)
 #endif
     }
     return 0;
+}
+
+/* === Custom engine loop (v2 del Custom Kart SFX, ENGINE-LOOP) === */
+
+void NativeCustomRacer_PreloadEngineSfx(struct GameTracker *gGT)
+{
+    if (gGT == NULL)
+        return;
+
+    for (int v = 0; v < NATIVE_ENGINE_SFX_VOICE_COUNT; v++)
+        NativeVag_Stop(NATIVE_ENGINE_SFX_VOICE_BASE + v);
+
+    memset(s_engineSfxSpuAddr,  0, sizeof(s_engineSfxSpuAddr));
+    memset(s_engineSfxSpuPitch, 0, sizeof(s_engineSfxSpuPitch));
+    memset(s_engineSfxVoicePlaying, 0, sizeof(s_engineSfxVoicePlaying));
+
+    if (sdata->boolAudioEnabled == 0)
+        return;
+
+    u32 cursor = NATIVE_ENGINE_SFX_SPU_BASE;
+
+    for (struct Thread *th = gGT->threadBuckets[PLAYER].thread;
+         th != 0; th = th->siblingThread)
+    {
+        struct Driver *d = th->object;
+        if (d == NULL)
+            continue;
+        if (d->driverID >= NATIVE_ENGINE_SFX_VOICE_COUNT)
+            continue;
+
+        int charID = data.characterIDs[d->driverID];
+        if (charID < NATIVE_CUSTOM_ID_BASE)
+            continue;
+
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+            continue;
+        if (s_engineSfxSpuAddr[idx] != 0)
+            continue;   /* dedup: same custom twice in 2P */
+
+        const char *folder = NativeCustomRacer_GetFolder(charID);
+        if (folder == NULL)
+            continue;
+
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "assets/mods/racers/%s/sfx/engine.vag", folder);
+
+        FILE *f = fopen(path, "rb");
+        if (f == NULL)
+            continue;
+        u8 hdr[20] = {0};
+        size_t got = fread(hdr, 1, sizeof(hdr), f);
+        fseek(f, 0, SEEK_END);
+        long file_size = ftell(f);
+        fclose(f);
+        if (file_size <= 48 || got < 20)
+            continue;
+
+        u32 rate = (u32)hdr[0x10]
+                 | ((u32)hdr[0x11] << 8)
+                 | ((u32)hdr[0x12] << 16)
+                 | ((u32)hdr[0x13] << 24);
+        u16 pitch = 0x1000;
+        if (rate > 0)
+            pitch = (u16)(((u64)rate * 0x1000u) / 44100u);
+
+        u32 needed = (u32)(file_size - 48);
+        needed = (needed + 15u) & ~15u;
+
+        if (cursor + needed > NATIVE_ENGINE_SFX_SPU_END)
+        {
+            Log("[CustomRacer] engine VAG out of SPU RAM "
+                "(need %u at 0x%X, ceiling 0x%X), dropped %s\n",
+                needed, cursor, NATIVE_ENGINE_SFX_SPU_END, path);
+            continue;
+        }
+
+        u32 loaded = NativeVag_Load(path, cursor, NULL);
+        if (loaded == 0)
+            continue;
+
+        s_engineSfxSpuAddr[idx]  = loaded;
+        s_engineSfxSpuPitch[idx] = pitch;
+        cursor = loaded + needed;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        Log("[CustomRacer] engine VAG: charID=%d spu=0x%X "
+            "size=%u rate=%u pitch=0x%X\n",
+            charID, loaded, needed, rate, pitch);
+#endif
+    }
+}
+
+int NativeCustomRacer_UpdateEngineSfx(struct Driver *d, int volume,
+                                      int pitch_mult16)
+{
+    if (d == NULL)
+        return 0;
+    if (d->driverID >= NATIVE_ENGINE_SFX_VOICE_COUNT)
+        return 0;   /* 3P/4P -> retail */
+    if (sdata->boolAudioEnabled == 0)
+        return 0;
+
+    int charID = data.characterIDs[d->driverID];
+    if (charID < NATIVE_CUSTOM_ID_BASE)
+        return 0;
+
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+    if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+        return 0;
+    if (s_engineSfxSpuAddr[idx] == 0)
+        return 0;
+
+    int voiceSlot = d->driverID & 1;
+    int voice     = NATIVE_ENGINE_SFX_VOICE_BASE + voiceSlot;
+
+    /* Split-screen scaling, mirrors EngineAudio_Recalculate. */
+    int effectiveVolume = volume;
+    {
+        int numPlyr = sdata->gGT->numPlyrCurrGame;
+        if (numPlyr > 1)
+        {
+            int scale = (numPlyr == 2) ? 0x37 : 0x2d;
+            effectiveVolume = ((volume * scale) << 2) >> 8;
+        }
+    }
+
+    /* 0..0xe6 -> SPU 0..0x3FFF, then scale by vol_FX (0..255). */
+    int spu_vol = (effectiveVolume * 0x3FFF) / 0xe6;
+    spu_vol = (spu_vol * (int)sdata->vol_FX) / 255;
+    if (spu_vol > 0x3FFF) spu_vol = 0x3FFF;
+    if (spu_vol < 0)      spu_vol = 0;
+
+    u32 basePitch  = s_engineSfxSpuPitch[idx];
+    u32 finalPitch = ((u64)basePitch * (u32)pitch_mult16) >> 16;
+    if (finalPitch > 0x3FFF) finalPitch = 0x3FFF;
+    if (finalPitch < 0x100)  finalPitch = 0x100;
+
+    if (!s_engineSfxVoicePlaying[voiceSlot])
+    {
+        NativeVag_Play(s_engineSfxSpuAddr[idx], voice,
+                       spu_vol, spu_vol, (int)finalPitch,
+                       /*loop=*/1);
+        s_engineSfxVoicePlaying[voiceSlot] = 1;
+    }
+    else
+    {
+        NativeVag_UpdateVolume(voice, spu_vol, spu_vol);
+        NativeVag_UpdatePitch (voice, (int)finalPitch);
+    }
+
+    return 1;
 }
 
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).

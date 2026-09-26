@@ -34,6 +34,10 @@ void NativeVag_Stop(int voice);
  * only the L/R volume registers change. */
 void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r);
 
+/* Update pitch of an already-playing voice without retriggering
+ * the key. Used for per-frame modulation (engine loop pitch-mod). */
+void NativeVag_UpdatePitch(int voice, int pitch);
+
 /* Debug helper: loads assets/vag_test.vag on first call
  * (cached), then plays it on voice 23 at 50% volume.
  * Wired to a hotkey behind CTR_DEBUG_VAG_TEST. */
