@@ -891,7 +891,10 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		weaponTh->funcThDestroy = PROC_DestroyInstance;
 		weaponTh->funcThCollide = (void *)RB_Hazard_ThCollide_Generic;
 
-		PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		if (!NativeCustomRacer_PlayKartSfx(d, NATIVE_KART_SFX_MINE_DROP))
+		{
+			PlaySound3D(SOUND_MINE_DROP, weaponInst);
+		}
 
 		// if human and not AI
 		if ((d->actionsFlagSet & ACTION_BOT) == 0)
