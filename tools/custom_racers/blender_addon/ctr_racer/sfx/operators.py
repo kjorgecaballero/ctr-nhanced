@@ -97,7 +97,53 @@ class NFR_OT_SfxBuild(Operator):
         return {"FINISHED"}
 
 
-_classes = (NFR_OT_SfxBuild,)
+class NFR_OT_SfxClear(Operator):
+    bl_idname = "nfr.sfx_clear"
+    bl_label = "Clear SFX"
+    bl_description = (
+        "Delete all <slug>/sfx/*.vag files. On the next race "
+        "start the C-side falls back to retail for every slot. "
+        "The WAVs and the pickers are kept, so Build SFX can "
+        "re-enable them."
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_sfx
+        prefs = _get_prefs(context)
+
+        slug = (st.slug or "").strip()
+        if not slug:
+            self.report({"ERROR"}, "Set the racer slug first")
+            return {"CANCELLED"}
+
+        slug_dir = prefs.racers_dir() / slug
+        sfx_dir = slug_dir / "sfx"
+        if not sfx_dir.is_dir():
+            self.report({"INFO"}, f"No sfx/ folder in {slug}")
+            return {"CANCELLED"}
+
+        vags = sorted(sfx_dir.glob("*.vag"))
+        if not vags:
+            self.report({"INFO"}, f"No VAGs in {sfx_dir.name}/")
+            return {"CANCELLED"}
+
+        n = 0
+        for v in vags:
+            try:
+                v.unlink()
+                n += 1
+            except Exception as ex:
+                self.report({"WARNING"},
+                            f"{v.name}: delete failed: {ex}")
+
+        self.report({"INFO"},
+                    f"Cleared {n} VAG(s) from {sfx_dir.name}/ — "
+                    f"retail will be used next race.")
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+_classes = (NFR_OT_SfxBuild, NFR_OT_SfxClear,)
 
 
 def register():

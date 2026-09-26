@@ -808,7 +808,11 @@ class NFR_PT_Racer(Panel):
             row.label(text=f"{label}:")
             row.prop(st, f"wav_{event}", text="")
 
-        box.operator("nfr.sfx_build", icon="SOUND")
+        row = box.row(align=True)
+        row.scale_y = 1.4
+        row.operator("nfr.sfx_build", icon="SOUND")
+        row.operator("nfr.sfx_clear",
+                     text="Clear SFX", icon="TRASH")
 
     def _draw_voices(self, context, layout):
         st = context.scene.nfr_voices
