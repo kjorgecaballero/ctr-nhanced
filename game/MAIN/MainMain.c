@@ -136,6 +136,7 @@ u32 main(void)
 			sdata->boolSoundPaused = 0;
       VehBirth_EngineAudio_AllPlayers();
       NativeCustomRacer_PreloadKartSfx(gGT);
+      NativeCustomRacer_PreloadMaskMusic(gGT);
 
 			// 9 = intro cutscene
 			// 10 = traffic lights

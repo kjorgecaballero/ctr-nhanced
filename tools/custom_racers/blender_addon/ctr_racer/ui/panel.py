@@ -766,6 +766,18 @@ class NFR_PT_Racer(Panel):
         row.operator("nfr.mask_export_icon",
                      text="Export Icon", icon="PLAY")
 
+        # --- Mask Music (optional) ---
+        music_box = layout.box()
+        music_box.label(text="Mask Music (optional)", icon="SOUND")
+        music_box.label(text="WAV loop that plays while the mask is")
+        music_box.label(text="active. Encoded to VAG @ 11025 Hz.")
+        music_box.prop(st, "mask_music_path", text="WAV")
+        row = music_box.row(align=True)
+        row.scale_y = 1.3
+        row.enabled = bool(slug) and bool((st.mask_music_path or "").strip())
+        row.operator("nfr.mask_build_music",
+                     text="Build Mask Music", icon="PLAY")
+
         # --- Actions ---
         layout.separator()
         row = layout.row(align=True)

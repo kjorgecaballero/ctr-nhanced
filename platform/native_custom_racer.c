@@ -257,6 +257,12 @@ static u32 s_kartSfxSpuAddr [NATIVE_CUSTOM_COUNT][NATIVE_KART_SFX_MAX];
 static u16 s_kartSfxSpuPitch[NATIVE_CUSTOM_COUNT][NATIVE_KART_SFX_MAX];
 static u32 s_kartSfxSpuNext;
 
+/* === Custom mask music (Fase 5, VAG) === */
+static u32 s_maskMusicSpuAddr [NATIVE_CUSTOM_COUNT];
+static u16 s_maskMusicSpuPitch[NATIVE_CUSTOM_COUNT];
+static int s_maskMusicPlaying;
+static int s_maskMusicCharIdx;
+
 static int ParseEngineID(const char *s)
 {
     if (strcmp(s, "SPEED")    == 0) return SPEED;
@@ -1383,6 +1389,164 @@ int NativeCustomRacer_PlayKartSfx(struct Driver *d, int slot)
     NativeVag_Play(addr, voice, 0x2000, 0x2000,
                    s_kartSfxSpuPitch[idx][slot], /*loop=*/0);
     return 1;
+}
+
+/* === Custom mask music (Fase 5, VAG) === */
+
+void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT)
+{
+    if (gGT == NULL)
+        return;
+
+    NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
+
+    memset(s_maskMusicSpuAddr,  0, sizeof(s_maskMusicSpuAddr));
+    memset(s_maskMusicSpuPitch, 0, sizeof(s_maskMusicSpuPitch));
+    s_maskMusicPlaying = 0;
+    s_maskMusicCharIdx = -1;
+
+    if (sdata->boolAudioEnabled == 0)
+        return;
+
+    u32 cursor = NATIVE_MASK_MUSIC_SPU_BASE;
+
+    for (struct Thread *th = gGT->threadBuckets[PLAYER].thread;
+         th != 0; th = th->siblingThread)
+    {
+        struct Driver *d = th->object;
+        if (d == NULL)
+            continue;
+
+        int charID = data.characterIDs[d->driverID];
+        if (charID < NATIVE_CUSTOM_ID_BASE)
+            continue;
+
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT)
+            continue;
+
+        const char *folder = NativeCustomRacer_GetFolder(charID);
+        if (folder == NULL)
+            continue;
+
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "assets/mods/racers/%s/mask/mask_song.vag", folder);
+
+        FILE *f = fopen(path, "rb");
+        if (f == NULL)
+            continue;
+        u8 hdr[20] = {0};
+        size_t got = fread(hdr, 1, sizeof(hdr), f);
+        fseek(f, 0, SEEK_END);
+        long file_size = ftell(f);
+        fclose(f);
+        if (file_size <= 48 || got < 20)
+            continue;
+
+        u32 rate = (u32)hdr[0x10]
+                 | ((u32)hdr[0x11] << 8)
+                 | ((u32)hdr[0x12] << 16)
+                 | ((u32)hdr[0x13] << 24);
+        u16 pitch = 0x1000;
+        if (rate > 0)
+            pitch = (u16)(((u64)rate * 0x1000u) / 44100u);
+
+        u32 needed = (u32)(file_size - 48);
+        needed = (needed + 15u) & ~15u;
+
+        if (cursor + needed > NATIVE_MASK_MUSIC_SPU_END)
+        {
+            Log("[CustomRacer] mask music VAG: out of SPU RAM "
+                "(need %u at 0x%X, ceiling 0x%X), dropped %s\n",
+                needed, cursor, NATIVE_MASK_MUSIC_SPU_END, path);
+            continue;
+        }
+
+        u32 loaded = NativeVag_Load(path, cursor, NULL);
+        if (loaded == 0)
+            continue;
+
+        s_maskMusicSpuAddr[idx]  = loaded;
+        s_maskMusicSpuPitch[idx] = pitch;
+        cursor = loaded + needed;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        Log("[CustomRacer] mask music VAG: charID=%d spu=0x%X "
+            "size=%u rate=%u pitch=0x%X\n",
+            charID, loaded, needed, rate, pitch);
+#endif
+    }
+}
+
+int NativeCustomRacer_UpdateMaskMusic(void)
+{
+    struct GameTracker *gGT = sdata->gGT;
+    if (gGT == NULL)
+        return 0;
+
+    int charIdx = -1;
+    for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+    {
+        struct Driver *d = gGT->drivers[i];
+        if (d == NULL)
+            continue;
+        if ((d->actionsFlagSet & ACTION_MASK_WEAPON) == 0)
+            continue;
+
+        int charID = data.characterIDs[d->driverID];
+        if (charID <  NATIVE_CUSTOM_ID_BASE ||
+            charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            continue;
+
+        int idx = charID - NATIVE_CUSTOM_ID_BASE;
+        if (s_maskMusicSpuAddr[idx] == 0)
+            continue;
+
+        charIdx = idx;
+        break;
+    }
+
+    if (charIdx >= 0)
+    {
+        if (!s_maskMusicPlaying)
+        {
+            CseqMusic_StopAll();
+            sdata->cseqBoolPlay = 0;
+            sdata->cseqHighestIndex = -1;
+            sdata->cseqTempo = 0;
+
+            NativeVag_Play(s_maskMusicSpuAddr[charIdx],
+                           NATIVE_MASK_MUSIC_VOICE,
+                           0x2000, 0x2000,
+                           s_maskMusicSpuPitch[charIdx],
+                           /*loop=*/1);
+
+            s_maskMusicPlaying = 1;
+            s_maskMusicCharIdx = charIdx;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+            Log("[CustomRacer] mask music start: charIdx=%d spu=0x%X pitch=0x%X\n",
+                charIdx, s_maskMusicSpuAddr[charIdx],
+                s_maskMusicSpuPitch[charIdx]);
+#endif
+        }
+        return 1;
+    }
+
+    if (s_maskMusicPlaying)
+    {
+        NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
+        s_maskMusicPlaying = 0;
+        s_maskMusicCharIdx = -1;
+        sdata->cseqBoolPlay = 0;
+        sdata->cseqHighestIndex = -1;
+
+#if defined(CTR_DEBUG_PODIUM_JUMP)
+        Log("[CustomRacer] mask music stop\n");
+#endif
+    }
+    return 0;
 }
 
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).

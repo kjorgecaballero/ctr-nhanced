@@ -24,6 +24,20 @@ class NFR_MaskState(PropertyGroup):
         default="",
     )
 
+    # Optional mask music loop. WAV that the pipeline encodes to
+    # <slug>/mask/mask_song.vag with --rate 11025 --loop. When the
+    # custom with mask=custom_good|custom_bad grabs the mask, CSEQ is
+    # stopped and this VAG plays on SPU voice 29 (range
+    # 0x180000-0x1A0000). Fallback to the retail Aku/Uka jingle if
+    # missing.
+    mask_music_path: StringProperty(
+        name="Mask Music",
+        description="WAV loop that plays while the mask is active. "
+                    "Encoded to VAG @ 11025 Hz with --loop.",
+        subtype="FILE_PATH",
+        default="",
+    )
+
     # Optional HUD icon. PNG that build_icon_bin.py converts to
     # <slug>/mask/icon.bin (RGBA8 + <II w h>). When present, the HUD
     # draws this instead of the retail Aku/Uka icon while the mask is

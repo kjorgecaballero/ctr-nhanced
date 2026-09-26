@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 void Audio_SetState(u32 state)
 {
@@ -141,6 +142,11 @@ void Audio_AdvHub_SwapSong(int levelID)
 
 void Audio_SetMaskSong(u32 tempo)
 {
+	/* Custom mask music takes over CSEQ when a custom with
+	 * mask_song.vag holds the mask. See native_custom_racer.c. */
+	if (NativeCustomRacer_UpdateMaskMusic() != 0)
+		return;
+
 	s32 i;
 	u8 isMaskUsed;
 	u32 songID;

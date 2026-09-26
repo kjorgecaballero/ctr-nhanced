@@ -206,7 +206,24 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
  * OtherFX_Play / PlaySound3D. */
 #define NATIVE_KART_SFX_SPU_BASE      0x100000u
 #define NATIVE_KART_SFX_SPU_END       0x180000u
-#define NATIVE_KART_SFX_VOICE_BASE    25
+#define NATIVE_KART_SFX_VOICE_BASE  25
+
+/* === Custom mask music (Fase 5, VAG) ===
+ * Optional per-custom mask music loop. When a custom with
+ * <slug>/mask/mask_song.vag grabs the mask, CSEQ is stopped and
+ * the VAG loop plays on voice 29, replacing the retail Aku/Uka
+ * jingle. When the mask expires, the level music resumes.
+ *
+ * SPU range 0x180000-0x1A0000 (128 KB, ~20 s of ADPCM @ 11025 Hz).
+ * Voice 29. Only one custom mask loop plays at a time (lowest
+ * driverID wins on split-screen). Customs without a mask_song.vag
+ * fall back to the retail Aku/Uka jingle. */
+#define NATIVE_MASK_MUSIC_SPU_BASE  0x180000u
+#define NATIVE_MASK_MUSIC_SPU_END   0x1A0000u
+#define NATIVE_MASK_MUSIC_VOICE     29
+
+void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT);
+int  NativeCustomRacer_UpdateMaskMusic(void);
 #define NATIVE_KART_SFX_MAX           11
 
 enum {

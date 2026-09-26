@@ -657,6 +657,41 @@ def cmd_build(verbose):
             print(f"  [{i}] {slug}: {event}.wav -> {event}.vag")
             kart_sfx_vag_count += 1
 
+    # ------- MASK MUSIC (VAG, no XNF, --loop) -------
+    # Encode <slug>/mask/mask_song.wav to <slug>/mask/mask_song.vag
+    # with --loop. The C-side plays it on SPU voice 29 while the mask
+    # is active (Fase 5). Skipped when the .vag is newer than the .wav.
+    mask_music_vag_count = 0
+
+    for i, (page, slot, slug) in enumerate(roster):
+        if not _roster_filter(page, slot):
+            continue
+
+        mask_dir = RACERS / slug / "mask"
+        if not mask_dir.is_dir():
+            continue
+
+        wav = mask_dir / "mask_song.wav"
+        vag = mask_dir / "mask_song.vag"
+        if not wav.is_file():
+            continue
+        if vag.is_file() and vag.stat().st_mtime >= wav.stat().st_mtime:
+            mask_music_vag_count += 1
+            continue
+        r = subprocess.run(
+            [sys.executable, str(VAG_CODEC), "encode",
+             "--rate", "11025", "--loop",
+             str(wav), str(vag)],
+            cwd=str(ROOT), capture_output=True,
+            encoding="utf-8", errors="replace",
+        )
+        if r.returncode != 0:
+            print(f"  [{i}] {slug}: VAG encode failed for mask_song.wav: "
+                  f"{r.stderr[-200:]}")
+            continue
+        print(f"  [{i}] {slug}: mask_song.wav -> mask_song.vag (--loop)")
+        mask_music_vag_count += 1
+
     if not music_tracks and not voice_tracks:
         print("No tracks to add.")
         write_sidecar(roster, banks_written=0, tracks_written=0)
@@ -669,8 +704,8 @@ def cmd_build(verbose):
     XNF.write_bytes(new_xnf)
     print(f"\nPatched {XNF.name}: {len(original)} -> {len(new_xnf)}B, "
           f"+{len(music_tracks)} music, +{len(voice_tracks)} voice, "
-          f"{dance_sfx_vag_count} dance-sfx VAG(s) present, "
-          f"{kart_sfx_vag_count} kart-sfx VAG(s) present "
+          f"{kart_sfx_vag_count} kart-sfx VAG(s) present, "
+          f"{mask_music_vag_count} mask-music VAG(s) present "
           f"(no XNF tracks)")
 
     write_sidecar(roster, banks_written=voice_bank_count,

@@ -221,7 +221,81 @@ class NFR_OT_MaskExportIcon(Operator):
         return {"FINISHED"}
 
 
-_classes = (NFR_OT_MaskExport, NFR_OT_MaskExportIcon)
+class NFR_OT_MaskBuildMusic(Operator):
+    bl_idname = "nfr.mask_build_music"
+    bl_label = "Build Mask Music"
+    bl_description = (
+        "Copy the picked WAV to <slug>/mask/mask_song.wav and run the "
+        "pipeline. Encoded to VAG @ 11025 Hz with --loop. The runtime "
+        "plays it on SPU voice 29 while the mask is active."
+    )
+
+    def execute(self, context):
+        st = context.scene.nfr_mask
+        prefs = _get_prefs(context)
+
+        slug = (st.slug or "").strip()
+        if not slug:
+            self.report({"ERROR"}, "Set the racer slug first")
+            return {"CANCELLED"}
+
+        src_str = (st.mask_music_path or "").strip()
+        if not src_str:
+            self.report({"ERROR"}, "Pick a mask music WAV first")
+            return {"CANCELLED"}
+
+        slug_dir = prefs.racers_dir() / slug
+        if not slug_dir.is_dir():
+            self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
+            return {"CANCELLED"}
+
+        src = _resolve_blender_path(src_str)
+        if src is None or not src.is_file():
+            self.report({"ERROR"},
+                        f"Cannot resolve WAV path: {src_str!r}. Save "
+                        "the .blend or uncheck 'Relative Path'.")
+            return {"CANCELLED"}
+
+        mask_dir = slug_dir / "mask"
+        mask_dir.mkdir(parents=True, exist_ok=True)
+        wav_dst = mask_dir / "mask_song.wav"
+
+        try:
+            if src.resolve() != wav_dst.resolve():
+                import shutil as _sh
+                _sh.copyfile(src, wav_dst)
+        except Exception as ex:
+            self.report({"ERROR"}, f"Copy failed: {ex}")
+            return {"CANCELLED"}
+
+        pipeline = (Path(prefs.repo_path) / "tools" / "custom_racers"
+                    / "build_voice_pipeline.py")
+        if not pipeline.is_file():
+            self.report({"ERROR"},
+                        f"build_voice_pipeline.py not found: {pipeline}")
+            return {"CANCELLED"}
+
+        res = subprocess.run(
+            [prefs.python_exe, str(pipeline), "-v"],
+            cwd=str(prefs.repo_path),
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+        )
+        if res.returncode != 0:
+            self.report({"ERROR"},
+                        f"Pipeline failed ({res.returncode}):\n"
+                        f"{res.stderr[-400:]}")
+            return {"CANCELLED"}
+
+        vag = mask_dir / "mask_song.vag"
+        size = vag.stat().st_size if vag.is_file() else 0
+        self.report({"INFO"},
+                    f"Mask music built: mask_song.vag ({size} B)")
+        _redraw_view3d(context)
+        return {"FINISHED"}
+
+
+_classes = (NFR_OT_MaskExport, NFR_OT_MaskExportIcon, NFR_OT_MaskBuildMusic)
 
 
 def register():
