@@ -5,6 +5,8 @@
 
 No classes, no registration. Pure functions.
 """
+from pathlib import Path
+
 import bpy
 
 
@@ -33,3 +35,24 @@ def _active_racer(context):
             or not hasattr(obj, "racer") or not obj.racer.is_racer):
         return None
     return obj.racer
+
+
+def _resolve_blender_path(p):
+    """Resolve a FILE_PATH property to an absolute Path, or None.
+
+    Blender stores relative paths as '//...' (relative to the .blend).
+    bpy.path.abspath() resolves them, but ONLY if the .blend has been
+    saved: with no filepath it returns a broken '\\..' prefix that
+    Path() cannot use. We detect both cases and return None so the
+    operator can surface a clear error instead of silently skipping."""
+    if not p:
+        return None
+    if p.startswith("//"):
+        if not bpy.data.filepath:
+            return None
+        return Path(bpy.path.abspath(p))
+    if p.startswith("\\"):
+        # Blender gave us a corrupted "relative" path because the .blend
+        # is unsaved; there is no way to resolve it.
+        return None
+    return Path(p)

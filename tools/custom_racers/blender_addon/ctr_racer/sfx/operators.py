@@ -16,7 +16,7 @@ from bpy.types import Operator
 
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
-from ..dance.operators import _resolve_blender_path
+from ..core.helpers import _resolve_blender_path
 from .state import SFX_EVENTS
 
 

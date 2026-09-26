@@ -17,29 +17,8 @@ from bpy.props import EnumProperty, IntProperty
 from bpy.types import Operator
 
 from ..prefs import _get_prefs
-from ..core.helpers import _redraw_view3d
+from ..core.helpers import _redraw_view3d, _resolve_blender_path
 from ..export.mesh_json import export_mesh_json, _bake_timeline_clips
-
-
-def _resolve_blender_path(p):
-    """Resolve a FILE_PATH property to an absolute Path, or None.
-
-    Blender stores relative paths as '//...' (relative to the .blend).
-    bpy.path.abspath() resolves them, but ONLY if the .blend has been
-    saved: with no filepath it returns a broken '\\..' prefix that
-    Path() cannot use. We detect both cases and return None so the
-    operator can surface a clear error instead of silently skipping."""
-    if not p:
-        return None
-    if p.startswith("//"):
-        if not bpy.data.filepath:
-            return None
-        return Path(bpy.path.abspath(p))
-    if p.startswith("\\"):
-        # Blender gave us a corrupted "relative" path because the .blend
-        # is unsaved; there is no way to resolve it.
-        return None
-    return Path(p)
 
 
 class NFR_OT_DanceExport(Operator):
