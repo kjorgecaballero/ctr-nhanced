@@ -28,11 +28,12 @@ void NativeVag_Play(u32 spu_addr, int voice,
 /* Stop a voice. */
 void NativeVag_Stop(int voice);
 
-/* Loads a 16-byte ADPCM silence block into a reserved SPU address
- * (once) and points the voice's addr at it, with pitch 0x1000 and
- * zero volume. After this, if another audio path (CSEQ/OtherFX)
- * key-ons the voice without setting the addr, it plays silence. */
-void NativeVag_PointVoiceAtSilence(int voice);
+/* Update volume of an already-playing voice without retriggering
+ * the key. Use this for per-frame modulation (mask music slider,
+ * future engine loop pitch-mod). The attack envelope is preserved;
+ * only the L/R volume registers change. */
+void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r);
+
 /* Debug helper: loads assets/vag_test.vag on first call
  * (cached), then plays it on voice 23 at 50% volume.
  * Wired to a hotkey behind CTR_DEBUG_VAG_TEST. */

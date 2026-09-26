@@ -412,10 +412,18 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 
 	PROC_CheckAllForDead();
 
-	if ((gGT->gameMode1 & PAUSE_ALL) == 0)
-	{
-		Audio_Update1();
-	}
+        if ((gGT->gameMode1 & PAUSE_ALL) == 0)
+        {
+                Audio_Update1();
+        }
+        else
+        {
+                /* PAUSE_ALL is set: Audio_Update1 doesn't run, so the
+                 * mask music VAG loop would keep playing forever.
+                 * Silently stop it; UpdateMaskMusic re-arms it on
+                 * resume with the current slider value. */
+                NativeCustomRacer_PauseMaskMusic();
+        }
 
 	gGT->gameMode1_prevFrame = gGT->gameMode1;
 	uVar5 = GAMEPAD_GetNumConnected(gGamepads);

@@ -39,7 +39,8 @@ class NFR_PT_Racer(Panel):
             (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
              ('MATERIALS', 'Materials')),
             (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
-            (('DANCE', 'Dance'), ('MASK', 'Mask'), ('VOICES', 'Voices')),
+            (('DANCE', 'Dance'), ('MASK', 'Mask'), ('SFX', 'SFX')),
+            (('VOICES', 'Voices'),),
         ):
             row = layout.row(align=True)
             row.scale_y = 1.3

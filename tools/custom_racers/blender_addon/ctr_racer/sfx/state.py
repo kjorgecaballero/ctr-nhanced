@@ -85,3 +85,18 @@ class NFR_SfxState(PropertyGroup):
         name="Invisibility",
         description="Custom invisibility SFX (replaces retail SOUND 0x61)",
         subtype="FILE_PATH", default="")
+
+
+_classes = (NFR_SfxState,)
+
+
+def register():
+    for c in _classes:
+        bpy.utils.register_class(c)
+    bpy.types.Scene.nfr_sfx = bpy.props.PointerProperty(type=NFR_SfxState)
+
+
+def unregister():
+    del bpy.types.Scene.nfr_sfx
+    for c in reversed(_classes):
+        bpy.utils.unregister_class(c)

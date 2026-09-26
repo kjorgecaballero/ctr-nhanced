@@ -85,8 +85,8 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
     attr.mask  = SPU_VOICE_WDSA
                | SPU_VOICE_VOLL | SPU_VOICE_VOLR
                | SPU_VOICE_PITCH
-               | SPU_VOICE_ADSR_AR | SPU_VOICE_ADSR_DR   
-               | SPU_VOICE_ADSR_SR | SPU_VOICE_ADSR_SL   
+               | SPU_VOICE_ADSR_AR | SPU_VOICE_ADSR_DR
+               | SPU_VOICE_ADSR_SR | SPU_VOICE_ADSR_SL
                | SPU_VOICE_ADSR_RR
                | SPU_VOICE_ADSR_AMODE | SPU_VOICE_ADSR_SMODE
                | SPU_VOICE_ADSR_RMODE;
@@ -125,8 +125,26 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     if (voice == NATIVE_DANCE_SFX_SPU_VOICE)
         fprintf(stderr, "[VAG24] play addr=0x%X pitch=0x%X loop=%d\n",
-                (unsigned)spu_addr, (unsigned)pitch, loop);    
+                (unsigned)spu_addr, (unsigned)pitch, loop);
 #endif
+}
+
+/* Update volume of an already-playing voice without retriggering
+ * the key. Used for per-frame modulation (mask music slider, future
+ * engine loop pitch-mod). The attack envelope is preserved; only
+ * the L/R volume registers change. */
+void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r)
+{
+    if (voice < 0 || voice >= 32) return;
+
+    SpuVoiceAttr attr;
+    memset(&attr, 0, sizeof(attr));
+    attr.voice = (u32)(1u << voice);
+    attr.mask  = SPU_VOICE_VOLL | SPU_VOICE_VOLR;
+    attr.volume.left  = (short)volume_l;
+    attr.volume.right = (short)volume_r;
+
+    NativeAudio_SpuSetVoiceAttr(&attr);
 }
 
 void NativeVag_Stop(int voice)

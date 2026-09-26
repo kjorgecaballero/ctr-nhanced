@@ -600,7 +600,7 @@ def cmd_build(verbose):
                 continue
             r = subprocess.run(
                 [sys.executable, str(VAG_CODEC), "encode",
-                 "--rate", "11025",
+                 "--rate", "11025", "--norm",
                  str(wav), str(vag)],
                 cwd=str(ROOT), capture_output=True,
                 encoding="utf-8", errors="replace",
@@ -645,7 +645,7 @@ def cmd_build(verbose):
                 continue
             r = subprocess.run(
                 [sys.executable, str(VAG_CODEC), "encode",
-                 "--rate", "11025",
+                 "--rate", "11025", "--norm",
                  str(wav), str(vag)],
                 cwd=str(ROOT), capture_output=True,
                 encoding="utf-8", errors="replace",
@@ -655,7 +655,7 @@ def cmd_build(verbose):
                       f"{r.stderr[-200:]}")
                 continue
             print(f"  [{i}] {slug}: {event}.wav -> {event}.vag")
-            kart_sfx_vag_count += 1
+            kart_sfx_vag_count += 1 1
 
     # ------- MASK MUSIC (VAG, no XNF, --loop) -------
     # Encode <slug>/mask/mask_song.wav to <slug>/mask/mask_song.vag
@@ -680,7 +680,7 @@ def cmd_build(verbose):
             continue
         r = subprocess.run(
             [sys.executable, str(VAG_CODEC), "encode",
-             "--rate", "11025", "--loop",
+             "--rate", "11025", "--loop", "--norm",
              str(wav), str(vag)],
             cwd=str(ROOT), capture_output=True,
             encoding="utf-8", errors="replace",
@@ -689,7 +689,7 @@ def cmd_build(verbose):
             print(f"  [{i}] {slug}: VAG encode failed for mask_song.wav: "
                   f"{r.stderr[-200:]}")
             continue
-        print(f"  [{i}] {slug}: mask_song.wav -> mask_song.vag (--loop)")
+        print(f"  [{i}] {slug}: mask_song.wav -> mask_song.vag (--loop --norm)")
         mask_music_vag_count += 1
 
     if not music_tracks and not voice_tracks:

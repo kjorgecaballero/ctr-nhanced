@@ -63,7 +63,6 @@ def register():
             ('DANCE',     "Dance",     "Custom podium dance export"),
             ('MASK',      "Mask",      "Custom mask model + beam export"),
             ('SFX',       "SFX",       "Custom kart SFX (boost, weapons, etc.)"),
-            ('SFX',       "SFX",       "Custom kart SFX (boost, weapons, etc.)"),
             ('VOICES',    "Voices",    "Custom voiceline WAV export"),
         ],
         default='SETTINGS',

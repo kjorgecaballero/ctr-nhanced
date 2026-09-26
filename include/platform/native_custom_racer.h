@@ -224,6 +224,7 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 
 void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT);
 int  NativeCustomRacer_UpdateMaskMusic(void);
+void NativeCustomRacer_PauseMaskMusic(void);
 #define NATIVE_KART_SFX_MAX           11
 
 enum {

@@ -339,12 +339,34 @@ def cmd_encode(args):
     if target > 0 and target != sr:
         pcm = _resample_linear(pcm, sr, target)
         sr = target
+
+    peak_before = None
+    rms_before  = None
+    if getattr(args, "norm", False):
+        if len(pcm):
+            f = pcm.astype(np.float64)
+            peak_before = int(np.max(np.abs(f)))
+            rms_before  = float(np.sqrt(np.mean(f * f)))
+            if rms_before > 0:
+                # RMS target -14 dBFS, hard clip at -0.5 dBFS.
+                # Matches the loudness of retail samples (which are
+                # compressed, unlike most WAVs from a DAW).
+                target_rms = 32767.0 * (10.0 ** (-14.0 / 20.0))
+                scale = target_rms / rms_before
+                pcm = (f * scale).clip(-32500, 32500).astype(np.int16)
+
     name = Path(args.output).stem[:16]
     vag = encode_vag(pcm, sample_rate=sr, name=name, loop=getattr(args, "loop", False))
     Path(args.output).write_bytes(vag)
     print(f"encode: {args.input} -> {args.output}")
     if src_sr != sr:
         print(f"  resample: {src_sr} Hz -> {sr} Hz")
+    if rms_before is not None and rms_before > 0:
+        f2 = pcm.astype(np.float64)
+        peak_after = int(np.max(np.abs(f2)))
+        rms_after  = float(np.sqrt(np.mean(f2 * f2)))
+        print(f"  normalize: peak {peak_before} -> {peak_after}, "
+              f"rms {rms_before:.0f} -> {rms_after:.0f} (-14 dBFS RMS)")
     print(f"  input:  {len(pcm)} samples, {sr} Hz, {pcm.nbytes} bytes")
     print(f"  output: {len(vag)} bytes "
           f"({VAG_HEADER_SIZE} header + {len(vag) - VAG_HEADER_SIZE} data)")
@@ -408,6 +430,9 @@ def main(argv=None):
     p_enc.add_argument("--rate", type=int, default=0,
                        help="resample to this rate before encoding "
                             "(0 = keep the input rate)")
+    p_enc.add_argument("--norm", action="store_true",
+                       help="normalize peak to -1 dBFS before encoding "
+                            "(recommended for short SFX / loops)")
     p_enc.set_defaults(func=cmd_encode)
 
     p_dec = sub.add_parser("decode", help="decode VAG -> WAV")

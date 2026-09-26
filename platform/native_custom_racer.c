@@ -1479,11 +1479,29 @@ void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT)
     }
 }
 
+/* Called every frame from MainFrame_GameLogic while the game is
+ * paused (PAUSE_ALL set). Audio_Update1 does not run during the
+ * pause, so UpdateMaskMusic does not run either — but the VAG
+ * loop keeps playing in the SPU. This stops it. On resume,
+ * Audio_Update1 runs again and UpdateMaskMusic re-arms the loop
+ * with the current vol_Music (so a slider change made in the
+ * pause menu is picked up automatically). */
+void NativeCustomRacer_PauseMaskMusic(void)
+{
+    /* Do NOT NativeVag_Stop: the SPU emulator has no public cursor
+     * to resume from, so a stop would restart the loop from the
+     * beginning on unpause. Instead, mute the voice; UpdateMaskMusic
+     * restores the volume when Audio_Update1 runs again. The cursor
+     * keeps advancing silently. */
+    if (s_maskMusicPlaying)
+        NativeVag_UpdateVolume(NATIVE_MASK_MUSIC_VOICE, 0, 0);
+}
+
 int NativeCustomRacer_UpdateMaskMusic(void)
 {
     struct GameTracker *gGT = sdata->gGT;
     if (gGT == NULL)
-        return 0;
+        return 0; 0;
 
     int charIdx = -1;
     for (int i = 0; i < gGT->numPlyrCurrGame; i++)
@@ -1509,6 +1527,14 @@ int NativeCustomRacer_UpdateMaskMusic(void)
 
     if (charIdx >= 0)
     {
+        /* Scale the SPU volume (0..0x3FFF) by the Music slider
+         * (sdata->vol_Music, 0..255). Retail mask music goes
+         * through CSEQ, which applies the same scaling. Computed
+         * every frame so the slider updates live. */
+        int vol = ((int)sdata->vol_Music * 0x3FFF) >> 8;
+        if (vol > 0x3FFF) vol = 0x3FFF;
+        if (vol < 0)      vol = 0;
+
         if (!s_maskMusicPlaying)
         {
             CseqMusic_StopAll();
@@ -1518,10 +1544,12 @@ int NativeCustomRacer_UpdateMaskMusic(void)
 
             NativeVag_Play(s_maskMusicSpuAddr[charIdx],
                            NATIVE_MASK_MUSIC_VOICE,
-                           0x2000, 0x2000,
+                           vol, vol,
                            s_maskMusicSpuPitch[charIdx],
                            /*loop=*/1);
 
+            s_maskMusicPlaying = 1;
+            s_maskMusicCharIdx = charIdx;
             s_maskMusicPlaying = 1;
             s_maskMusicCharIdx = charIdx;
 
@@ -1531,6 +1559,13 @@ int NativeCustomRacer_UpdateMaskMusic(void)
                 s_maskMusicSpuPitch[charIdx]);
 #endif
         }
+        else
+        {
+            /* Slider may have moved while the loop is playing.
+             * Update the L/R registers without retriggering. */
+            NativeVag_UpdateVolume(NATIVE_MASK_MUSIC_VOICE, vol, vol);
+        }
+
         return 1;
     }
 
