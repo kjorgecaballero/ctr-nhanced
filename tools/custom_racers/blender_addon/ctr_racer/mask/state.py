@@ -13,11 +13,22 @@ roster entry needs mask=custom_good | mask=custom_bad for the runtime
 to load the .ctr files at all.
 """
 import bpy
-from bpy.props import StringProperty
+from bpy.props import EnumProperty, StringProperty
 from bpy.types import PropertyGroup
 
 
 class NFR_MaskState(PropertyGroup):
+    item_type: EnumProperty(
+        name="Item Type",
+        description="Which item this asset belongs to",
+        items=[
+            ('MASK',    "Mask",    "Custom Aku/Uka shield (existing feature)"),
+            ('MISSILE', "Missile", "Custom tracker missile model"),
+            ('BOMB',    "Bomb",    "Custom bomb model"),
+        ],
+        default='MASK',
+    )
+
     slug: StringProperty(
         name="Slug",
         description="Folder name of the racer this mask belongs to",

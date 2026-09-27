@@ -45,33 +45,52 @@ class NFR_OT_MaskExport(Operator):
 
     # ---- helpers --------------------------------------------------------
 
-    def _export_one(self, context, obj, slug_dir, slug, is_mask):
+    def _export_one(self, context, obj, slug_dir, slug, is_mask, item_type):
         """Bake + export a single variant. Returns the out path or None."""
         prefs = _get_prefs(context)
 
-        if is_mask:
-            stem = "mask"
-            extra_flag = "--mask"
+        # Dispatch by item_type. For MASK, honor the variant (MASK/BEAM).
+        # For MISSILE/BOMB, ignore variant and export the single model.
+        if item_type == 'MASK':
+            if is_mask:
+                stem = "mask"
+                json_stem = "mask"
+                extra_flags = ["--mask"]
+            else:
+                stem = "beam"
+                json_stem = "beam"
+                extra_flags = ["--mask-beam"]
+            out_dir = slug_dir / "mask"
+        elif item_type == 'MISSILE':
+            stem = "model"
+            json_stem = "missile"
+            extra_flags = ["--item", "missile"]
+            out_dir = slug_dir / "items" / "missile"
+        elif item_type == 'BOMB':
+            stem = "model"
+            json_stem = "bomb"
+            extra_flags = ["--item", "bomb"]
+            out_dir = slug_dir / "items" / "bomb"
         else:
-            stem = "beam"
-            extra_flag = "--mask-beam"
+            self.report({"ERROR"}, f"Unknown item type: {item_type}")
+            return None
 
-        mask_dir = slug_dir / "mask"
-        mask_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
 
         source_dir = slug_dir / "source"
         source_dir.mkdir(parents=True, exist_ok=True)
-        json_path = source_dir / f"source_mesh_{stem}.json"
+        json_path = source_dir / f"source_mesh_{json_stem}.json"
 
-        # Mask and beam are static (rotation is per-tick in
-        # RB_MaskWeapon_ThTick), so bake a single frame. override_clips
-        # bypasses the racer's own anim_use_timeline / anim_frame_ranges.
+        # Mask / beam / items are static (rotation is per-tick in
+        # RB_MaskWeapon_ThTick for mask/beam). Bake a single frame.
+        # override_clips bypasses the racer's own anim_use_timeline /
+        # anim_frame_ranges.
         frame = int(context.scene.frame_current)
         try:
             clips = _bake_timeline_clips(obj, {stem: [frame, frame]})
             export_mesh_json(obj, json_path, override_clips=clips)
         except Exception as ex:
-            self.report({"ERROR"}, f"{stem}: mesh export failed: {ex}")
+            self.report({"ERROR"}, f"{stem}: mesh export failed: {ex}")        
             return None
 
         build_py = (Path(prefs.repo_path) / "tools" / "custom_racers"
@@ -81,12 +100,12 @@ class NFR_OT_MaskExport(Operator):
                         f"build_character.py not found: {build_py}")
             return None
 
-        out_ctr = mask_dir / f"{stem}.ctr"
+        out_ctr = out_dir / f"{stem}.ctr"
         cmd = [
             prefs.python_exe, str(build_py),
             str(json_path), slug, str(out_ctr),
-            "--sentinel", extra_flag,
-        ]
+            "--sentinel",
+        ] + extra_flags
 
         res = subprocess.run(
             cmd, cwd=str(prefs.repo_path),
@@ -122,24 +141,28 @@ class NFR_OT_MaskExport(Operator):
             self.report({"ERROR"}, f"Racer folder not found: {slug_dir}")
             return {"CANCELLED"}
 
+        item_type = st.item_type
         is_mask = (self.variant == 'MASK')
-        out = self._export_one(context, obj, slug_dir, slug, is_mask=is_mask)
+        out = self._export_one(context, obj, slug_dir, slug,
+                               is_mask=is_mask, item_type=item_type)
         if out is None:
             return {"CANCELLED"}
 
-        # Report (mask/ holds both sets of sentinels, so count both).
-        mask_dir = slug_dir / "mask"
-        n_mask_bins = len([p for p in mask_dir.glob("sentinel_*.bin")
-                           if not p.name.startswith("beam_")])
-        n_beam_bins = len(list(mask_dir.glob("beam_sentinel_*.bin")))
-
         size = out.stat().st_size if out.is_file() else 0
-        stem = "Mask" if is_mask else "Beam"
-        msg = f"{stem} exported: {out.name} ({size} B)"
-        if is_mask:
-            msg += f" — {n_mask_bins} mask textures"
+        if item_type == 'MASK':
+            # Report both mask and beam textures.
+            mask_dir = slug_dir / "mask"
+            n_mask_bins = len([p for p in mask_dir.glob("sentinel_*.bin")
+                               if not p.name.startswith("beam_")])
+            n_beam_bins = len(list(mask_dir.glob("beam_sentinel_*.bin")))
+            stem = "Mask" if is_mask else "Beam"
+            msg = f"{stem} exported: {out.name} ({size} B)"
+            if is_mask:
+                msg += f" — {n_mask_bins} mask textures"
+            else:
+                msg += f" — {n_beam_bins} beam textures"
         else:
-            msg += f" — {n_beam_bins} beam textures"
+            msg = f"{item_type.title()} exported: {out.name} ({size} B)"
         self.report({"INFO"}, msg)
         _redraw_view3d(context)
         return {"FINISHED"}
@@ -181,12 +204,20 @@ class NFR_OT_MaskExportIcon(Operator):
                         "the .blend or uncheck 'Relative Path'.")
             return {"CANCELLED"}
 
-        mask_dir = slug_dir / "mask"
-        mask_dir.mkdir(parents=True, exist_ok=True)
+        item_type = st.item_type
+        if item_type == 'MASK':
+            icon_dir = slug_dir / "mask"
+        elif item_type == 'MISSILE':
+            icon_dir = slug_dir / "items" / "missile"
+        elif item_type == 'BOMB':
+            icon_dir = slug_dir / "items" / "bomb"
+        else:
+            self.report({"ERROR"}, f"Unknown item type: {item_type}")
+            return {"CANCELLED"}
+        icon_dir.mkdir(parents=True, exist_ok=True)
 
-        png_dst = mask_dir / "icon.png"
-        bin_dst = mask_dir / "icon.bin"
-
+        png_dst = icon_dir / "icon.png"
+        bin_dst = icon_dir / "icon.bin"
         try:
             if src.resolve() != png_dst.resolve():
                 import shutil as _sh

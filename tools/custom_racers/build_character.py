@@ -101,6 +101,7 @@ STATIC_MODE = False
 DANCE_MODE = False
 MASK_MODE = False
 MASK_BEAM_MODE = False
+ITEM_MODE = None
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
@@ -114,6 +115,12 @@ for i, a in enumerate(argv):
         MASK_MODE = True
     elif a == '--mask-beam':
         MASK_BEAM_MODE = True
+    elif a == '--item':
+        ITEM_MODE = argv[i + 1] if i + 1 < len(argv) else None
+
+# --item requires --sentinel (items are Sentinel-format .ctr only).
+if ITEM_MODE is not None:
+    SENTINEL_MODE = True
 
 if SENTINEL_MODE and PIL_Image is None:
     raise RuntimeError("Pillow is required for --sentinel mode")
@@ -133,7 +140,9 @@ if not OUT_PATH.is_absolute():
 MODEL_NAME       = SLOT_NAME
 MODEL_NAME_HI    = SLOT_NAME + '_hi'
 HEADER_UNK_44    = 0x2000
-if MASK_BEAM_MODE:
+if ITEM_MODE is not None:
+    SLOT_NAMES = ['model']
+elif MASK_BEAM_MODE:
     SLOT_NAMES = ['beam']
 elif MASK_MODE:
     SLOT_NAMES = ['mask']
@@ -141,7 +150,6 @@ elif DANCE_MODE:
     SLOT_NAMES = ['dance']
 else:
     SLOT_NAMES = ['turn', 'reverse', 'bump', 'jump']
-
 # Sentinel file prefix. "sentinel" for model / dance / mask; "beam_sentinel"
 # for the mask beam (same <slug>/mask/ folder, disjoint file names).
 SENTINEL_FILE_PREFIX = "beam_sentinel" if MASK_BEAM_MODE else "sentinel"
@@ -760,7 +768,8 @@ def build():
     # Disabled in --dance and --mask modes: those carry exactly one
     # clip ('dance' / 'mask') and shape keys are irrelevant.
     if (clips is None and not STATIC_MODE and not DANCE_MODE
-            and not MASK_MODE and not MASK_BEAM_MODE):
+            and not MASK_MODE and not MASK_BEAM_MODE
+            and ITEM_MODE is None):
         clips = make_clips_from_keys(mesh, records, quantize)
 
     if clips is None:

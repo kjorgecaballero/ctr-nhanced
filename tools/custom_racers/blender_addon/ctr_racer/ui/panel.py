@@ -39,7 +39,7 @@ class NFR_PT_Racer(Panel):
             (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
              ('MATERIALS', 'Materials')),
             (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
-            (('DANCE', 'Dance'), ('MASK', 'Mask'), ('SFX', 'SFX')),
+            (('DANCE', 'Dance'), ('ITEMS', 'Items'), ('SFX', 'SFX')),
             (('VOICES', 'Voices'),),
         ):
             row = layout.row(align=True)
@@ -64,8 +64,8 @@ class NFR_PT_Racer(Panel):
             self._draw_anim(context, layout)
         elif tab == 'DANCE':
             self._draw_dance(context, layout)
-        elif tab == 'MASK':
-            self._draw_mask(context, layout)
+        elif tab == 'ITEMS':
+            self._draw_items(context, layout)
         elif context.scene.nfr_ui_tab == 'SFX':
             self._draw_sfx(context, layout)
         elif context.scene.nfr_ui_tab == 'VOICES':
@@ -712,22 +712,39 @@ class NFR_PT_Racer(Panel):
                           text="Export Both", icon="DUPLICATE")
         op.variant = 'BOTH'
 
-    def _draw_mask(self, context, layout):
+    def _draw_items(self, context, layout):
         st = context.scene.nfr_mask
+        item_type = st.item_type
 
-        layout.label(text="Custom Mask Model", icon="MESH_DATA")
-        layout.label(text="Exports <slug>/mask/mask.ctr (the shield that",
-                     icon="INFO")
-        layout.label(text="rotates around the kart) and optionally")
-        layout.label(text="<slug>/mask/beam.ctr (the light beam above it).")
-        layout.label(text="Both are static — retail rotates them per-tick.")
-        layout.label(text="Roster must say mask=custom_good | custom_bad.")
+        layout.label(text="Custom Item Model", icon="MESH_DATA")
+
+        col = layout.column(align=True)
+        col.prop(st, "item_type", text="Item Type")
+
+        if item_type == 'MASK':
+            layout.label(text="Exports <slug>/mask/mask.ctr (shield) and/or",
+                         icon="INFO")
+            layout.label(text="<slug>/mask/beam.ctr (light beam). Both are")
+            layout.label(text="static — retail rotates them per-tick.")
+            layout.label(text="Roster must say mask=custom_good | custom_bad.")
+        elif item_type == 'MISSILE':
+            layout.label(text="Exports <slug>/items/missile/model.ctr and",
+                         icon="INFO")
+            layout.label(text="<slug>/items/missile/sentinel_NN.bin.")
+            layout.label(text="Overrides the missile model for this custom.")
+            layout.label(text="No roster flag needed.")
+        elif item_type == 'BOMB':
+            layout.label(text="Exports <slug>/items/bomb/model.ctr and",
+                         icon="INFO")
+            layout.label(text="<slug>/items/bomb/sentinel_NN.bin.")
+            layout.label(text="Overrides the bomb model for this custom.")
+            layout.label(text="No roster flag needed.")
 
         layout.separator()
 
         obj = context.active_object
         if obj is None or obj.type != "MESH":
-            layout.label(text="Select the mask mesh first", icon="ERROR")
+            layout.label(text="Select the mesh first", icon="ERROR")
         else:
             layout.label(text=f"Mesh: {obj.name} "
                               f"({len(obj.data.vertices)} verts)",
@@ -741,12 +758,19 @@ class NFR_PT_Racer(Panel):
             prefs = _get_prefs(context)
             slug_dir = prefs.racers_dir() / slug
             if slug_dir.is_dir():
-                mask_dir = slug_dir / "mask"
                 existing = []
-                if (mask_dir / "mask.ctr").is_file():
-                    existing.append("mask.ctr")
-                if (mask_dir / "beam.ctr").is_file():
-                    existing.append("beam.ctr")
+                if item_type == 'MASK':
+                    mask_dir = slug_dir / "mask"
+                    if (mask_dir / "mask.ctr").is_file():
+                        existing.append("mask.ctr")
+                    if (mask_dir / "beam.ctr").is_file():
+                        existing.append("beam.ctr")
+                elif item_type == 'MISSILE':
+                    if (slug_dir / "items" / "missile" / "model.ctr").is_file():
+                        existing.append("items/missile/model.ctr")
+                elif item_type == 'BOMB':
+                    if (slug_dir / "items" / "bomb" / "model.ctr").is_file():
+                        existing.append("items/bomb/model.ctr")
                 if existing:
                     layout.label(text="Existing: " + ", ".join(existing),
                                  icon="CHECKMARK")
@@ -758,8 +782,12 @@ class NFR_PT_Racer(Panel):
         # --- HUD Icon (optional) ---
         icon_box = layout.box()
         icon_box.label(text="HUD Icon (optional)", icon="IMAGE_DATA")
-        icon_box.label(text="Replaces the retail Aku/Uka face while")
-        icon_box.label(text="the mask is held. ~32x32 PNG.")
+        if item_type == 'MASK':
+            icon_box.label(text="Replaces the retail Aku/Uka face while")
+            icon_box.label(text="the mask is held. ~32x32 PNG.")
+        else:
+            icon_box.label(text="Replaces the retail icon while the")
+            icon_box.label(text=f"{item_type.lower()} is held. ~32x32 PNG.")
         icon_box.prop(st, "icon_path", text="PNG")
         row = icon_box.row(align=True)
         row.scale_y = 1.3
@@ -767,26 +795,34 @@ class NFR_PT_Racer(Panel):
         row.operator("nfr.mask_export_icon",
                      text="Export Icon", icon="PLAY")
 
-        # --- Mask Music (optional) ---
-        music_box = layout.box()
-        music_box.label(text="Mask Music (optional)", icon="SOUND")
-        music_box.label(text="WAV loop that plays while the mask is")
-        music_box.label(text="active. Encoded to VAG @ 11025 Hz.")
-        music_box.prop(st, "mask_music_path", text="WAV")
-        row = music_box.row(align=True)
-        row.scale_y = 1.3
-        row.enabled = bool(slug) and bool((st.mask_music_path or "").strip())
-        row.operator("nfr.mask_build_music",
-                     text="Build Mask Music", icon="PLAY")
+        # --- Mask Music (optional): only for MASK ---
+        if item_type == 'MASK':
+            music_box = layout.box()
+            music_box.label(text="Mask Music (optional)", icon="SOUND")
+            music_box.label(text="WAV loop that plays while the mask is")
+            music_box.label(text="active. Encoded to VAG @ 11025 Hz.")
+            music_box.prop(st, "mask_music_path", text="WAV")
+            row = music_box.row(align=True)
+            row.scale_y = 1.3
+            row.enabled = bool(slug) and bool((st.mask_music_path or "").strip())
+            row.operator("nfr.mask_build_music",
+                         text="Build Mask Music", icon="PLAY")
 
         # --- Actions ---
         layout.separator()
         row = layout.row(align=True)
         row.scale_y = 1.3
-        op = row.operator("nfr.mask_export", text="Export Mask", icon="EXPORT")
-        op.variant = 'MASK'
-        op = row.operator("nfr.mask_export", text="Export Beam")
-        op.variant = 'BEAM'
+        if item_type == 'MASK':
+            op = row.operator("nfr.mask_export", text="Export Mask", icon="EXPORT")
+            op.variant = 'MASK'
+            op = row.operator("nfr.mask_export", text="Export Beam")
+            op.variant = 'BEAM'
+        elif item_type == 'MISSILE':
+            op = row.operator("nfr.mask_export", text="Export Missile", icon="EXPORT")
+            op.variant = 'MASK'
+        elif item_type == 'BOMB':
+            op = row.operator("nfr.mask_export", text="Export Bomb", icon="EXPORT")
+            op.variant = 'MASK'
 
     def _draw_sfx(self, context, layout):
         st = context.scene.nfr_sfx
