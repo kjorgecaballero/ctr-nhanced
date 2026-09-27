@@ -1270,7 +1270,10 @@ struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID)
 
     FILE *probe = fopen(path, "rb");
     if (!probe)
+    {
+        Log("[CustomRacer] item model not found: %s\n", path);
         return NULL;
+    }
     fseek(probe, 0, SEEK_END);
     long file_sz = ftell(probe);
     fclose(probe);
@@ -1294,6 +1297,17 @@ struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID)
     RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_ITEM, itemID);
 
     struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
+
+    /* The tick readers (RB_MovingExplosive_ThTick for missile/bomb,
+     * RB_GenericMine_ThTick for mine/beaker, RB_Warpball_ThTick, etc.)
+     * read inst->model->id to decide which behavior path to follow.
+     * Our custom .ctr has a random id written by build_character.py
+     * at export time, which does NOT match DYNAMIC_BOMB / DYNAMIC_ROCKET.
+     * Without this patch, a custom bomb falls through to the missile
+     * branch in RB_MovingExplosive_ThTick (modelID != DYNAMIC_BOMB).
+     * Patch the id to the retail slot we are substituting. */
+    m->id = (itemID == NATIVE_ITEM_BOMB) ? DYNAMIC_BOMB : DYNAMIC_ROCKET;
+
     s_itemModel[idx][itemID] = m;
 
     Log("[CustomRacer] item model loaded: %s (%ld bytes) itemID=%d\n",

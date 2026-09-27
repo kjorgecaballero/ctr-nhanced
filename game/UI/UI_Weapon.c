@@ -196,8 +196,13 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 		case UI_WEAPON_ITEM_MASK:
 			nativeItemID = -2;
 			break;
-		case UI_WEAPON_ITEM_BOMB:
+		case HELD_ITEM_BOMB_1X:
+		case HELD_ITEM_BOMB_3X:
 			nativeItemID = NATIVE_ITEM_BOMB;
+			break;
+		case HELD_ITEM_MISSILE_1X:
+		case HELD_ITEM_MISSILE_3X:
+			nativeItemID = NATIVE_ITEM_MISSILE;
 			break;
 		default:
 			break;
