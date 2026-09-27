@@ -421,6 +421,35 @@ struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID);
  * mask=custom_*, or if <slug>/mask/icon.bin is missing. */
 struct Icon *NativeCustomRacer_GetMaskIcon(int characterID);
 
+/* =====================================================================
+ * Custom item models + HUD icons (CUSTOM-ITEM-MODELS).
+ *
+ * Each custom racer can override the 3D model and HUD icon of a
+ * specific item. Assets live in <slug>/items/<item_name>/:
+ *
+ *   model.ctr         the mesh (Sentinel format, same as mask.ctr)
+ *   sentinel_NN.bin   one per material
+ *   icon.bin          optional HUD icon (RGBA8 + <II w h>)
+ *
+ * Detection is filesystem-based: no roster flag, no engine-side
+ * opt-in. Presence of <slug>/items/<item>/model.ctr enables the
+ * override for that (custom, item) pair.
+ *
+ * The mask feature predates this and keeps its own subdir
+ * (<slug>/mask/) and its own roster flag (mask=custom_good|bad),
+ * because the retail mask icon shares the same slot as the custom
+ * mask icon and the runtime needs the flag to disambiguate.
+ * ===================================================================== */
+
+enum NativeItemID {
+    NATIVE_ITEM_MISSILE = 0,
+    NATIVE_ITEM_BOMB    = 1,
+    NATIVE_ITEM_COUNT   = 2,
+};
+
+struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID);
+struct Icon  *NativeCustomRacer_GetItemIcon      (int characterID, int itemID);
+
 /* === Wheels visible flag ===
  * Returns 1 = wheels visible, 0 = wheels hidden (Oxide-style), -1 = not a custom.
  * Default for customs without a wheels= field in roster.txt is 1. */

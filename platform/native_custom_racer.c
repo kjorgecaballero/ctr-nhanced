@@ -52,6 +52,7 @@ enum {
     NATIVE_SENTINEL_KIND_DANCE     = 1,
     NATIVE_SENTINEL_KIND_MASK      = 2,
     NATIVE_SENTINEL_KIND_MASK_BEAM = 3,
+    NATIVE_SENTINEL_KIND_ITEM      = 4,   /* items/<item>/sentinel_NN.bin */
 };
 
 /* Width in VRAM words assigned to each player slot. */
@@ -178,6 +179,23 @@ static u8              s_customMaskIconAttempted[NATIVE_CUSTOM_COUNT];
 static s16             s_customMaskIconTexIdx   [NATIVE_CUSTOM_COUNT];
 static struct Icon     s_customMaskIcon          [NATIVE_CUSTOM_COUNT];
 
+/* Custom item models + HUD icons (CUSTOM-ITEM-MODELS).
+ *
+ * Indexed [customIdx][itemID]. itemID is one of enum NativeItemID.
+ * Detection is filesystem-based (see GetItemModelForChar): no
+ * roster flag needed, presence of <slug>/items/<item>/model.ctr
+ * enables the override.
+ *
+ * s_itemSentinelTexMap is a 3D array so each (custom, item) pair
+ * has its own texture cache. Allocated lazily by
+ * RegisterModelTextures when kind == NATIVE_SENTINEL_KIND_ITEM.
+ */
+static u8              s_itemLoaded        [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
+static struct Model   *s_itemModel         [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
+static u8              s_itemIconAttempted [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
+static s16             s_itemIconTexIdx    [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
+static struct Icon     s_itemIcon          [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
+static s16             s_itemSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT][NATIVE_MODEL_TEX_MAX];
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
 
@@ -441,6 +459,14 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_customMaskBeamModel, 0, sizeof(s_customMaskBeamModel));
     memset(s_customMaskIconAttempted, 0, sizeof(s_customMaskIconAttempted));
     memset(s_customMaskIconTexIdx, 0xFF, sizeof(s_customMaskIconTexIdx)); /* -1 = unset */
+
+    /* Custom item models + HUD icons (CUSTOM-ITEM-MODELS). */
+    memset(s_itemLoaded,         0,    sizeof(s_itemLoaded));
+    memset(s_itemModel,          0,    sizeof(s_itemModel));
+    memset(s_itemIconAttempted,  0,    sizeof(s_itemIconAttempted));
+    memset(s_itemIconTexIdx,     0xFF, sizeof(s_itemIconTexIdx)); /* -1 = unset */
+    memset(s_itemIcon,           0,    sizeof(s_itemIcon));
+    memset(s_itemSentinelTexMap, 0xFF, sizeof(s_itemSentinelTexMap)); /* -1 = unset */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
@@ -843,7 +869,20 @@ static GLuint LoadSentinelBin(const char *path, int *outW, int *outH)
     return tex;
 }
 
-static void RegisterModelTextures(int characterID, unsigned char *data, int kind)
+/* Map NativeItemID -> folder name under <slug>/items/. Used by
+ * RegisterModelTextures (kind == NATIVE_SENTINEL_KIND_ITEM) and by
+ * NativeCustomRacer_GetItemModelForChar to build on-disk paths. */
+static const char *ItemNameFromID(int itemID)
+{
+    switch (itemID)
+    {
+    case NATIVE_ITEM_MISSILE: return "missile";
+    case NATIVE_ITEM_BOMB:    return "bomb";
+    default:                  return "unknown";
+    }
+}
+
+static void RegisterModelTextures(int characterID, unsigned char *data, int kind, int itemID)
 {
     int charIdx = characterID - NATIVE_CUSTOM_ID_BASE;
     if (charIdx < 0 || charIdx >= NATIVE_CUSTOM_COUNT)
@@ -860,32 +899,41 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
     const char *subdir;
     const char *kind_name;
     const char *file_prefix;
-    s16 (*cache)[NATIVE_MODEL_TEX_MAX];
+    s16 *cache_row;                     /* per-char row of the target cache */
+    char subdir_buf[64];                /* backing store for ITEM's dynamic subdir */
     switch (kind)
     {
     case NATIVE_SENTINEL_KIND_DANCE:
         subdir      = "dance/";
         kind_name   = "dance";
         file_prefix = "sentinel";
-        cache       = s_danceSentinelTexMap;
+        cache_row   = s_danceSentinelTexMap[charIdx];
         break;
     case NATIVE_SENTINEL_KIND_MASK:
         subdir      = "mask/";
         kind_name   = "mask";
         file_prefix = "sentinel";
-        cache       = s_maskSentinelTexMap;
+        cache_row   = s_maskSentinelTexMap[charIdx];
         break;
     case NATIVE_SENTINEL_KIND_MASK_BEAM:
         subdir      = "mask/";
         kind_name   = "mask_beam";
         file_prefix = "beam_sentinel";
-        cache       = s_maskBeamSentinelTexMap;
+        cache_row   = s_maskBeamSentinelTexMap[charIdx];
+        break;
+    case NATIVE_SENTINEL_KIND_ITEM:
+        snprintf(subdir_buf, sizeof(subdir_buf),
+                 "items/%s/", ItemNameFromID(itemID));
+        subdir      = subdir_buf;
+        kind_name   = "item";
+        file_prefix = "sentinel";
+        cache_row   = s_itemSentinelTexMap[charIdx][itemID];
         break;
     default:
         subdir      = "";
         kind_name   = "model";
         file_prefix = "sentinel";
-        cache       = s_sentinelTexMap;
+        cache_row   = s_sentinelTexMap[charIdx];
         break;
     }
 
@@ -934,8 +982,7 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
         if (localIdx >= NATIVE_MODEL_TEX_MAX)
             continue;
 
-        s16 cached = cache[charIdx][localIdx];
-        int globalIdx;
+        s16 cached = cache_row[localIdx];        int globalIdx;
         if (cached >= 0)
         {
             globalIdx = cached;
@@ -967,7 +1014,7 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
 
             NativeGpu_RegisterCustomTexture((u16)globalIdx,
                                             (TextureID)tex, w, h);
-            cache[charIdx][localIdx] = (s16)globalIdx;
+            cache_row[localIdx] = (s16)globalIdx;
             Log("[CustomRacer] sentinel tex (%s): charID=%d local=%d global=%d %dx%d\n",
                 kind_name, characterID, localIdx, globalIdx, w, h);
         }
@@ -1045,7 +1092,7 @@ struct Model *NativeCustomRacer_GetMaskModelForChar(int characterID)
 
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
-    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK, -1);
 
     struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
     s_customMaskModel[idx] = m;
@@ -1115,7 +1162,7 @@ struct Model *NativeCustomRacer_GetMaskBeamModelForChar(int characterID)
 
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
-    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK_BEAM);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MASK_BEAM, -1);
 
     struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
     s_customMaskBeamModel[idx] = m;
@@ -1192,6 +1239,129 @@ struct Icon *NativeCustomRacer_GetMaskIcon(int characterID)
 
     Log("[CustomRacer] mask icon loaded: charID=%d %dx%d global=%d\n",
         characterID, w, h, globalIdx);
+    return icon;
+}
+
+/* =====================================================================
+ * Custom item models + HUD icons (CUSTOM-ITEM-MODELS).
+ * ===================================================================== */
+
+struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+    if (itemID < 0 || itemID >= NATIVE_ITEM_COUNT)
+        return NULL;
+
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (s_itemLoaded[idx][itemID])
+        return s_itemModel[idx][itemID];
+    s_itemLoaded[idx][itemID] = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+        return NULL;
+
+    const char *itemName = ItemNameFromID(itemID);
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/items/%s/model.ctr", folder, itemName);
+
+    FILE *probe = fopen(path, "rb");
+    if (!probe)
+        return NULL;
+    fseek(probe, 0, SEEK_END);
+    long file_sz = ftell(probe);
+    fclose(probe);
+
+    if (file_sz > NATIVE_CTR_MAX_BYTES)
+    {
+        Log("[CustomRacer] item model too large: %s (%ld bytes)\n", path, file_sz);
+        return NULL;
+    }
+
+    long sz = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] item model load failed: %s\n", path);
+        return NULL;
+    }
+
+    ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_ITEM, itemID);
+
+    struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
+    s_itemModel[idx][itemID] = m;
+
+    Log("[CustomRacer] item model loaded: %s (%ld bytes) itemID=%d\n",
+        path, sz, itemID);
+    return m;
+}
+
+struct Icon *NativeCustomRacer_GetItemIcon(int characterID, int itemID)
+{
+    if (characterID <  NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return NULL;
+    if (itemID < 0 || itemID >= NATIVE_ITEM_COUNT)
+        return NULL;
+
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    if (s_itemIconAttempted[idx][itemID])
+    {
+        if (s_itemIconTexIdx[idx][itemID] < 0)
+            return NULL;
+        return &s_itemIcon[idx][itemID];
+    }
+    s_itemIconAttempted[idx][itemID] = 1;
+
+    const char *folder = NativeCustomRacer_GetFolder(characterID);
+    if (folder == NULL)
+    {
+        s_itemIconTexIdx[idx][itemID] = -1;
+        return NULL;
+    }
+
+    const char *itemName = ItemNameFromID(itemID);
+    char path[256];
+    snprintf(path, sizeof(path),
+             "assets/mods/racers/%s/items/%s/icon.bin", folder, itemName);
+
+    int w = 0, h = 0;
+    GLuint tex = LoadSentinelBin(path, &w, &h);
+    if (tex == 0)
+    {
+        s_itemIconTexIdx[idx][itemID] = -1;
+        return NULL;
+    }
+
+    int globalIdx = AllocModelTexIdx();
+    if (globalIdx < 0)
+    {
+        Log("[CustomRacer] item icon: texture pool full (max=%d)\n",
+            NATIVE_MODEL_TEX_END);
+        s_itemIconTexIdx[idx][itemID] = -1;
+        return NULL;
+    }
+
+    NativeGpu_RegisterCustomTexture((u16)globalIdx, (TextureID)tex, w, h);
+
+    struct Icon *icon = &s_itemIcon[idx][itemID];
+    memset(icon, 0, sizeof(*icon));
+    icon->texLayout.u0 = 0;  icon->texLayout.v0 = 0;
+    icon->texLayout.u1 = (u8)(w & 0xFF);  icon->texLayout.v1 = 0;
+    icon->texLayout.u2 = 0;  icon->texLayout.v2 = (u8)(h & 0xFF);
+    icon->texLayout.u3 = (u8)(w & 0xFF);  icon->texLayout.v3 = (u8)(h & 0xFF);
+    icon->texLayout.clut = (u16)(0x8000 | globalIdx);
+    icon->texLayout.tpage = 0;
+
+    s_itemIconTexIdx[idx][itemID] = (s16)globalIdx;
+
+    Log("[CustomRacer] item icon loaded: charID=%d itemID=%d %dx%d global=%d\n",
+        characterID, itemID, w, h, globalIdx);
     return icon;
 }
 
@@ -1944,7 +2114,7 @@ static void *LoadDanceModelRaw(int characterID, const char *path)
     /* Dance has its own Sentinel cache (kind = DANCE). Its textures
      * live in <slug>/dance/sentinel_NN.bin, independent from the
      * model's <slug>/sentinel_NN.bin. See RegisterModelTextures. */
-    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_DANCE);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_DANCE, -1);
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     Log("[CustomRacer] dance.ctr loaded: %s (%ld bytes)\n", path, sz);
@@ -2295,7 +2465,7 @@ void *NativeCustomRacer_LoadModel(int playerIndex, int characterID)
     ExpandModelHeaders(buf, sz);
 
     /* Register Sentinel model textures (no-op for VRM models). */
-    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MODEL);
+    RegisterModelTextures(characterID, buf + 4, NATIVE_SENTINEL_KIND_MODEL, -1);
 
     Log("[CustomRacer] model_p%d.ctr loaded: %s (player %d, %ld bytes)\n",
         playerIndex, path, playerIndex, sz);

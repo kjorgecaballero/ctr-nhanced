@@ -180,18 +180,48 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 		posY = pos.y;
 	}
 
-	/* Custom mask icon: query d->heldItemID (the original held
-	 * item), not itemID - on the roulette path itemID is
-	 * reassigned to a random weapon id. */
-	if (d->heldItemID == UI_WEAPON_ITEM_MASK)
+	/* Custom item icon override (mask / bomb). Query
+	 * d->heldItemID (the original held item), not itemID - on the
+	 * roulette path itemID is reassigned to a random weapon id.
+	 *
+	 * Mask and items use different loaders (mask is gated by the
+	 * roster flag mask=custom_good|bad; items are gated by the
+	 * presence of <slug>/items/<item>/icon.bin). NativeItemID
+	 * sentinel -2 means "mask path". */
+	struct Icon *itemIconOverride = NULL;
 	{
-		maskIconOverride = NativeCustomRacer_GetMaskIcon(
-		    (int)data.characterIDs[d->driverID]);
+		int nativeItemID = -1;
+		switch (d->heldItemID)
+		{
+		case UI_WEAPON_ITEM_MASK:
+			nativeItemID = -2;
+			break;
+		case UI_WEAPON_ITEM_BOMB:
+			nativeItemID = NATIVE_ITEM_BOMB;
+			break;
+		default:
+			break;
+		}
+
+		if (nativeItemID == -2)
+		{
+			maskIconOverride = NativeCustomRacer_GetMaskIcon(
+			    (int)data.characterIDs[d->driverID]);
+		}
+		else if (nativeItemID >= 0)
+		{
+			itemIconOverride = NativeCustomRacer_GetItemIcon(
+			    (int)data.characterIDs[d->driverID], nativeItemID);
+		}
 	}
+
+	struct Icon *finalIcon = gGT->ptrIcons[iconID];
+	if (maskIconOverride != NULL) finalIcon = maskIconOverride;
+	if (itemIconOverride != NULL) finalIcon = itemIconOverride;
 
 	DecalHUD_DrawWeapon(
 	    // pointer to icon, from array of icon pointers
-	    (maskIconOverride != NULL) ? maskIconOverride : gGT->ptrIcons[iconID],
+	    finalIcon,
 
 	    (int)posX, (int)posY,
 

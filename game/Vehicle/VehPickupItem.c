@@ -603,7 +603,32 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		}
 
 		// medium stack pool
+		/* Custom item model override (missile/bomb). Filesystem-based:
+		 * <slug>/items/<item>/model.ctr. Falls through to retail when
+		 * the custom has no model for this item. Save/restore the
+		 * modelPtr slot so the birth sees the custom and retail is
+		 * restored for any subsequent read the same tick. */
+		struct Model *nativeItemSaved = NULL;
+		{
+			int nativeItemID = (modelID == DYNAMIC_BOMB)
+			                   ? NATIVE_ITEM_BOMB
+			                   : NATIVE_ITEM_MISSILE;
+			struct Model *nativeItemModel =
+			    NativeCustomRacer_GetItemModelForChar(
+			        data.characterIDs[d->driverID], nativeItemID);
+			if (nativeItemModel != NULL)
+			{
+				nativeItemSaved = gGT->modelPtr[modelID];
+				gGT->modelPtr[modelID] = nativeItemModel;
+			}
+		}
+
 		weaponInst = INSTANCE_BirthWithThread(modelID, weaponName, MEDIUM, bucket, RB_MovingExplosive_ThTick, sizeof(struct TrackerWeapon), parentTh);
+
+		if (nativeItemSaved != NULL)
+		{
+			gGT->modelPtr[modelID] = nativeItemSaved;
+		}
 
 		// NOTE(aalhendi): Native low-RAM audit candidate only. Retail
 		// dereferences weapon birth results before later checks in several
