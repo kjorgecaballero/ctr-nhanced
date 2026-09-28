@@ -135,6 +135,20 @@ static int DrawLevelOvr2P_DispatchBucketHandler(u32 handlerAddress, void *bucket
 		return 0;
 	}
 
+#if defined(CTR_NATIVE)
+	// Mirror del patch highLOD.s del SDK. Retail escribe 0x800a6f40
+	// en el slot del handler FULL_DYNAMIC_LIST. Eso retargetea los
+	// leaves lejanos a renderizar con el handler DYNAMIC (topología
+	// HI LOD 4-slot) sin mover el leaf de su bucket natural.
+	// Los triblocks mantienen su path natural → UVs correctas.
+	if (bucket->role == DRAW_LEVEL_OVR1P_BUCKET_FULL_DYNAMIC_LIST &&
+	    LevelRegistry_ShouldForceHiLod())
+	{
+		return DrawLevelOvr1P_DrawBspListQuadBlocks((struct VisMemBspListNode *)bucketValue, pb, mesh, primMem, visFaceList,
+		                                            DRAW_LEVEL_OVR1P_BUCKET_DYNAMIC_LIST);
+	}
+#endif
+
 	if (bucket->kind == DRAW_LEVEL_OVR1P_BUCKET_QUADBLOCKS_RENDERED)
 	{
 		return DrawLevelOvr1P_DrawRenderedQuadBlocks((struct QuadBlock **)bucketValue, pb, mesh, primMem, bucket->role);
