@@ -99,7 +99,7 @@
 #include "LinkedCollide.c"
 
 #include "LIST.c"
-
+#include "LevelRegistry.c"
 #include "LOAD/LOAD_Callbacks.c"
 #include "LOAD/LOAD_ModelPtrs.c"
 #include "LOAD/LOAD_File.c"
