@@ -7393,13 +7393,13 @@ static void DrawLevelOvr1P_TerminateRenderedListCursor(void)
 static struct TextureLayout *Ovr226_800a1058_PrepareFullDynamicLowUv(struct QuadBlock *block, struct DrawLevelOvr1PScratchVertex *projected)
 {
         const int *indices = sDrawLevelOvr1PFullDynamicLowIndices;
-#if defined(CTR_NATIVE)
-        struct TextureLayout *texture = LevelRegistry_ShouldForceHiLod()
-                ? DrawLevelOvr1P_ResolveMidTexture(block, 0)
-                : block->ptr_texture_low;
-#else
+        // NOTE(CTR_NATIVE): force_hi_lod must NOT rewrite the texture
+        // pointer on the full-dynamic LOW path. Custom tracks share the
+        // same texture atlas across LOD slots; triblocks (4X1) are not
+        // exported with valid MID-LOD texture data, so forcing MID here
+        // broke their UVs (CUSTOM-LEVELS-TRIBLOCK-UVS). Geometry HI LOD
+        // is still enforced via RenderLists_Select1P2PSlot.
         struct TextureLayout *texture = block->ptr_texture_low;
-#endif
 
 	// NOTE(aalhendi): Retail full-dynamic 0x800a0ef4 seeds low-LOD UVs before
 	// choosing either the direct low quad or the near/transition helper table.
@@ -8072,26 +8072,19 @@ static int Ovr226_800a0ef4_DrawFullDynamicBspList(struct VisMemBspListNode *slot
 
 static void DrawLevelOvr1P_SetSplitGroundThresholdScratch(void)
 {
-#if defined(CTR_NATIVE)
-        if (LevelRegistry_ShouldForceHiLod())
-        {
-                // Custom tracks are exported assuming HI LOD everywhere.
-                // Suppress all depth-based LOD downgrades so every quadblock
-                // keeps its highest-quality texture at any distance.
-                DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
-                DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0;
-                DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0;
-                DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0;
-                DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0;
-                return;
-        }
-#endif
-
-        DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
-        DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0x640;
-        DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0x500;
-        DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0x280;
-        DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0x140;
+	// NOTE(CTR_NATIVE): force_hi_lod does NOT touch texture LOD thresholds.
+	// Custom tracks share the same texture atlas across LOD slots (CTR
+	// Editor exports HI-LOD textures for all distances), so the retail
+	// depth-based downgrade would switch to LOW texture data that doesn't
+	// exist. Geometry LOD is handled in RenderLists_Select1P2PSlot: with
+	// force_hi_lod we skip the distance check so leaves stay in their
+	// natural bucket (4X4/4X1/4X2/DYNAMIC_SUBDIV) instead of falling into
+	// FULL_DYNAMIC (LOW LOD). Triblocks (4X1) keep their native topology.
+	DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
+	DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0x640;
+	DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0x500;
+	DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0x280;
+	DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0x140;
 }
 
 static int DrawLevelOvr1P_ProjectSplitGroundListALowGrid(struct LevVertex *vertices, const struct QuadBlock *block,
@@ -9698,11 +9691,24 @@ static int Ovr226_800a0e78_DispatchBucketHandler(u32 handlerAddress, void *bucke
                                                  const int *visFaceList)
 {
 	const struct DrawLevelOvr1PBucket *bucket = Ovr226_800a0e78_FindBucketByHandler(handlerAddress);
-
 	if (bucket == NULL)
 	{
 		return 0;
 	}
+
+#if defined(CTR_NATIVE)
+	// Mirror del patch highLOD.s del SDK. Retail escribe 0x800a6f40
+	// en el slot del handler FULL_DYNAMIC_LIST. Eso retargetea los
+	// leaves lejanos a renderizar con el handler DYNAMIC (topología
+	// HI LOD 4-slot) sin mover el leaf de su bucket natural. Los
+	// triblocks mantienen su path natural → UVs correctas.
+	if (bucket->role == DRAW_LEVEL_OVR1P_BUCKET_FULL_DYNAMIC_LIST &&
+	    LevelRegistry_ShouldForceHiLod())
+	{
+		return DrawLevelOvr1P_DrawBspListQuadBlocks((struct VisMemBspListNode *)bucketValue, pb, mesh, primMem, visFaceList,
+		                                            DRAW_LEVEL_OVR1P_BUCKET_DYNAMIC_LIST);
+	}
+#endif
 
 	if (bucket->kind == DRAW_LEVEL_OVR1P_BUCKET_QUADBLOCKS_RENDERED)
 	{

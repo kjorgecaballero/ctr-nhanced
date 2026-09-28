@@ -128,47 +128,45 @@ static int RenderLists_ProjectDistance(struct PushBuffer *pb, const struct Bound
 
 static int RenderLists_Select1P2PSlot(const struct BSP *bsp, struct PushBuffer *pb, int lodDistanceThreshold)
 {
-        if ((bsp->flag & BSP_LEAF_FLAG_WATER) != 0)      
-        {
-                return RENDER_LIST_SLOT_WATER;
-        }
+	if ((bsp->flag & BSP_LEAF_FLAG_WATER) != 0)
+	{
+		return RENDER_LIST_SLOT_WATER;
+	}
 
-        if ((bsp->flag & BSP_RENDER_LEAF_FLAG_DYNAMIC_SUBDIV) != 0)
-        {
-                return RENDER_LIST_SLOT_DYNAMIC_SUBDIV;  
-        }
+	if ((bsp->flag & BSP_RENDER_LEAF_FLAG_DYNAMIC_SUBDIV) != 0)
+	{
+		return RENDER_LIST_SLOT_DYNAMIC_SUBDIV;
+	}
 
 #if defined(CTR_NATIVE)
-        // Custom tracks are exported assuming full subdivision everywhere.
-        // Force every ground leaf into the 4X4 slot regardless of distance
-        // so geometry does not dissolve at range.
-        if (LevelRegistry_ShouldForceHiLod())
-        {
-                return RENDER_LIST_SLOT_4X4;
-        }
+	// force_hi_lod: skip the distance check. Retail manda leaves lejanos
+	// a FULL_DYNAMIC (LOW LOD). Custom tracks no tienen LOW LOD válido,
+	// y el vistree descarta esos leaves basado en el bounding box
+	// "chico" del HI LOD. Cada leaf va a su bucket natural según flags.
+	// Los triblocks (4X1) NO se ven afectados: van a su bucket propio.
+	if (!LevelRegistry_ShouldForceHiLod())
 #endif
+	if (RenderLists_ProjectDistance(pb, &bsp->box) > lodDistanceThreshold)
+	{
+		return RENDER_LIST_SLOT_FULL_DYNAMIC;
+	}
 
-        if (RenderLists_ProjectDistance(pb, &bsp->box) > lodDistanceThreshold)
-        {
-                return RENDER_LIST_SLOT_FULL_DYNAMIC;    
-        }
+	if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X4) != 0)
+	{
+		return RENDER_LIST_SLOT_4X4;
+	}
 
-        if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X4) != 0) 
-        {
-                return RENDER_LIST_SLOT_4X4;
-        }
+	if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X1) != 0)
+	{
+		return RENDER_LIST_SLOT_4X1;
+	}
 
-        if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X1) != 0) 
-        {
-                return RENDER_LIST_SLOT_4X1;
-        }
+	if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X2) != 0)
+	{
+		return RENDER_LIST_SLOT_4X2;
+	}
 
-        if ((bsp->flag & BSP_RENDER_LEAF_FLAG_4X2) != 0) 
-        {
-                return RENDER_LIST_SLOT_4X2;
-        }
-
-        return RENDER_LIST_SLOT_DYNAMIC_SUBDIV;
+	return RENDER_LIST_SLOT_DYNAMIC_SUBDIV;
 }
 
 static struct VisMemBspListNode **RenderLists_Get1P2PHead(void *LevRenderList, int slotIndex)
