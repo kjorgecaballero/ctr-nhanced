@@ -238,7 +238,7 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 	int renderBucketSize = 0x800;
 	if ((gameMode & ADVENTURE_ARENA) == 0)
 	{
-		renderBucketSize = 0x1000;
+		renderBucketSize = 0x2000;  // era 0x1000, doblado para pistas custom con muchos objetos
 		if ((gameMode & MAIN_MENU) != 0)
 		{
 			renderBucketSize = 0x400;

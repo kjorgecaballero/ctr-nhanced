@@ -254,9 +254,17 @@ void RB_Burst_Init(struct Instance *weaponInst)
 
 	// initialize thread for burst
 	currInst = INSTANCE_BirthWithThread(STATIC_WARPEDBURST, s_burst_explosion1, SMALL, BURST, RB_Burst_ThTick, 0xc, 0);
+	if (currInst == NULL)
+	{
+		return;
+	}
 
 	// get thread from instance
 	t = currInst->thread;
+	if (t == NULL)
+	{
+		return;
+	}
 
 	// get object from thread
 	burst = t->object;
@@ -270,12 +278,19 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	CTR_MatrixSetRotIdentity(&currInst->matrix);
 
 	// set flag to always point to camera
-	headers = currInst->model->headers;
-	headers[0].flags |= 2;
+	if (currInst->model != NULL)
+	{
+		headers = currInst->model->headers;
+		headers[0].flags |= 2;
+	}
 
 	// ======== Next one ===========
 
 	currInst = INSTANCE_Birth3D(gGT->modelPtr[STATIC_WARPEDBURST], s_burst_explosion2, t);
+	if (currInst == NULL)
+	{
+		return;
+	}
 
 	burst[2] = (int)currInst;
 	currInst->depthBiasNormal += -2;
@@ -292,12 +307,19 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	currInst->matrix.m[2][2] = 0x1000;
 
 	// set flag to always point to camera
-	headers = currInst->model->headers;
-	headers[0].flags |= 2;
+	if (currInst->model != NULL)
+	{
+		headers = currInst->model->headers;
+		headers[0].flags |= 2;
+	}
 
 	// ======= Next One ===========
 
 	currInst = INSTANCE_Birth3D(gGT->modelPtr[STATIC_SHOCKWAVE_RED], s_burst_shockwave1, t);
+	if (currInst == NULL)
+	{
+		return;
+	}
 
 	burst[0] = (int)currInst;
 	currInst->depthBiasNormal += -2;
@@ -306,9 +328,12 @@ void RB_Burst_Init(struct Instance *weaponInst)
 	currInst->flags |= (VISIBLE_DURING_GAMEPLAY | DRAW_BILLBOARD);
 
 	// set flag to always point to camera
-	headers = currInst->model->headers;
-	headers[0].flags |= 2;
-	headers[1].flags |= 2;
+	if (currInst->model != NULL)
+	{
+		headers = currInst->model->headers;
+		headers[0].flags |= 2;
+		headers[1].flags |= 2;
+	}
 
 	// ======= End of Instance =========
 
