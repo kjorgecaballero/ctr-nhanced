@@ -26,6 +26,8 @@ const char *LevelRegistry_GetMusic(int levelID);
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID);
 int LevelRegistry_GetAdditionalCount(void);
 const struct LevelDef *LevelRegistry_GetAdditional(int index);
+const struct LevelDef *LevelRegistry_GetAdditionalByLogicalID(int logicalLevelID);
+const char *LevelRegistry_GetAdditionalName(int levelID);
 void LevelRegistry_SetActive(const struct LevelDef *level);
 const struct LevelDef *LevelRegistry_GetActive(void);
 const int *LevelRegistry_GetRacers(int levelID, int *count);

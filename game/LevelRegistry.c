@@ -13,6 +13,11 @@
 #define LEVEL_REGISTRY_MAX_LEVELS 32
 #define LEVEL_REGISTRY_DEFAULT_PRIM_MEM 0x40000
 
+// Virtual IDs for additional (non-replace) tracks. Chosen well above the
+// retail range (0-24) so a custom's logicalLevelID can never collide with
+// a real level ID or with another custom's baseLevelID.
+#define LEVEL_REGISTRY_CUSTOM_BASE 1000
+
 struct LevelJson
 {
 	const char *cursor;
@@ -547,8 +552,29 @@ static SDL_EnumerationResult SDLCALL LevelRegistry_Enumerate(void *userdata, con
 				return SDL_ENUM_CONTINUE;
 			}
 		}
+		// Assign logicalLevelID. Replacements reuse the retail ID they
+		// replace; additional tracks (no "replace") get a virtual ID in
+		// a range disjoint from retail so GetRuntimeLevel can find them
+		// by ID lookup.
+		if (level.replaceLevelID < 0)
+		{
+			int additionalCount = 0;
+			int addIndex;
+			for (addIndex = 0; addIndex < s_levelCount; addIndex++)
+			{
+				if (s_levels[addIndex].replaceLevelID < 0)
+					additionalCount++;
+			}
+			level.logicalLevelID = LEVEL_REGISTRY_CUSTOM_BASE + additionalCount;
+		}
+		else
+		{
+			level.logicalLevelID = level.replaceLevelID;
+		}
+
 		s_levels[s_levelCount++] = level;
-		fprintf(stderr, "[LevelRegistry] Registered level #%d: '%s'\n", s_levelCount - 1, level.name);
+		fprintf(stderr, "[LevelRegistry] Registered level #%d: '%s' (logicalID=%d)\n",
+		        s_levelCount - 1, level.name, level.logicalLevelID);
 	}
 	else
 	{
@@ -630,7 +656,19 @@ const struct LevelDef *LevelRegistry_GetActive(void)
 
 static const struct LevelDef *LevelRegistry_GetRuntimeLevel(int levelID)
 {
+	int index;
 	LevelRegistry_Load();
+
+	// Additional tracks (no replace): match by their virtual logicalLevelID.
+	// Runs first so a virtual ID never falls through to a retail-ID lookup
+	// that would read garbage.
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) &&
+		    (s_levels[index].logicalLevelID == levelID))
+			return &s_levels[index];
+	}
+
 	if ((s_activeLevel != NULL) && (s_activeLevel->baseLevelID == levelID))
 		return s_activeLevel;
 	return LevelRegistry_GetReplacement(levelID);
@@ -651,10 +689,42 @@ int LevelRegistry_GetPrimMemSize(int levelID)
 	return level != NULL ? level->primMemSize : 0;
 }
 
-char *LevelRegistry_GetName(int levelID, char *retailName)
+char *LevelRegistry_GetName(int levelID, char *retailName)   
 {
 	const struct LevelDef *level = LevelRegistry_GetRuntimeLevel(levelID);
-	return level != NULL ? level->name : retailName;
+	return level != NULL ? level->name : retailName;     
+}
+
+// Return the LevelDef of an additional track (no "replace") by its
+// virtual logicalLevelID. Pure lookup, no side effects.
+const struct LevelDef *LevelRegistry_GetAdditionalByLogicalID(int logicalLevelID)
+{
+	int index;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) &&
+		    (s_levels[index].logicalLevelID == logicalLevelID))
+			return &s_levels[index];
+	}
+	return NULL;
+}
+
+// Return the display name of an additional track by its virtual ID, or
+// NULL if levelID does not belong to an additional track. Used by the
+// Track Select menu to bypass data.metaDataLEV[], which is only sized
+// for retail level IDs.
+const char *LevelRegistry_GetAdditionalName(int levelID)
+{
+	int index;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) &&
+		    (s_levels[index].logicalLevelID == levelID))
+			return s_levels[index].name;
+	}
+	return NULL;
 }
 
 int LevelRegistry_ShouldForceHiLod(void)
@@ -723,6 +793,8 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 
 #include <LevelRegistry.h>
 
+const struct LevelDef *LevelRegistry_GetAdditionalByLogicalID(int logicalLevelID) { (void)logicalLevelID; return 0; }
+const char *LevelRegistry_GetAdditionalName(int levelID) { (void)levelID; return 0; }
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID) { (void)levelID; return 0; }
 int LevelRegistry_GetAdditionalCount(void) { return 0; }
 const struct LevelDef *LevelRegistry_GetAdditional(int index) { (void)index; return 0; }

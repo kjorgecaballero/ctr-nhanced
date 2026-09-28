@@ -1,5 +1,9 @@
 #include <common.h>
 
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
+
 enum TrackSelectVideoState
 {
 	MM_TRACK_VIDEO_ICON = 1,
@@ -66,6 +70,60 @@ enum
 	MM_TRACK_SELECT_MAP_CENTER_Y_OFFSET = 0x49,
 	MM_TRACK_SELECT_INPUT = BTN_UP | BTN_DOWN | BTN_TRIANGLE | BTN_SQUARE_one | BTN_CROSS_one | BTN_CIRCLE,
 };
+
+#ifdef CTR_NATIVE
+// Native: "combined" arcade menu array = 18 retail + N customs.
+// The retail array D230.arcadeTracks[18] is followed in memory by
+// D230.battleTracks[7], so reading index 18 from D230.arcadeTracks
+// would silently alias a battle row. We materialize a dedicated
+// buffer here instead, so any consumer (MenuProc, Video_Draw, the
+// hidden-rows scan, ...) can index [0 .. 18+N-1] safely.
+#define MM_TRACK_SELECT_CUSTOM_TRACK_MAX 16
+#define MM_TRACK_SELECT_TOTAL_TRACK_MAX (MM_TRACK_SELECT_ARCADE_TRACK_COUNT + MM_TRACK_SELECT_CUSTOM_TRACK_MAX)
+
+static struct MainMenu_LevelRow s_combinedArcadeTracks[MM_TRACK_SELECT_TOTAL_TRACK_MAX];
+static s16 s_combinedArcadeTrackCount = 0;
+
+static void MM_TrackSelect_PopulateCustomTracks(void)
+{
+	int n = LevelRegistry_GetAdditionalCount();
+	int i;
+
+	if (n > MM_TRACK_SELECT_CUSTOM_TRACK_MAX)
+		n = MM_TRACK_SELECT_CUSTOM_TRACK_MAX;
+
+	// Copy all 18 retail rows first.
+	memcpy(s_combinedArcadeTracks, D230.arcadeTracks, sizeof(D230.arcadeTracks));
+
+	for (i = 0; i < n; i++)
+	{
+		const struct LevelDef *def = LevelRegistry_GetAdditional(i);
+		struct MainMenu_LevelRow *row = &s_combinedArcadeTracks[MM_TRACK_SELECT_ARCADE_TRACK_COUNT + i];
+
+		memset(row, 0, sizeof(*row));
+
+		// logicalLevelID: virtual ID assigned by the registry parser.
+		row->levID = (s16)def->logicalLevelID;
+
+		// Placeholder thumbnail: reuse Crash Cove (icon 0x6a).
+		// Phase 2 will load a per-level menu/preview.png.
+		row->videoThumbnail = 0x6a;
+
+		// No minimap yet (Phase 2).
+		row->mapTextureID = -1;
+
+		// Always unlocked: custom tracks don't gate on adventure bits.
+		row->unlock = MM_TRACK_UNLOCK_ALWAYS;
+
+		// Preview video: 0 marks "no video" (see Video_Draw early-out).
+		// Retail rows always have a non-zero bigfile entry index here.
+		row->previewVideoFileIndex = 0;
+		row->previewVideoFrameCount = 0;
+	}
+
+	s_combinedArcadeTrackCount = (s16)(MM_TRACK_SELECT_ARCADE_TRACK_COUNT + n);
+}
+#endif // CTR_NATIVE
 
 
 void MM_TrackSelect_Video_SetDefaults(void)
@@ -161,7 +219,11 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 	selectMenu = &selectMenu[trackIndex];
 	s32 previewVideoFileIndex = selectMenu->previewVideoFileIndex;
 
-	if ((entry[previewVideoFileIndex].size == 0) ||
+	// Native custom tracks have previewVideoFileIndex == 0 and no video
+	// data in the bigfile: skip the streaming path and just draw the
+	// thumbnail icon. Retail rows always have a non-zero file index.
+	if ((previewVideoFileIndex == 0) ||
+	    (entry[previewVideoFileIndex].size == 0) ||
 
 	    // Video off-screen
 	    (r->x < 0) || (r->y < 0) || ((r->x + r->w) > MM_TRACK_VIDEO_SCREEN_W) || ((r->y + r->h) > MM_TRACK_VIDEO_SCREEN_H))
@@ -346,8 +408,26 @@ b32 MM_TrackSelect_boolTrackOpen(struct MainMenu_LevelRow *menuSelect)
 
 void MM_TrackSelect_Init(void)
 {
-	struct MainMenu_LevelRow *selectMenu = D230.arcadeTracks;
-	s16 numTracks = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
+	struct MainMenu_LevelRow *selectMenu;
+	s16 numTracks;
+
+#ifdef CTR_NATIVE
+	// Reload the custom track list each time we enter Track Select.
+	// Cheap (memcpy + small loop) and picks up new manifests without
+	// restarting the game. Must run before any index into the arcade
+	// array so the combined buffer is fresh.
+	MM_TrackSelect_PopulateCustomTracks();
+
+	// Clear any stale active custom from a previous menu session so a
+	// retail track doesn't accidentally load with a leftover override.
+	LevelRegistry_SetActive(NULL);
+
+	selectMenu = s_combinedArcadeTracks;
+	numTracks = s_combinedArcadeTrackCount;
+#else
+	selectMenu = D230.arcadeTracks;
+	numTracks = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
+#endif
 
 	// lap selection menu is closed by default
 	D230.trackSelect.lapBoxOpen = false;
@@ -489,9 +569,14 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 	}
 	D230.trackSelect.transition.frame = elapsedFrames;
 
-	// default arcade tracks
+	// default arcade tracks (combined retail + customs on native)
+#ifdef CTR_NATIVE
+	struct MainMenu_LevelRow *selectMenu = &s_combinedArcadeTracks[0];
+	s16 numTracks = s_combinedArcadeTrackCount;
+#else
 	struct MainMenu_LevelRow *selectMenu = &D230.arcadeTracks[0];
 	s16 numTracks = MM_TRACK_SELECT_ARCADE_TRACK_COUNT;
+#endif
 
 	// if you are in battle mode
 	if ((gGT->gameMode1 & BATTLE_MODE) != 0)
@@ -571,6 +656,13 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 				// "enter/confirm" sound
 				OtherFX_Play(1, 1);
+
+#ifdef CTR_NATIVE
+				// Lock the override to the row the player just confirmed,
+				// so a subsequent menu frame (or a stale active from a
+				// previous selection) can't change the load target.
+				LevelRegistry_SetActive(LevelRegistry_GetAdditionalByLogicalID(selectMenu[currTrack].levID));
+#endif
 
 				// if not Battle or Time Trial, open LapSelectMenu
 				if ((gGT->gameMode1 & (BATTLE_MODE | TIME_TRIAL)) == 0)
@@ -676,7 +768,28 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 
 	MM_TrackSelect_Video_State(resetPreviewVideo);
 
+#ifdef CTR_NATIVE
+	{
+		// Additional tracks carry a virtual logicalLevelID that would
+		// OOB any retail-indexed table (metaDataLEV, highScoreTracks,
+		// gameProgress, ...). Expose only the base retail ID to the
+		// engine, and tell the registry which additional is currently
+		// selected so the bigfile override resolves to it.
+		const struct LevelDef *additional = LevelRegistry_GetAdditionalByLogicalID(selectMenu[menu->rowSelected].levID);
+		if (additional != NULL)
+		{
+			LevelRegistry_SetActive(additional);
+			gGT->currLEV = (s16)additional->baseLevelID;
+		}
+		else
+		{
+			LevelRegistry_SetActive(NULL);
+			gGT->currLEV = selectMenu[menu->rowSelected].levID;
+		}
+	}
+#else
 	gGT->currLEV = selectMenu[menu->rowSelected].levID;
+#endif
 	s32 scanTrack = (int)menu->rowSelected + -1;
 
 	for (s32 hiddenRowIndex = 0; hiddenRowIndex < MM_TRACK_SELECT_CENTER_ROW; hiddenRowIndex++)
@@ -740,7 +853,14 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			for (s32 starIndex = 0; starIndex < MM_TRACK_SELECT_TT_STAR_COUNT; starIndex++)
 			{
 				// set level ID to the level you're hovering on, in the main menu
+#ifdef CTR_NATIVE
+				{
+					const struct LevelDef *additional = LevelRegistry_GetAdditionalByLogicalID(selectMenu[currTrack].levID);
+					gGT->levelID = additional != NULL ? (s16)additional->baseLevelID : selectMenu[currTrack].levID;
+				}
+#else
 				gGT->levelID = selectMenu[currTrack].levID;
+#endif
 
 				// (useless?)
 				GAMEPROG_GetPtrHighScoreTrack();
@@ -778,8 +898,26 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		}
 
 		// Draw string
+#ifdef CTR_NATIVE
+		{
+			// Additional tracks have virtual level IDs that don't index
+			// data.metaDataLEV[]; use the registry name directly.
+			const char *customName = LevelRegistry_GetAdditionalName(selectMenu[currTrack].levID);
+			if (customName != NULL)
+			{
+				DecalFont_DrawLine(customName, (rowX + MM_TRACK_SELECT_ROW_NAME_X_OFFSET),
+				                   (rowBaseY + MM_TRACK_SELECT_ROW_NAME_Y_OFFSET), FONT_BIG, ORANGE);
+			}
+			else
+			{
+				DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[selectMenu[currTrack].levID].name_LNG], (rowX + MM_TRACK_SELECT_ROW_NAME_X_OFFSET),
+				                   (rowBaseY + MM_TRACK_SELECT_ROW_NAME_Y_OFFSET), FONT_BIG, ORANGE);
+			}
+		}
+#else
 		DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[selectMenu[currTrack].levID].name_LNG], (rowX + MM_TRACK_SELECT_ROW_NAME_X_OFFSET),
 		                   (rowBaseY + MM_TRACK_SELECT_ROW_NAME_Y_OFFSET), FONT_BIG, ORANGE);
+#endif
 
 		if ((D230.trackSelect.trackChangeFrames == 0) && ((s16)rowIndex == MM_TRACK_SELECT_CENTER_ROW))
 		{
