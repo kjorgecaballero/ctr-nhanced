@@ -47,4 +47,19 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(
 // retail track they share a baseLevelID with.
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void);
 
+// Virtual memcard level IDs: retail filename packs only 5 bits for
+// levelID (0-31). Customs get 25-31 (7 slots). The GhostHeader and
+// the memcard filename both use these; the header wins on read.
+#define LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE  25
+#define LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT 7
+
+// Returns the virtual memcard ID for the active custom (set by Track
+// Select), or -1 if the active level is retail.
+int LevelRegistry_GetVirtualMemcardIDFromActive(void);
+
+// Maps a logicalLevelID (1000+) to its virtual memcard ID (25-31).
+// Retail IDs (< 1000) pass through unchanged. Out-of-range customs
+// (logicalID >= 1000 + COUNT) return the input unchanged.
+int LevelRegistry_MapLogicalToVirtual(int logicalID);
+
 #endif

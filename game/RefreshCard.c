@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <platform/native_custom_racer.h>
 #include <platform/native_memcard.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 s16 RefreshCard_CountGhostProfilesForLEV(u16 trackID)
 {
@@ -152,7 +155,22 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 
 	description[0] = '\0';
 
-	strcat(&description[strlen(description)], sdata->lngStrings[data.metaDataLEV[(s16)levelID].name_LNG]);
+#ifdef CTR_NATIVE
+	if ((levelID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE) &&
+	    (levelID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT))
+	{
+		int logicalID = 1000 + (levelID - LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE);
+		const struct LevelDef *def = LevelRegistry_GetAdditionalByLogicalID(logicalID);
+		if (def != NULL)
+			strcat(&description[strlen(description)], def->name);
+		else
+			strcat(&description[strlen(description)], "Custom");
+	}
+	else
+#endif
+	{
+		strcat(&description[strlen(description)], sdata->lngStrings[data.metaDataLEV[(s16)levelID].name_LNG]);
+	}
 	strcat(description, sdata->strcatData1_colon);
 
 	/* BUG-GHOST-02: custom racers have name_LNG_short = -1 (Phase 5 TODO).
@@ -264,7 +282,7 @@ static void RefreshCard_GhostReadHeaderInfo(int slotIdx, char *fileName,
 
 	/* Resolve the host path exactly the way MEMCARD_Load does, then read
 	 * the GhostHeader (offset 0x100 in the file) via the native memcard
-	 * adapter. Do NOT use fopen("bu00:...") — the PS1 device prefix does
+	 * adapter. Do NOT use fopen("bu00:...") ï¿½ the PS1 device prefix does
 	 * not resolve on Windows and silently falls back to the filename-
 	 * packed (truncated) character ID. */
 	char nativeName[64];

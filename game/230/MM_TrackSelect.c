@@ -925,7 +925,14 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			if ((gGT->gameMode1 & TIME_TRIAL) != 0)
 			{
 				// Check if this track has Ghost Data
-				s16 ghostProfileCount = RefreshCard_CountGhostProfilesForLEV(selectMenu[currTrack].levID);
+#ifdef CTR_NATIVE
+				// Map custom logicalLevelIDs to their virtual memcard IDs
+				// (25-31); retail rows pass through unchanged.
+				s16 ghostCheckID = (s16)LevelRegistry_MapLogicalToVirtual(selectMenu[currTrack].levID);
+#else
+				s16 ghostCheckID = selectMenu[currTrack].levID;
+#endif
+				s16 ghostProfileCount = RefreshCard_CountGhostProfilesForLEV(ghostCheckID);
 
 				// If this track has Ghost Data
 				if (ghostProfileCount != 0)

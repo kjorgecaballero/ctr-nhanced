@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 void GhostTape_Start(void)
 {
@@ -11,6 +14,15 @@ void GhostTape_Start(void)
 	gh = sdata->GhostRecording.ptrGhost;
 	gh->version = GHOST_TAPE_VERSION_RETAIL;
 	gh->levelID = gGT->levelID;
+#ifdef CTR_NATIVE
+	{
+		// Customs get a virtual memcard ID (25-31) so their ghosts do not
+		// share the retail baseLevelID slot in the memcard filename.
+		int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+		if (virtualID >= 0)
+			gh->levelID = (u16)virtualID;
+	}
+#endif
 	gh->characterID = data.characterIDs[d->driverID];
 
 	sdata->GhostRecording.VelX = 0;

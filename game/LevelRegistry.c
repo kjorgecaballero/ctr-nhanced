@@ -114,6 +114,35 @@ struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void)
 	return &s_customHighScoreTracks[slot];
 }
 
+int LevelRegistry_GetVirtualMemcardIDFromActive(void)
+{
+	const struct LevelDef *active = s_activeLevel;
+	int slot;
+
+	if (active == NULL || active->logicalLevelID < LEVEL_REGISTRY_CUSTOM_BASE)
+		return -1;
+
+	slot = active->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
+	if (slot < 0 || slot >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+		return -1;
+
+	return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
+}
+
+int LevelRegistry_MapLogicalToVirtual(int logicalID)
+{
+	int slot;
+
+	if (logicalID < LEVEL_REGISTRY_CUSTOM_BASE)
+		return logicalID;
+
+	slot = logicalID - LEVEL_REGISTRY_CUSTOM_BASE;
+	if (slot < 0 || slot >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+		return logicalID;
+
+	return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
+}
+
 static void LevelRegistry_Load(void);
 
 const char *LevelRegistry_GetMusic(int levelID)
@@ -849,5 +878,7 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 }
 
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void) { return 0; }
+int LevelRegistry_GetVirtualMemcardIDFromActive(void) { return -1; }
+int LevelRegistry_MapLogicalToVirtual(int logicalID) { return logicalID; }
 
 #endif
