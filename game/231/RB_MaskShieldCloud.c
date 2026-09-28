@@ -560,10 +560,25 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		model = DYNAMIC_SHIELD;
 	}
 
-	// create a thread, get an instance
-	struct Instance *bombInst = INSTANCE_BirthWithThread(model, 0, MEDIUM, OTHER, RB_MovingExplosive_ThTick, sizeof(struct TrackerWeapon), playerTh);
+        // create a thread, get an instance
+        struct Instance *bombInst = INSTANCE_BirthWithThread(model, 0, MEDIUM, OTHER, RB_MovingExplosive_ThTick, sizeof(struct TrackerWeapon), playerTh);
 
-	struct Thread *bombTh = bombInst->thread;
+        /* Custom shield projectile model override (CUSTOM-ITEM-MODELS).
+         * Per-instance — see VehPickupItem.c for rationale. */
+        {
+            int nativeShieldItemID = (model == DYNAMIC_SHIELD)
+                                   ? NATIVE_ITEM_SHIELD_BLUE
+                                   : NATIVE_ITEM_SHIELD;
+            struct Model *nativeShieldModel =
+                NativeCustomRacer_GetItemModelForChar(
+                    data.characterIDs[player->driverID], nativeShieldItemID);
+            if (nativeShieldModel != NULL)
+            {
+                bombInst->model = nativeShieldModel;
+            }
+        }
+
+        struct Thread *bombTh = bombInst->thread;
 	bombTh->funcThDestroy = PROC_DestroyInstance;
 
 	// if driver is not an AI (human)

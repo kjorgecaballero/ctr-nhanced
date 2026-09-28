@@ -442,9 +442,18 @@ struct Icon *NativeCustomRacer_GetMaskIcon(int characterID);
  * ===================================================================== */
 
 enum NativeItemID {
-    NATIVE_ITEM_MISSILE = 0,
-    NATIVE_ITEM_BOMB    = 1,
-    NATIVE_ITEM_COUNT   = 2,
+    NATIVE_ITEM_MISSILE     = 0,
+    NATIVE_ITEM_BOMB        = 1,
+    NATIVE_ITEM_MINE        = 2,   /* TNT (green)   STATIC_CRATE_TNT       */
+    NATIVE_ITEM_NITRO       = 3,   /* Nitro (juiced) PU_EXPLOSIVE_CRATE    */
+    NATIVE_ITEM_BEAKER      = 4,   /* Potion green  STATIC_BEAKER_GREEN    */
+    NATIVE_ITEM_BEAKER_RED  = 5,   /* Potion red (juiced) STATIC_BEAKER_RED*/
+    NATIVE_ITEM_SHIELD      = 6,   /* Shield green  DYNAMIC_SHIELD_GREEN   */
+    NATIVE_ITEM_SHIELD_BLUE = 7,   /* Shield blue (juiced) DYNAMIC_SHIELD  */
+    NATIVE_ITEM_WARPBALL    = 8,
+    NATIVE_ITEM_CLOCK       = 9,   /* HUD icon only                        */
+    NATIVE_ITEM_INVIS       = 10,  /* HUD icon only                        */
+    NATIVE_ITEM_COUNT       = 11,
 };
 
 struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID);

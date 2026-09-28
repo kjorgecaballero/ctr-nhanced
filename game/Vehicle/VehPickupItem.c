@@ -759,7 +759,29 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 			mineName = sdata->s_nitro1;
 		}
 
+		/* Custom item model override (CUSTOM-ITEM-MODELS).
+		 * Filesystem-based: <slug>/items/mine/model.ctr (TNT) and
+		 * <slug>/items/nitro/model.ctr (Nitro, juiced).
+		 *
+		 * Per-instance override: we do NOT touch the shared
+		 * gGT->modelPtr[] slot (that is global to the whole race
+		 * and would make bots/original racers use the custom mesh
+		 * too). Instead, birth the instance normally, then
+		 * overwrite inst->model with the custom pointer for THIS
+		 * instance only. All mine ticks read inst->model, so the
+		 * override sticks for the lifetime of the projectile. */
+		int nativeMineItemID = (modelID == PU_EXPLOSIVE_CRATE)
+		                     ? NATIVE_ITEM_NITRO
+		                     : NATIVE_ITEM_MINE;
+		struct Model *nativeMineModel = NativeCustomRacer_GetItemModelForChar(
+		    data.characterIDs[d->driverID], nativeMineItemID);
+
 		weaponInst = INSTANCE_BirthWithThread(modelID, mineName, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
+
+		if (nativeMineModel != NULL)
+		{
+			weaponInst->model = nativeMineModel;
+		}
 
 		dInst = d->instSelf;
 
@@ -888,23 +910,36 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 	// Beaker
 	case WEAPON_ID_BEAKER:
 
-		if (d->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
+		/* Custom item model override (CUSTOM-ITEM-MODELS).
+		 * Per-instance override — see MINE for rationale.
+		 * Green and red are SEPARATE assets. */
 		{
-			modelID = STATIC_BEAKER_GREEN;
+			int nativeBeakerItemID = (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
+			                       ? NATIVE_ITEM_BEAKER_RED
+			                       : NATIVE_ITEM_BEAKER;
+			struct Model *nativeBeakerModel = NativeCustomRacer_GetItemModelForChar(
+			    data.characterIDs[d->driverID], nativeBeakerItemID);
 
-			weaponInst = INSTANCE_BirthWithThread(modelID, sdata->s_beaker1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
-			if (weaponInst == 0)
+			if (d->numWumpas < DRIVER_WUMPA_JUICED_COUNT)
 			{
-				return;
+				modelID = STATIC_BEAKER_GREEN;
+				weaponInst = INSTANCE_BirthWithThread(modelID, sdata->s_beaker1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
+				if (weaponInst == 0)
+				{
+					return;
+				}
+			}
+			else
+			{
+				modelID = STATIC_BEAKER_RED;
+				weaponInst = INSTANCE_BirthWithThread(modelID, sdata->s_beaker1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
+			}
+
+			if (nativeBeakerModel != NULL)
+			{
+				weaponInst->model = nativeBeakerModel;
 			}
 		}
-		else
-		{
-			modelID = STATIC_BEAKER_RED;
-
-			weaponInst = INSTANCE_BirthWithThread(modelID, sdata->s_beaker1, SMALL, MINE, RB_GenericMine_ThTick, sizeof(struct MineWeapon), 0);
-		}
-
 		dInst = d->instSelf;
 
 		VehPickupItem_CopyMatrix(&weaponInst->matrix, &dInst->matrix);
@@ -990,9 +1025,33 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 			modelID = DYNAMIC_SHIELD;
 		}
 
+		/* Custom item model override (CUSTOM-ITEM-MODELS).
+		 * Per-instance override — see MINE for rationale.
+		 * Green and blue are SEPARATE assets. */
+		int nativeShieldItemID = (modelID == DYNAMIC_SHIELD)
+		                       ? NATIVE_ITEM_SHIELD_BLUE
+		                       : NATIVE_ITEM_SHIELD;
+		struct Model *nativeShieldModel = NativeCustomRacer_GetItemModelForChar(
+		    data.characterIDs[d->driverID], nativeShieldItemID);
+
 		struct Instance *instColor = INSTANCE_Birth3D(gGT->modelPtr[modelID], sdata->s_shield, weaponTh);
 
+		if (nativeShieldModel != NULL)
+		{
+			instColor->model = nativeShieldModel;
+		}
+
 		struct Instance *instHighlight = INSTANCE_Birth3D(gGT->modelPtr[DYNAMIC_HIGHLIGHT], highlightName, weaponTh);
+
+		/* With a custom color layer, hide the retail dark shell
+		 * (weaponInst) and highlight so only the custom mesh
+		 * renders. HIDE_MODEL is a render-only flag, so the
+		 * growth tick keeps running on the hidden instance. */
+		if (nativeShieldModel != NULL)
+		{
+			weaponInst->flags    |= HIDE_MODEL;
+			instHighlight->flags |= HIDE_MODEL;
+		}
 
 		instColor->scale.x = SHIELD_SCALE;
 		instColor->scale.y = SHIELD_SCALE;
@@ -1088,7 +1147,17 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		// MEDIUM
 		char *warpballName = rdata.s_warpball;
 
+		/* Custom item model override (CUSTOM-ITEM-MODELS).
+		 * Per-instance override — see MINE for rationale. */
+		struct Model *nativeWarpballModel = NativeCustomRacer_GetItemModelForChar(
+		    data.characterIDs[d->driverID], NATIVE_ITEM_WARPBALL);
+
 		weaponInst = INSTANCE_BirthWithThread(WARPBALL_MODEL, warpballName, MEDIUM, TRACKING, RB_Warpball_ThTick, sizeof(struct TrackerWeapon), 0);
+
+		if (nativeWarpballModel != NULL)
+		{
+			weaponInst->model = nativeWarpballModel;
+		}
 
 		weaponInst->matrix.m[0][0] = WARPBALL_MATRIX_IDENTITY_SCALE;
 		weaponInst->matrix.m[0][1] = 0;

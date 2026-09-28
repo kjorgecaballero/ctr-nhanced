@@ -129,6 +129,17 @@ void RB_Follower_Init(struct Driver *d, struct Thread *mineTh)
 	// mineInst
 	mineInst = mineTh->inst;
 
+	/* CUSTOM-ITEM-MODELS: the follower is a temporary "trail" instance
+	 * created during the drop animation. INSTANCE_BirthWithThread above
+	 * resolved its model from gGT->modelPtr[] (retail), then
+	 * RB_Follower_ProcessBucket hides the real mine and shows this
+	 * follower instead for the driver who dropped it. Without this
+	 * copy, the driver sees the retail mesh for ~7 frames before the
+	 * follower dies and the mine (with its per-instance override)
+	 * becomes visible again.
+	 * Copy the mine's overridden model so the follower matches. */
+	followerInst->model = mineInst->model;
+
 	memcpy(&followerInst->matrix, &mineInst->matrix, sizeof(followerInst->matrix));
 
 	t = followerInst->thread;

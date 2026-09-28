@@ -51,6 +51,21 @@ class NFR_OT_MaskExport(Operator):
 
         # Dispatch by item_type. For MASK, honor the variant (MASK/BEAM).
         # For MISSILE/BOMB, ignore variant and export the single model.
+        # (json_stem, folder_name) for the items that use the generic
+        # <slug>/items/<name>/model.ctr layout. build_character.py takes
+        # --item <name>; the folder name must match ItemNameFromID in
+        _ITEMS = {
+            'MISSILE':  "missile",
+            'BOMB':     "bomb",
+            'MINE':     "mine",
+            'NITRO':    "nitro",
+            'BEAKER':      "beaker",
+            'BEAKER_RED':  "beaker_red",
+            'SHIELD':      "shield",
+            'SHIELD_BLUE': "shield_blue",
+            'WARPBALL': "warpball",
+        }
+
         if item_type == 'MASK':
             if is_mask:
                 stem = "mask"
@@ -61,16 +76,12 @@ class NFR_OT_MaskExport(Operator):
                 json_stem = "beam"
                 extra_flags = ["--mask-beam"]
             out_dir = slug_dir / "mask"
-        elif item_type == 'MISSILE':
+        elif item_type in _ITEMS:
+            name = _ITEMS[item_type]
             stem = "model"
-            json_stem = "missile"
-            extra_flags = ["--item", "missile"]
-            out_dir = slug_dir / "items" / "missile"
-        elif item_type == 'BOMB':
-            stem = "model"
-            json_stem = "bomb"
-            extra_flags = ["--item", "bomb"]
-            out_dir = slug_dir / "items" / "bomb"
+            json_stem = name
+            extra_flags = ["--item", name]
+            out_dir = slug_dir / "items" / name
         else:
             self.report({"ERROR"}, f"Unknown item type: {item_type}")
             return None
@@ -205,13 +216,22 @@ class NFR_OT_MaskExportIcon(Operator):
             return {"CANCELLED"}
 
         item_type = st.item_type
-        if item_type == 'MASK':
-            icon_dir = slug_dir / "mask"
-        elif item_type == 'MISSILE':
-            icon_dir = slug_dir / "items" / "missile"
-        elif item_type == 'BOMB':
-            icon_dir = slug_dir / "items" / "bomb"
-        else:
+        _ICON_DIRS = {
+            'MASK':     slug_dir / "mask",
+            'MISSILE':  slug_dir / "items" / "missile",
+            'BOMB':     slug_dir / "items" / "bomb",
+            'MINE':     slug_dir / "items" / "mine",
+            'NITRO':    slug_dir / "items" / "nitro",
+            'BEAKER':      slug_dir / "items" / "beaker",
+            'BEAKER_RED':  slug_dir / "items" / "beaker_red",
+            'SHIELD':      slug_dir / "items" / "shield",
+            'SHIELD_BLUE': slug_dir / "items" / "shield_blue",
+            'WARPBALL': slug_dir / "items" / "warpball",
+            'CLOCK':    slug_dir / "items" / "clock",
+            'INVIS':    slug_dir / "items" / "invisibility",
+        }
+        icon_dir = _ICON_DIRS.get(item_type)
+        if icon_dir is None:
             self.report({"ERROR"}, f"Unknown item type: {item_type}")
             return {"CANCELLED"}
         icon_dir.mkdir(parents=True, exist_ok=True)

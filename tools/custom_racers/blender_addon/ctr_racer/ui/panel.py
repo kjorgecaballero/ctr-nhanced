@@ -716,39 +716,125 @@ class NFR_PT_Racer(Panel):
         st = context.scene.nfr_mask
         item_type = st.item_type
 
-        layout.label(text="Custom Item Model", icon="MESH_DATA")
+        # Per-item config: (folder_name, has_3d_model, blurb_lines, button_label)
+        # folder_name must match ItemNameFromID in platform/native_custom_racer.c.
+        _ITEM_INFO = {
+            'MASK': (
+                None, True,
+                ["Exports <slug>/mask/mask.ctr (shield) and/or",
+                 "<slug>/mask/beam.ctr (light beam). Both are",
+                 "static — retail rotates them per-tick.",
+                 "Roster must say mask=custom_good | custom_bad."],
+                "Mask",
+            ),
+            'MISSILE': (
+                "missile", True,
+                ["Exports <slug>/items/missile/model.ctr and",
+                 "<slug>/items/missile/sentinel_NN.bin.",
+                 "Overrides the missile model for this custom.",
+                 "No roster flag needed."],
+                "Missile",
+            ),
+            'BOMB': (
+                "bomb", True,
+                ["Exports <slug>/items/bomb/model.ctr and",
+                 "<slug>/items/bomb/sentinel_NN.bin.",
+                 "Overrides the bomb model for this custom.",
+                 "No roster flag needed."],
+                "Bomb",
+            ),
+            'MINE': (
+                "mine", True,
+                ["Exports <slug>/items/mine/model.ctr + sentinel_NN.bin.",
+                 "Overrides the TNT crate model (green, <10 wumpas).",
+                 "For juiced Nitro, use Item Type = Nitro.",
+                 "No roster flag needed."],
+                "Mine",
+            ),
+            'NITRO': (
+                "nitro", True,
+                ["Exports <slug>/items/nitro/model.ctr + sentinel_NN.bin.",
+                 "Overrides the Nitro crate model (juiced, >=10 wumpas).",
+                 "Explodes on contact; distinct from TNT.",
+                 "No roster flag needed."],
+                "Nitro",
+            ),
+            'BEAKER': (
+                "beaker", True,
+                ["Exports <slug>/items/beaker/model.ctr + sentinel_NN.bin.",
+                 "Overrides the GREEN potion model (<10 wumpas).",
+                 "For juiced red potion, use Item Type = Beaker Red.",
+                 "No roster flag needed."],
+                "Beaker",
+            ),
+            'BEAKER_RED': (
+                "beaker_red", True,
+                ["Exports <slug>/items/beaker_red/model.ctr + sentinel_NN.bin.",
+                 "Overrides the RED (juiced) potion model.",
+                 "No roster flag needed."],
+                "Beaker Red",
+            ),
+            'SHIELD': (
+                "shield", True,
+                ["Exports <slug>/items/shield/model.ctr + sentinel_NN.bin.",
+                 "Overrides the GREEN shield color layer.",
+                 "Retail dark shell + highlight are hidden automatically.",
+                 "For juiced blue shield, use Item Type = Shield Blue.",
+                 "No roster flag needed."],
+                "Shield",
+            ),
+            'SHIELD_BLUE': (
+                "shield_blue", True,
+                ["Exports <slug>/items/shield_blue/model.ctr + sentinel_NN.bin.",
+                 "Overrides the BLUE (juiced) shield color layer.",
+                 "Retail dark shell + highlight are hidden automatically.",
+                 "No roster flag needed."],
+                "Shield Blue",
+            ),
+            'WARPBALL': (
+                "warpball", True,
+                ["Exports <slug>/items/warpball/model.ctr + sentinel_NN.bin.",
+                 "Overrides the warpball tracker model.",
+                 "No roster flag needed."],
+                "Warpball",
+            ),
+            'CLOCK': (
+                "clock", False,
+                ["HUD icon only — the clock weapon has no 3D model",
+                 "instance in retail. Provide only the HUD icon PNG.",
+                 "No roster flag needed."],
+                None,   # no Export Model button
+            ),
+            'INVIS': (
+                "invisibility", False,
+                ["HUD icon only — invisibility has no 3D model",
+                 "instance in retail. Provide only the HUD icon PNG.",
+                 "No roster flag needed."],
+                None,   # no Export Model button
+            ),
+        }
 
+        folder_name, has_model, blurb, button_label = _ITEM_INFO[item_type]
+
+        layout.label(text="Custom Item Model", icon="MESH_DATA")
         col = layout.column(align=True)
         col.prop(st, "item_type", text="Item Type")
 
-        if item_type == 'MASK':
-            layout.label(text="Exports <slug>/mask/mask.ctr (shield) and/or",
-                         icon="INFO")
-            layout.label(text="<slug>/mask/beam.ctr (light beam). Both are")
-            layout.label(text="static — retail rotates them per-tick.")
-            layout.label(text="Roster must say mask=custom_good | custom_bad.")
-        elif item_type == 'MISSILE':
-            layout.label(text="Exports <slug>/items/missile/model.ctr and",
-                         icon="INFO")
-            layout.label(text="<slug>/items/missile/sentinel_NN.bin.")
-            layout.label(text="Overrides the missile model for this custom.")
-            layout.label(text="No roster flag needed.")
-        elif item_type == 'BOMB':
-            layout.label(text="Exports <slug>/items/bomb/model.ctr and",
-                         icon="INFO")
-            layout.label(text="<slug>/items/bomb/sentinel_NN.bin.")
-            layout.label(text="Overrides the bomb model for this custom.")
-            layout.label(text="No roster flag needed.")
+        for line in blurb:
+            layout.label(text=line, icon="INFO")
 
         layout.separator()
 
         obj = context.active_object
-        if obj is None or obj.type != "MESH":
-            layout.label(text="Select the mesh first", icon="ERROR")
+        if has_model:
+            if obj is None or obj.type != "MESH":
+                layout.label(text="Select the mesh first", icon="ERROR")
+            else:
+                layout.label(text=f"Mesh: {obj.name} "
+                                  f"({len(obj.data.vertices)} verts)",
+                             icon="MESH_DATA")
         else:
-            layout.label(text=f"Mesh: {obj.name} "
-                              f"({len(obj.data.vertices)} verts)",
-                         icon="MESH_DATA")
+            layout.label(text="(no 3D model — icon only)", icon="INFO")
 
         col = layout.column(align=True)
         col.prop(st, "slug", text="Slug")
@@ -765,12 +851,10 @@ class NFR_PT_Racer(Panel):
                         existing.append("mask.ctr")
                     if (mask_dir / "beam.ctr").is_file():
                         existing.append("beam.ctr")
-                elif item_type == 'MISSILE':
-                    if (slug_dir / "items" / "missile" / "model.ctr").is_file():
-                        existing.append("items/missile/model.ctr")
-                elif item_type == 'BOMB':
-                    if (slug_dir / "items" / "bomb" / "model.ctr").is_file():
-                        existing.append("items/bomb/model.ctr")
+                elif folder_name is not None:
+                    item_dir = slug_dir / "items" / folder_name
+                    if (item_dir / "model.ctr").is_file():
+                        existing.append(f"items/{folder_name}/model.ctr")
                 if existing:
                     layout.label(text="Existing: " + ", ".join(existing),
                                  icon="CHECKMARK")
@@ -813,16 +897,15 @@ class NFR_PT_Racer(Panel):
         row = layout.row(align=True)
         row.scale_y = 1.3
         if item_type == 'MASK':
-            op = row.operator("nfr.mask_export", text="Export Mask", icon="EXPORT")
+            op = row.operator("nfr.mask_export",
+                              text="Export Mask", icon="EXPORT")
             op.variant = 'MASK'
             op = row.operator("nfr.mask_export", text="Export Beam")
             op.variant = 'BEAM'
-        elif item_type == 'MISSILE':
-            op = row.operator("nfr.mask_export", text="Export Missile", icon="EXPORT")
-            op.variant = 'MASK'
-        elif item_type == 'BOMB':
-            op = row.operator("nfr.mask_export", text="Export Bomb", icon="EXPORT")
-            op.variant = 'MASK'
+        elif has_model and button_label:
+            op = row.operator("nfr.mask_export",
+                              text=f"Export {button_label}", icon="EXPORT")
+            op.variant = 'MASK'   # ignored for non-MASK items; see _export_one
 
     def _draw_sfx(self, context, layout):
         st = context.scene.nfr_sfx

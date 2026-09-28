@@ -40,9 +40,9 @@ void RB_Potion_OnShatter_TeethSearch(struct Instance *inst)
 
 void RB_Potion_ThTick_InAir(struct Thread *t)
 {
-	struct GameTracker *gGT;
-	struct Instance *inst;
-	struct MineWeapon *mw;
+        struct GameTracker *gGT;
+        struct Instance *inst;
+        struct MineWeapon *mw;
 
 	SVec3 posBottom;
 	SVec3 posTop;

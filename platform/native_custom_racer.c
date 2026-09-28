@@ -876,9 +876,18 @@ static const char *ItemNameFromID(int itemID)
 {
     switch (itemID)
     {
-    case NATIVE_ITEM_MISSILE: return "missile";
-    case NATIVE_ITEM_BOMB:    return "bomb";
-    default:                  return "unknown";
+    case NATIVE_ITEM_MISSILE:     return "missile";
+    case NATIVE_ITEM_BOMB:        return "bomb";
+    case NATIVE_ITEM_MINE:        return "mine";
+    case NATIVE_ITEM_NITRO:       return "nitro";
+    case NATIVE_ITEM_BEAKER:      return "beaker";
+    case NATIVE_ITEM_BEAKER_RED:  return "beaker_red";
+    case NATIVE_ITEM_SHIELD:      return "shield";
+    case NATIVE_ITEM_SHIELD_BLUE: return "shield_blue";
+    case NATIVE_ITEM_WARPBALL:    return "warpball";
+    case NATIVE_ITEM_CLOCK:       return "clock";
+    case NATIVE_ITEM_INVIS:       return "invisibility";
+    default:                      return "unknown";
     }
 }
 
@@ -1298,15 +1307,32 @@ struct Model *NativeCustomRacer_GetItemModelForChar(int characterID, int itemID)
 
     struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
 
-    /* The tick readers (RB_MovingExplosive_ThTick for missile/bomb,
-     * RB_GenericMine_ThTick for mine/beaker, RB_Warpball_ThTick, etc.)
-     * read inst->model->id to decide which behavior path to follow.
-     * Our custom .ctr has a random id written by build_character.py
-     * at export time, which does NOT match DYNAMIC_BOMB / DYNAMIC_ROCKET.
-     * Without this patch, a custom bomb falls through to the missile
-     * branch in RB_MovingExplosive_ThTick (modelID != DYNAMIC_BOMB).
-     * Patch the id to the retail slot we are substituting. */
-    m->id = (itemID == NATIVE_ITEM_BOMB) ? DYNAMIC_BOMB : DYNAMIC_ROCKET;
+    /* The tick readers (RB_MovingExplosive_ThTick, RB_GenericMine_ThTick,
+     * RB_Warpball_ThTick, etc.) read inst->model->id to decide which
+     * behavior path to follow. Our custom .ctr has a random id written
+     * by build_character.py at export time, which does NOT match the
+     * retail slot we are substituting. Patch the id to the retail id.
+     *
+     * For items with a "juiced" variant (mine → TNT/Nitro, beaker →
+     * green/red, shield → green/blue), the retail code branches on
+     * d->numWumpas in the spawn site, not on m->id, so patching to the
+     * normal variant is safe. If a retail tick turns out to read the
+     * id for behavior, split into a second enum value with its own
+     * m->id. */
+    switch (itemID)
+    {
+    case NATIVE_ITEM_MISSILE:     m->id = DYNAMIC_ROCKET;       break;
+    case NATIVE_ITEM_BOMB:        m->id = DYNAMIC_BOMB;         break;
+    case NATIVE_ITEM_MINE:        m->id = STATIC_CRATE_TNT;     break;
+    case NATIVE_ITEM_NITRO:       m->id = PU_EXPLOSIVE_CRATE;   break;
+    case NATIVE_ITEM_BEAKER:      m->id = STATIC_BEAKER_GREEN;  break;
+    case NATIVE_ITEM_BEAKER_RED:  m->id = STATIC_BEAKER_RED;    break;
+    case NATIVE_ITEM_SHIELD:      m->id = DYNAMIC_SHIELD_GREEN; break;
+    case NATIVE_ITEM_SHIELD_BLUE: m->id = DYNAMIC_SHIELD;       break;
+    case NATIVE_ITEM_WARPBALL:    m->id = DYNAMIC_WARPBALL;     break;
+    default:                                                     break;
+    /* CLOCK / INVIS: no model instance — HUD icon only. */
+    }
 
     s_itemModel[idx][itemID] = m;
 
@@ -1693,7 +1719,7 @@ int NativeCustomRacer_UpdateMaskMusic(void)
 {
     struct GameTracker *gGT = sdata->gGT;
     if (gGT == NULL)
-        return 0; 0;
+        return 0;
 
     int charIdx = -1;
     for (int i = 0; i < gGT->numPlyrCurrGame; i++)

@@ -12,6 +12,7 @@ enum UIWeaponConstants
 	UI_WEAPON_ITEM_MASK = HELD_ITEM_MASK,
 	UI_WEAPON_ITEM_CLOCK = HELD_ITEM_CLOCK,
 	UI_WEAPON_ITEM_WARPBALL = HELD_ITEM_WARPBALL,
+	UI_WEAPON_ITEM_INVIS = HELD_ITEM_INVISIBILITY,
 	UI_WEAPON_ITEM_NONE = HELD_ITEM_NONE,
 	UI_WEAPON_ITEM_ROULETTE = HELD_ITEM_ROULETTE,
 	UI_WEAPON_ICON_BASE = 5,
@@ -203,6 +204,34 @@ void UI_Weapon_DrawSelf(s16 posX, s16 posY, s16 scale, struct Driver *d)
 		case HELD_ITEM_MISSILE_1X:
 		case HELD_ITEM_MISSILE_3X:
 			nativeItemID = NATIVE_ITEM_MISSILE;
+			break;
+		case UI_WEAPON_ITEM_TNT:
+			/* Juiced pickup → Nitro (own icon + retail model). */
+			if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
+				nativeItemID = NATIVE_ITEM_NITRO;
+			else
+				nativeItemID = NATIVE_ITEM_MINE;
+			break;
+		case UI_WEAPON_ITEM_POTION:
+			if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
+				nativeItemID = NATIVE_ITEM_BEAKER_RED;
+			else
+				nativeItemID = NATIVE_ITEM_BEAKER;
+			break;
+		case UI_WEAPON_ITEM_SHIELD:
+			if (d->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)
+				nativeItemID = NATIVE_ITEM_SHIELD_BLUE;
+			else
+				nativeItemID = NATIVE_ITEM_SHIELD;
+			break;
+		case UI_WEAPON_ITEM_WARPBALL:
+			nativeItemID = NATIVE_ITEM_WARPBALL;
+			break;
+		case UI_WEAPON_ITEM_CLOCK:
+			nativeItemID = NATIVE_ITEM_CLOCK;
+			break;
+		case UI_WEAPON_ITEM_INVIS:
+			nativeItemID = NATIVE_ITEM_INVIS;
 			break;
 		default:
 			break;

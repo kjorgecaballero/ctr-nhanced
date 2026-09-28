@@ -78,12 +78,12 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	int param;
 	b32 boolPotion;
 
-	gGT = sdata->gGT;
-	inst = t->inst;
-	mw = inst->thread->object;
-	model = inst->model->id;
+        gGT = sdata->gGT;
+        inst = t->inst;
+        mw = inst->thread->object;
+        model = inst->model->id;
 
-	boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;
+        boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;
 
 	// if weapon is "thrown" like Komodo Joe
 	if ((mw->flags & MINE_WEAPON_FLAG_THROWN) != 0)
