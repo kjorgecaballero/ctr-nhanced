@@ -12,15 +12,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Native uses the NTSC-U 926 mempack start address (0x800ba9f0) inside a
-// 4 MiB backing buffer. The retail 2 MiB window is too tight for a handful
-// of 1P arcade scenarios (Crash/Cortex/Dingodile/Pura on certain tracks
-// like Hot Air Skyway, N.Gin Labs, Polar Pass), where the character's bot
-// pack pushes a late allocation past the boundary and mempack OOMs.
+// Native uses the NTSC-U 926 mempack start address (0x800ba9f0) inside an
+// 8 MiB backing buffer. The retail 2 MiB window is too tight for a handful
+// of 1P arcade scenarios and custom tracks with high polygon counts; a
+// custom LEV's primitive buffer (prim_mem) can request 2-4 MB directly.
 // PC memory is not the constraint, so we restore headroom.
-#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x400000u
+#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x800000u
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0xba9f0u
-#define CTR_NATIVE_MEMPACK_SIZE         0x344e10u
+#define CTR_NATIVE_MEMPACK_SIZE         0x744e10u
 
 CTR_STATIC_ASSERT(CTR_NATIVE_MEMPACK_START_OFFSET + CTR_NATIVE_MEMPACK_SIZE + MEMPACK_PS1_END_GUARD_SIZE == CTR_NATIVE_MEMPACK_BUFFER_SIZE);
 

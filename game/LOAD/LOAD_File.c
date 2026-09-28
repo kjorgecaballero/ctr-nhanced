@@ -15,6 +15,7 @@ void LOAD_StringToUpper(char *path)
 
 #ifdef CTR_NATIVE
 #include <platform/native_cd.h>
+#include <LevelRegistry.h>
 #endif
 
 int LOAD_InitCDvol(void)
@@ -319,6 +320,11 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 	int sectorSize;
 	int sectorCount;
 	int readComplete;
+#if defined(CTR_NATIVE)
+	struct NativeAssetsByteBuffer overrideBytes = {0};
+	const char *overridePath = NULL;
+	b32 hasOverride = false;
+#endif
 
 	(void)loadType;
 	CDSYS_SetMode_StreamData();
@@ -330,16 +336,40 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 	{
 		bigfile = sdata->ptrBigfile1;
 	}
+
+	// CUSTOM-LEVELS: consult LevelRegistry for a disk override (LEV/VRM/etc.)
+	// before falling through to the retail bigfile read.
+	overridePath = LevelRegistry_GetOverrideForBigfileEntry(
+		sdata->gGT->levelID,
+		sdata->levelLOD,
+		subfileIndex);
+
+	if (overridePath != NULL)
+	{
+		hasOverride = NativeAssets_ReadBytes(
+			overridePath,
+			NATIVE_ASSET_READ_DATA_FILE,
+			&overrideBytes);
+	}
 #endif
 
 	// get size and offset of subfile
 	struct BigEntry *entry = BIG_GETENTRY(bigfile);
-	int eSize = entry[subfileIndex].size;
+	int eSize =
+#if defined(CTR_NATIVE)
+		hasOverride ? (int)overrideBytes.size :
+#endif
+		entry[subfileIndex].size;
 	int eOffs = entry[subfileIndex].offset;
 
 	*sizePtr = eSize;
 
-	CdIntToPos(bigfile->cdpos + eOffs, &cdLoc);
+#if defined(CTR_NATIVE)
+	if (!hasOverride)
+#endif
+	{
+		CdIntToPos(bigfile->cdpos + eOffs, &cdLoc);
+	}
 
 	struct LoadQueueSlot *lqs = &data.currSlot;
 	originalDst = ptrDst;
@@ -378,6 +408,30 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 	// the returned pointer back into data.currSlot.
 	lqs->ptrDestination = ptrDst;
 	lqs->size_UNUSED = eSize;
+#endif
+
+#if defined(CTR_NATIVE)
+	// CUSTOM-LEVELS: short-circuit the CD read path when a disk override is
+	// present. Copy the file bytes into the destination, fire the callback
+	// synchronously, and return. The retail CD read block below is skipped.
+	if (hasOverride)
+	{
+		memcpy(ptrDst, overrideBytes.data, overrideBytes.size);
+		NativeAssets_FreeBytes(&overrideBytes);
+
+		if (callback != NULL)
+		{
+			sdata->callbackCdReadSuccess = callback;
+			LOAD_ReadFileASyncCallback(CdlComplete, NULL);
+		}
+
+		if ((callback == NULL) && (originalDst == NULL))
+		{
+			MEMPACK_ReallocMem(*sizePtr);
+		}
+
+		return ptrDst;
+	}
 #endif
 
 	while (1)

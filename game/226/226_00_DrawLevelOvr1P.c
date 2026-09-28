@@ -1,4 +1,7 @@
 #include <common.h>
+#if defined(CTR_NATIVE)
+#include <LevelRegistry.h>
+#endif
 
 struct DrawLevelOvr1PFaceSelector
 {
@@ -7389,8 +7392,14 @@ static void DrawLevelOvr1P_TerminateRenderedListCursor(void)
 
 static struct TextureLayout *Ovr226_800a1058_PrepareFullDynamicLowUv(struct QuadBlock *block, struct DrawLevelOvr1PScratchVertex *projected)
 {
-	const int *indices = sDrawLevelOvr1PFullDynamicLowIndices;
-	struct TextureLayout *texture = block->ptr_texture_low;
+        const int *indices = sDrawLevelOvr1PFullDynamicLowIndices;
+#if defined(CTR_NATIVE)
+        struct TextureLayout *texture = LevelRegistry_ShouldForceHiLod()
+                ? DrawLevelOvr1P_ResolveMidTexture(block, 0)
+                : block->ptr_texture_low;
+#else
+        struct TextureLayout *texture = block->ptr_texture_low;
+#endif
 
 	// NOTE(aalhendi): Retail full-dynamic 0x800a0ef4 seeds low-LOD UVs before
 	// choosing either the direct low quad or the near/transition helper table.
@@ -8063,11 +8072,26 @@ static int Ovr226_800a0ef4_DrawFullDynamicBspList(struct VisMemBspListNode *slot
 
 static void DrawLevelOvr1P_SetSplitGroundThresholdScratch(void)
 {
-	DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
-	DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0x640;
-	DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0x500;
-	DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0x280;
-	DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0x140;
+#if defined(CTR_NATIVE)
+        if (LevelRegistry_ShouldForceHiLod())
+        {
+                // Custom tracks are exported assuming HI LOD everywhere.
+                // Suppress all depth-based LOD downgrades so every quadblock
+                // keeps its highest-quality texture at any distance.
+                DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
+                DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0;
+                DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0;
+                DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0;
+                DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0;
+                return;
+        }
+#endif
+
+        DrawLevelOvr1P_RenderScratch()->depthScale = 0x780;
+        DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold0 = 0x640;
+        DrawLevelOvr1P_RenderScratch()->textureLodDepthThreshold1 = 0x500;
+        DrawLevelOvr1P_RenderScratch()->topLevelNearDepthThreshold = 0x280;
+        DrawLevelOvr1P_RenderScratch()->recursiveNearDepthThreshold = 0x140;
 }
 
 static int DrawLevelOvr1P_ProjectSplitGroundListALowGrid(struct LevVertex *vertices, const struct QuadBlock *block,
