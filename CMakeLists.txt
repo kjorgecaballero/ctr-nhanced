@@ -110,11 +110,20 @@ if(CTR_NATIVE_MSVC_FRONTEND)
         /W4 #TODO(aalhendi): fix warnings
         /bigobj
         /arch:SSE2
+        /Zi
         /wd4152
         /wd4244
         /wd4245
         /wd4310
         /wd5287
+    )
+    # Generar .pdb y .map para debugging de crash dumps
+    target_link_options(ctr_native PRIVATE
+        /DEBUG
+        /MAP
+        /MAPINFO:EXPORTS
+        /PDB:${CMAKE_BINARY_DIR}/ctr_native.pdb
+        /MAP:${CMAKE_BINARY_DIR}/ctr_native.map
     )
 else()
     target_compile_options(ctr_native PRIVATE
