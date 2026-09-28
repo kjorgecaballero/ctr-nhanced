@@ -1,5 +1,8 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook};
 
@@ -27,6 +30,19 @@ static void LOAD_NativeAudio_SetStateAfterBankReload(u32 state)
 	}
 
 	Audio_SetState_Safe(state);
+}
+#endif
+
+#ifdef CTR_NATIVE
+static int LOAD_IsCustomLevel(int levelID)
+{
+	// Only consult the active pointer set by the Track Select menu.
+	// Do NOT call LevelRegistry_GetReplacement here: it triggers
+	// LevelRegistry_Load(), which uses NativeAssets path resolution and
+	// runs before NativeAssets is fully initialised during the first
+	// main menu load.
+	const struct LevelDef *active = LevelRegistry_GetActive();
+	return (active != NULL && active->baseLevelID == levelID);
 }
 #endif
 
@@ -167,19 +183,31 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		// ========== Set LevelLOD variables ================
 
 
-		// main menu or adv garage
-		if ((gGT->gameMode1 & MAIN_MENU) != 0)
+#ifdef CTR_NATIVE
+		if (LOAD_IsCustomLevel(levelID))
 		{
+			// Custom levels are only exported for 1P LOD. Forcing LOD_1P
+			// avoids loading the retail RELIC PTR map, which corrupts the
+			// custom LEV and crashes in GhostReplay_Init1 (gh == NULL).
 			sdata->levelLOD = LOAD_LEVEL_LOD_1P;
 		}
-		// if relic, or time trial
-		else if ((gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0)
-		{
-			sdata->levelLOD = LOAD_LEVEL_LOD_RELIC;
-		}
 		else
+#endif
 		{
-			sdata->levelLOD = gGT->numPlyrCurrGame;
+			// main menu or adv garage
+			if ((gGT->gameMode1 & MAIN_MENU) != 0)
+			{
+				sdata->levelLOD = LOAD_LEVEL_LOD_1P;
+			}
+			// if relic, or time trial
+			else if ((gGT->gameMode1 & (TIME_TRIAL | RELIC_RACE)) != 0)
+			{
+				sdata->levelLOD = LOAD_LEVEL_LOD_RELIC;
+			}
+			else
+			{
+				sdata->levelLOD = gGT->numPlyrCurrGame;
+			}
 		}
 
 		gGT->hudFlags |= HUD_FLAG_INIT_UI_INSTANCES;

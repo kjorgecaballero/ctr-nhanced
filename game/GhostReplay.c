@@ -398,6 +398,7 @@ void GhostReplay_Init1(void)
 	for (s32 i = 0; i < 2; i++)
 	{
 		struct GhostTape *tape = MEMPACK_AllocMem(0x268);
+		memset(tape, 0, 0x268);
 		sdata->ptrGhostTape[i] = tape;
 
 		if (i == 0)
@@ -410,6 +411,16 @@ void GhostReplay_Init1(void)
 			void **pointers = ST1_GETPOINTERS(gGT->level1->ptrSpawnType1);
 
 			gh = ((timeTrialFlags & TT_NTROPY_BEATEN) != 0) ? pointers[ST1_NOXIDE] : pointers[ST1_NTROPY];
+		}
+
+		// CTR_NATIVE: custom tracks exported by CTR Editor may not include
+		// ST1_NTROPY / ST1_NOXIDE spawn entries in their LEV, so pointers[]
+		// returns NULL. Skip the ghost slot instead of crashing at
+		// &recordBuffer[gh->size] below. The tape was memset to 0, so
+		// GhostReplay_Init2 / ThTick will skip it (ptrEnd == ptrStart).
+		if (gh == NULL)
+		{
+			continue;
 		}
 
 		recordBuffer = GHOSTHEADER_GETRECORDBUFFER(gh);
