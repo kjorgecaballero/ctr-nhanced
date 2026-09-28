@@ -1,4 +1,7 @@
 #include <common.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 {
@@ -52,9 +55,14 @@ void MainGameEnd_SoloRaceGetReward(int subtractTimeCrateBonus)
 
 	gGT->gameModeEnd |= 4;
 
+#ifdef CTR_NATIVE
+	struct HighScoreTrack *track = LevelRegistry_GetActiveCustomHighScoreTrack();
+	if (track == NULL)
+		track = &sdata->gameProgress.highScoreTracks[gGT->levelID];
+#else
 	struct HighScoreTrack *track = &sdata->gameProgress.highScoreTracks[gGT->levelID];
+#endif
 	int playerTime = player->timeElapsedInRace;
-
 	if (((track->timeTrialFlags >> data.bitIndex_timeTrialFlags_saveData.nTropyOpen) & 1) == 0)
 	{
 		if ((track->timeTrialFlags & 1) == 0)

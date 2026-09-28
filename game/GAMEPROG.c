@@ -1,5 +1,8 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 void GAMEPROG_AdvPercent(struct AdvProgress *adv)
 {
@@ -300,6 +303,17 @@ void GAMEPROG_GetPtrHighScoreTrack(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
 	s32 gameMode1 = gGT->gameMode1;
+
+#ifdef CTR_NATIVE
+	{
+		struct HighScoreTrack *custom = LevelRegistry_GetActiveCustomHighScoreTrack();
+		if (custom != NULL)
+		{
+			sdata->ptrActiveHighScoreEntry = &custom->scoreEntry[MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE * ((gameMode1 & RELIC_RACE) != 0)];
+			return;
+		}
+	}
+#endif
 
 	sdata->ptrActiveHighScoreEntry =
 	    &sdata->gameProgress.highScoreTracks[gGT->levelID].scoreEntry[MEMCARD_HIGH_SCORE_ENTRIES_PER_MODE * ((gameMode1 & RELIC_RACE) != 0)];

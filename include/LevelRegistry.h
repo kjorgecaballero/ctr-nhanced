@@ -40,4 +40,11 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(
 	int levelLOD,
 	int subfileIndex);
 
+// Returns a parallel HighScoreTrack for the currently active additional
+// (non-replace) custom level, or NULL if the active level is retail.
+// Slots are indexed by (logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE).
+// Used to keep custom track high scores / TT flags separate from the
+// retail track they share a baseLevelID with.
+struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void);
+
 #endif

@@ -1,5 +1,8 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
 void SelectProfile_QueueLoadHub_MenuProc(struct RectMenu *menu)
 {
@@ -403,12 +406,25 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 
 	if (profile != NULL)
 	{
-		struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
-
 		/* BUG-ICON-01: make sure the VRAM slot holds this character's
 		 * icon, not whatever page was last bulk-uploaded. */
 
-		DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+#ifdef CTR_NATIVE
+		// Custom ghosts carry a virtual memcard ID (25-31). metaDataLEV[]
+		// is retail-only; resolve the custom's display name via the registry.
+		if ((profile->trackID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE) &&
+		    (profile->trackID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT))
+		{
+			int logicalID = 1000 + (profile->trackID - LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE);
+			const struct LevelDef *def = LevelRegistry_GetAdditionalByLogicalID(logicalID);
+			DecalFont_DrawLine(def != NULL ? def->name : "Custom", posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+		}
+		else
+#endif
+		{
+			struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
+			DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+		}
 		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);
 		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(profile->characterID), posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
 		                     sdata->ghostIconColor, sdata->ghostIconColor, sdata->ghostIconColor, TRANS_50_DECAL, 0x1000);
@@ -684,7 +700,17 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 		time = driver->timeElapsedInRace;
 	}
 
+#ifdef CTR_NATIVE
+	{
+		int saveLevelID = gGT->levelID;
+		int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+		if (virtualID >= 0)
+			saveLevelID = virtualID;
+		RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], saveLevelID, time, gGT->prevNameEntered);
+	}
+#else
 	RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], gGT->levelID, time, gGT->prevNameEntered);
+#endif
 
 	sdata->ghostProfile_indexSave = menu->rowSelected;
 	sdata->ghostProfile_rowSelect = -1;
@@ -840,10 +866,23 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 		// NOTE(aalhendi): Retail compares against GameTracker.currLEV
 		// (0x1eb0). Ghost selection happens before QueueLoadTrack, so
 		// levelID still refers to the previously loaded level.
+#ifdef CTR_NATIVE
+		{
+			int compareID = sdata->gGT->currLEV;
+			int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+			if (virtualID >= 0)
+				compareID = virtualID;
+			if ((profile != NULL) && (profile->trackID != compareID))
+			{
+				isWrongTrack = sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE;
+			}
+		}
+#else
 		if ((profile != NULL) && (profile->trackID != sdata->gGT->currLEV))
 		{
 			isWrongTrack = sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE;
 		}
+#endif
 
 		SelectProfile_DrawGhostProfile(profile, x, y, i == menu->rowSelected, i, drawStyle, sdata->memcardAction == SELECT_PROFILE_ACTION_LOAD, isWrongTrack);
 
@@ -961,6 +1000,21 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 
 	// NOTE(aalhendi): Retail uses currLEV here; levelID is not updated to the
 	// selected Time Trial track until the queued load starts.
+#ifdef CTR_NATIVE
+	{
+		int compareID = sdata->gGT->currLEV;
+		int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+		if (virtualID >= 0)
+			compareID = virtualID;
+		if (sdata->ghostProfile_memcard[menu->rowSelected].trackID == compareID)
+		{
+			sdata->ghostProfile_indexLoad = menu->rowSelected;
+			RefreshCard_StartMemcardAction(5);
+			*SelectProfile_AllProfiles_ActionActive() = 1;
+			return;
+		}
+	}
+#else
 	if (sdata->ghostProfile_memcard[menu->rowSelected].trackID == sdata->gGT->currLEV)
 	{
 		sdata->ghostProfile_indexLoad = menu->rowSelected;
@@ -968,6 +1022,7 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 		*SelectProfile_AllProfiles_ActionActive() = 1;
 		return;
 	}
+#endif
 
 	OtherFX_Play(5, 1);
 }

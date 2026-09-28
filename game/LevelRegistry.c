@@ -76,6 +76,44 @@ static int s_levelCount;
 static int s_registryLoaded;
 static const struct LevelDef *s_activeLevel;
 
+#define LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS 16
+static struct HighScoreTrack s_customHighScoreTracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
+static int s_customHighScoresInit;
+
+static void LevelRegistry_InitCustomHighScoreTrack(struct HighScoreTrack *track)
+{
+	int i;
+	memset(track, 0, sizeof(*track));
+	for (i = 0; i < MEMCARD_HIGH_SCORE_ENTRIES_PER_TRACK; i++)
+	{
+		track->scoreEntry[i].time = MEMCARD_HIGH_SCORE_DEFAULT_TIME;
+		track->scoreEntry[i].characterID = 0;
+	}
+}
+
+struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void)
+{
+	const struct LevelDef *active = s_activeLevel;
+	int slot;
+
+	if (active == NULL || active->logicalLevelID < LEVEL_REGISTRY_CUSTOM_BASE)
+		return NULL;
+
+	slot = active->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
+	if (slot < 0 || slot >= LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS)
+		return NULL;
+
+	if (!s_customHighScoresInit)
+	{
+		int i;
+		for (i = 0; i < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS; i++)
+			LevelRegistry_InitCustomHighScoreTrack(&s_customHighScoreTracks[i]);
+		s_customHighScoresInit = 1;
+	}
+
+	return &s_customHighScoreTracks[slot];
+}
+
 static void LevelRegistry_Load(void);
 
 const char *LevelRegistry_GetMusic(int levelID)
@@ -809,5 +847,7 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 {
 	(void)levelID; (void)levelLOD; (void)subfileIndex; return 0;
 }
+
+struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void) { return 0; }
 
 #endif

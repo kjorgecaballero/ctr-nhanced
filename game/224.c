@@ -1,8 +1,10 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#ifdef CTR_NATIVE
+#include <LevelRegistry.h>
+#endif
 
-enum TimeTrialEndMenuConstants
-{
+enum TimeTrialEndMenuConstants{
 	TT_RACE_CLOCK_HOLD_FRAMES = CTR_SECONDS_TO_FRAMES(3),
 	TT_RACE_CLOCK_FLYOUT_FRAME_OFFSET = 65,
 	TT_RESULT_MAX_FRAMES = CTR_SECONDS_TO_FRAMES(30),
@@ -317,7 +319,14 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	u16 rowOffsetY = 0;
 
 	// 12 entries per track, 6 for Time Trial and 6 for Relic Race
+#ifdef CTR_NATIVE
+	struct HighScoreTrack *customTrack = LevelRegistry_GetActiveCustomHighScoreTrack();
+	struct HighScoreEntry *scoreEntries = customTrack != NULL
+	    ? &customTrack->scoreEntry[TT_HIGH_SCORE_ENTRIES_PER_MODE * scoreMode]
+	    : &sdata->gameProgress.highScoreTracks[gGT->levelID].scoreEntry[TT_HIGH_SCORE_ENTRIES_PER_MODE * scoreMode];
+#else
 	struct HighScoreEntry *scoreEntries = &sdata->gameProgress.highScoreTracks[gGT->levelID].scoreEntry[TT_HIGH_SCORE_ENTRIES_PER_MODE * scoreMode];
+#endif
 
 	// === Naughty Dog Bug ===
 	// Start and End is the same
