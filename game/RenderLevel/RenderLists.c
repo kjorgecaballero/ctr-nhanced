@@ -204,6 +204,14 @@ static void RenderLists_LinkBsp(struct BSP *bspRoot, struct BSP *bsp, struct Vis
 	struct VisMemBspListNode *node;
 	int bspIndex = bsp - bspRoot;
 
+#ifdef CTR_NATIVE
+	// Custom LEV exports (or stale per-viewport pointers in splitscreen) can
+	// leave bspList NULL or give a negative bspIndex. Bail out instead of
+	// writing to a garbage address.
+	if (bspList == NULL || bspIndex < 0)
+		return;
+#endif
+
 	node = &bspList[bspIndex];
 
 	node->next = *head;

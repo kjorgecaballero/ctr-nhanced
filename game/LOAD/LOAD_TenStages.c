@@ -464,6 +464,46 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		gGT->level1 = lev;
 		gGT->visMem1 = lev->visMem;
 
+#ifdef CTR_NATIVE
+		// Custom LEVs (CTR Editor export) only fill visMem slot [0].
+		// Splitscreen reads slots [1..3]. Every per-viewport slot must be
+		// a DISTINCT buffer — aliasing them caused the two viewports to
+		// stomp each other's vis data every frame (P1 moves -> P2 takes
+		// P1's vistree -> P2 environment disappears, and eventually a
+		// linked-list splice crash in RenderLists_LinkBsp).
+		//
+		// We allocate fresh MEMPACK buffers for every per-viewport slot.
+		// DST arrays are zeroed bit sets until MainFrame_VisMemFullFrame
+		// fills them on the first render frame. SRC arrays stay NULL and
+		// MainFrame writes the per-viewport source pointers on demand.
+		if (lev != 0 && lev->visMem != 0 && lev->ptr_mesh_info != 0)
+		{
+			struct VisMem *vm = lev->visMem;
+			struct mesh_info *mesh = lev->ptr_mesh_info;
+
+			int leafBytes    = ((mesh->numBspNodes + 0x1f) >> 5) << 2;
+			int faceBytes    = ((mesh->numQuadBlock + 0x1f) >> 5) << 2;
+			int oVertBytes   = ((lev->numWaterVertices + 0x1f) >> 5) << 2;
+			int scVertBytes  = ((lev->numSCVert + 0x1f) >> 5) << 2;
+			int bspListBytes = 8 * mesh->numBspNodes;
+
+			for (int i = 1; i < 4; i++)
+			{
+				if (vm->visLeafList[i] == 0 && leafBytes > 0)
+					vm->visLeafList[i] = MEMPACK_AllocMem(leafBytes);
+				if (vm->visFaceList[i] == 0 && faceBytes > 0)
+					vm->visFaceList[i] = MEMPACK_AllocMem(faceBytes);
+				if (vm->visOVertList[i] == 0 && oVertBytes > 0)
+					vm->visOVertList[i] = MEMPACK_AllocMem(oVertBytes);
+				if (vm->visSCVertList[i] == 0 && scVertBytes > 0)
+					vm->visSCVertList[i] = MEMPACK_AllocMem(scVertBytes);
+				if (vm->bspList[i] == 0 && bspListBytes > 0)
+					vm->bspList[i] = MEMPACK_AllocMem(bspListBytes);
+				// SRC arrays stay NULL; MainFrame fills them per viewport.
+			}
+		}
+#endif
+
 		if (lev != 0)
 		{
 			DecalGlobal_Store(gGT, lev->levTexLookup);

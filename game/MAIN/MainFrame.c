@@ -628,6 +628,12 @@ b32 MainFrame_HaveAllPads(s16 numPlyrNextGame)
 
 static void MainFrame_ReplacePackedVisList(int *dst, void *src, int byteCount)
 {
+#ifdef CTR_NATIVE
+	// Custom LEVs exported for 1P may not carry visMem lists for playerIndex > 0.
+	// Skip instead of crashing on NULL dst; the second viewport loses vis data
+	// until the LEV carries per-player slots.
+	if (dst == NULL || src == NULL) return;
+#endif
 	u32 srcWord = (u32)src;
 
 	if ((srcWord & 1) == 0)
@@ -641,6 +647,9 @@ static void MainFrame_ReplacePackedVisList(int *dst, void *src, int byteCount)
 
 static void MainFrame_OrPackedVisList(int *dst, void *src, int byteCount)
 {
+#ifdef CTR_NATIVE
+	if (dst == NULL || src == NULL) return;
+#endif
 	u32 srcWord = (u32)src;
 
 	if ((srcWord & 1) == 0)
@@ -789,6 +798,9 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 			}
 			else if (visMem->visOVertSrc[playerIndex] == NULL)
 			{
+#ifdef CTR_NATIVE
+				if (visMem->visOVertList[playerIndex] != NULL && level->visOVertSrc != NULL)
+#endif
 				memcpy(visMem->visOVertList[playerIndex], level->visOVertSrc, ((level->numWaterVertices + 0x1f) >> 5) << 2);
 			}
 		}
