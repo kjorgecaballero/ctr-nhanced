@@ -58,3 +58,5 @@ tools/custom_racers/blender_addon/ctr_racer.zip
 # ignores any new helper script the pipeline adds.
 !tools/custom_racers/build_*.py
 run.log*
+
+*.BMP
