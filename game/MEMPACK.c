@@ -80,18 +80,20 @@ void *MEMPACK_AllocMem(int allocSize)
 	struct Mempack *ptrMempack = sdata->PtrMempack;
 
 	if (MEMPACK_GetFreeBytes() < allocSize)
-        {
+	{
 #ifdef CTR_NATIVE
-                fprintf(stderr, "[MEMPACK] OOM alloc=%d free=%d (returning NULL)\n",
-                        allocSize, MEMPACK_GetFreeBytes());
-                return NULL;
+		fprintf(stderr, "[MEMPACK] OOM alloc=%d free=%d pack=%p size=%d first=%p last=%p (returning NULL)\n",
+			allocSize, MEMPACK_GetFreeBytes(),
+			(void *)ptrMempack, ptrMempack->packSize,
+			ptrMempack->firstFreeByte, ptrMempack->lastFreeByte);
+		return NULL;
 #else
-                CTR_ErrorScreen(0xFF, 0, 0);
-                for (;;)
-                {
-                }
+		CTR_ErrorScreen(0xFF, 0, 0);
+		for (;;)
+		{
+		}
 #endif
-        }
+	}
 
 	s32 newAllocSize = MEMPACK_ALIGN_SIZE(allocSize);
 	ptrMempack->sizeOfPrevAllocation = newAllocSize;

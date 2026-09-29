@@ -811,11 +811,11 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 	if (level == NULL)
 		return NULL;
 
-	// Custom VRMs are exported for the 1P VRAM layout. Loading them into
-	// the smaller 2P/3P/4P slots overflows VRAM and crashes. Fall back to
-	// the retail track in splitscreen until per-LOD VRMs are supported.
-	if (sdata->gGT->numPlyrCurrGame > 1)
-		return NULL;
+	// EXPERIMENT: allow custom override in splitscreen. The 1P VRM is
+	// loaded regardless of numPlyrCurrGame; we rely on the emulated VRAM
+	// to not enforce the retail slot boundary. If this crashes or renders
+	// wrong, revert and implement multi-LOD (Fase 3) instead.
+	// (Nothing here for now -- removed the early return.)
 
 	if (levelID == MAIN_MENU_LEVEL)
 	{
