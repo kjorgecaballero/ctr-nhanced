@@ -18,9 +18,9 @@
 // custom LEV's primitive buffer (prim_mem) can request 2-4 MB directly.
 // Splitscreen (2P/3P/4P) roughly doubles that pressure, so we bump the
 // backing buffer to 32 MiB. PC memory is not the constraint.
-#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x8000000u
+#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x800000u
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0xba9f0u
-#define CTR_NATIVE_MEMPACK_SIZE         0x7F44E10u
+#define CTR_NATIVE_MEMPACK_SIZE         0x744e10u
 
 CTR_STATIC_ASSERT(CTR_NATIVE_MEMPACK_START_OFFSET + CTR_NATIVE_MEMPACK_SIZE + MEMPACK_PS1_END_GUARD_SIZE == CTR_NATIVE_MEMPACK_BUFFER_SIZE);
 
