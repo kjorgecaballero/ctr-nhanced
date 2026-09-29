@@ -330,7 +330,30 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		}
 
 		sdata->load_inProgress = 1;
-		LOAD_DriverMPK(bigfile, sdata->levelLOD, LOAD_Callback_DriverModels);
+
+		// Custom levels force sdata->levelLOD to 1P in case 0, because the
+		// LEV/VRM assets only exist under <id>/1p/. The driver MPK path must
+		// follow the actual player count so that the per-player custom model
+		// override (LOAD_DriverMPK iterates data.characterIDs[0..N-1]) runs
+		// for every human player instead of only P1.
+		//
+		// Known issue (CUSTOM-LEVELS-SPLIT-3P4P-FREEZE): in 3P/4P splitscreen
+		// on a custom track the race loads and renders, but the human players
+		// cannot accelerate (they can only steer). This is a preexisting bug
+		// in the custom LEV path for 3P/4P; it is NOT caused by this driver-
+		// MPK LOD change — it also reproduces when driverLOD is left at 1P.
+		// Tracked separately.
+		int driverLOD = sdata->levelLOD;
+#ifdef CTR_NATIVE
+		if (LOAD_IsCustomLevel(gGT->levelID))
+		{
+			int n = gGT->numPlyrCurrGame;
+			if (n < 1) n = 1;
+			if (n > 4) n = 4;
+			driverLOD = n;
+		}
+#endif
+		LOAD_DriverMPK(bigfile, driverLOD, LOAD_Callback_DriverModels);
 		break;
 	}
 	case 5:
