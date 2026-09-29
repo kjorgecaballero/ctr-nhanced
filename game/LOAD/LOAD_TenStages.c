@@ -36,13 +36,24 @@ static void LOAD_NativeAudio_SetStateAfterBankReload(u32 state)
 #ifdef CTR_NATIVE
 static int LOAD_IsCustomLevel(int levelID)
 {
-	// Only consult the active pointer set by the Track Select menu.
-	// Do NOT call LevelRegistry_GetReplacement here: it triggers
-	// LevelRegistry_Load(), which uses NativeAssets path resolution and
-	// runs before NativeAssets is fully initialised during the first
-	// main menu load.
+	// Fast path: Track Select sets the active pointer in 1P.
 	const struct LevelDef *active = LevelRegistry_GetActive();
-	return (active != NULL && active->baseLevelID == levelID);
+	if (active != NULL && active->baseLevelID == levelID)
+		return 1;
+
+	// Fallback for replace-based customs that bypass SetActive
+	// (3P/4P VS Track Select does not call SetActive). Without this,
+	// levelLOD stays at numPlyrCurrGame in 3P/4P, the collision
+	// search falls through to LOW LOD (which custom LEVs do not
+	// ship), and every kart gets snapped to a phantom ground plane.
+	//
+	// Skip MAIN_MENU_LEVEL: during the first boot load, NativeAssets
+	// is not yet initialised and LevelRegistry_GetReplacement would
+	// trigger a premature LevelRegistry_Load.
+	if (levelID == MAIN_MENU_LEVEL)
+		return 0;
+
+	return LevelRegistry_GetReplacement(levelID) != NULL;
 }
 #endif
 
