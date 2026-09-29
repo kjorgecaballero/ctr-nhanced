@@ -176,7 +176,14 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	sps->Union.QuadBlockColl.quadFlagsWanted = QUADBLOCK_FLAG_GROUND | QUADBLOCK_FLAG_COLLISION_SURFACE;
 	sps->Union.QuadBlockColl.quadFlagsIgnored = 0;
 	sps->Union.QuadBlockColl.searchFlags = 0;
-	if (gGT->numPlyrCurrGame < 3)
+	// Custom levels force sdata->levelLOD to 1P in LOAD_TenStages case 0
+	// because they only ship <id>/1p/ assets — the LEV has no LOW LOD
+	// collision data. In 3P/4P the retail guard below would skip
+	// COLL_SEARCH_HIGH_LOD and the collision search would run against
+	// garbage, leaving every driver snapped to a phantom ground plane
+	// (karts spawn on the start line but cannot accelerate). Force HIGH
+	// LOD whenever the level is 1P-only, not just in 1P/2P.
+	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
 	{
 		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
 	}

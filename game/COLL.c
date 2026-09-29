@@ -1189,14 +1189,18 @@ internal void COLL_FIXED_PlayerSearch_SetupSearch(struct ScratchpadStruct *sps, 
 	sps->Union.QuadBlockColl.quadFlagsIgnored = QUADBLOCK_FLAG_NO_COLLISION_RESPONSE;
 	sps->Union.QuadBlockColl.quadFlagsWanted = QUADBLOCK_FLAG_GROUND | QUADBLOCK_FLAG_COLLISION_SURFACE;
 
-	sps->Union.QuadBlockColl.searchFlags = 0;
-	if (gGT->numPlyrCurrGame < 3)
-	{
-		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
-	}
+        sps->Union.QuadBlockColl.searchFlags = 0;
+        // Custom levels force sdata->levelLOD to 1P and have no LOW LOD
+        // collision data. In 3P/4P the retail guard would skip HIGH LOD
+        // and this per-frame ground search would run against garbage.
+        // Same fix as VehBirth_TeleportSelf / VehStuckProc_MaskDrop.
+        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+        {
+                sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
+        }
 
-	sps->boolDidTouchQuadblock = 0;
-	sps->boolDidTouchHitbox = 0;
+  sps->boolDidTouchQuadblock = 0;
+  sps->boolDidTouchHitbox = 0;
 	sps->numTrianglesTested = 0;
 
 	sps->bbox.min.x = probeTop.x;
@@ -2257,13 +2261,14 @@ void COLL_MOVED_PlayerSearch(struct Thread *t, struct Driver *d)
 	sps->Union.QuadBlockColl.hitRadiusSquared = hitRadius * hitRadius;
 	sps->Union.QuadBlockColl.quadFlagsWanted = QUADBLOCK_FLAG_GROUND | QUADBLOCK_FLAG_COLLISION_SURFACE;
 	sps->Union.QuadBlockColl.quadFlagsIgnored = 0;
-	sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES;
-	sps->ptr_mesh_info = gGT->level1->ptr_mesh_info;
+        sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES;
+        sps->ptr_mesh_info = gGT->level1->ptr_mesh_info;
 
-	if (gGT->numPlyrCurrGame < 3)
-	{
-		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES | COLL_SEARCH_HIGH_LOD;
-	}
+        // Same fix as above: no LOW LOD collision data on custom levels.
+        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+        {
+                sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES | COLL_SEARCH_HIGH_LOD;
+        }
 
 	sps->numBspHitboxesHit = 0;
 	sps->Input1.modelID = DYNAMIC_PLAYER;

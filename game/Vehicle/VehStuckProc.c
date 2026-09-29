@@ -88,7 +88,11 @@ static void VehStuckProc_MaskGrab_SearchBsp(struct Driver *d, struct ScratchpadS
 	sps->Union.QuadBlockColl.pos.z = topZ;
 
 	sps->Union.QuadBlockColl.searchFlags = 0;
-	if (gGT->numPlyrCurrGame < 3)
+	// Custom levels force sdata->levelLOD to 1P and ship no LOW LOD
+	// collision data. In 3P/4P the retail guard would skip HIGH LOD and
+	// the collision search would run against garbage, leaving the driver
+	// frozen in the rev-engine phase. Same fix as VehBirth_TeleportSelf.
+	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
 	{
 		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
 	}
