@@ -1,5 +1,10 @@
 #include <common.h>
 #include "../RenderLevel/DrawLevelOvr_shared.h"
+extern void DrawLevelOvr1P_SetPlayerIndexOverride(int index);
+extern void NativeGpu_FlushAndDrawAllSplits(void);
+extern void NativeGpu_SetActiveClipRect(int x, int y, int w, int h);
+extern void NativeGpu_FlushAndDrawAllSplits(void);
+extern void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList, const struct TextureLayout *waterEnvMap);
 
 enum Ovr229DrawLevelConstants
 {
@@ -340,6 +345,23 @@ static int DrawLevelOvr4P_ConsumeClipRecords(struct PushBuffer *pb, struct PrimM
 void DrawLevelOvr4P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspList, struct PrimMem *primMem, const int *visFaceList0, const int *visFaceList1,
                     const int *visFaceList2, const int *visFaceList3, const struct TextureLayout *waterEnvMap)
 {
+#if defined(CTR_NATIVE)
+	if (LevelRegistry_ShouldForceHiLod())
+	{
+		const int *visFaceLists[4] = {visFaceList0, visFaceList1, visFaceList2, visFaceList3};
+		struct DrawLevelOvr1PRenderList *renderLists = LevRenderList;
+
+		for (int i = 0; i < 4; i++)
+		{
+			if (visFaceLists[i] == NULL) continue;
+			NativeGpu_SetActiveClipRect(pb[i].rect.x, pb[i].rect.y, pb[i].rect.w, pb[i].rect.h);
+			DrawLevelOvr1P_SetPlayerIndexOverride(i);
+			DrawLevelOvr1P(&renderLists[i], &pb[i], bspList, primMem, visFaceLists[i], waterEnvMap);
+		}
+		DrawLevelOvr1P_SetPlayerIndexOverride(-1);
+		return;
+	}
+#endif
 	struct DrawLevelOvr1PRenderList *renderLists = LevRenderList;
 	struct mesh_info *mesh = (struct mesh_info *)bspList;
 	u8 *clipCursors[4];

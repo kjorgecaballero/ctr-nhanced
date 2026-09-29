@@ -93,13 +93,13 @@ typedef struct
 	bool psxDrawMaskSet;
 	bool psxKeepTextureAlpha;
 
-	u16 startVertex;
-	u16 numVerts;
+	u32 startVertex;
+	u32 numVerts;
 
 	const char *debugText;
 } GPUDrawSplit;
 
-#define MAX_DRAW_SPLITS 16384
+#define MAX_DRAW_SPLITS 32768
 
 typedef struct
 {
@@ -139,6 +139,29 @@ struct NativeGpuSnapshot
 int NativeGpu_HasPendingSplits(void)
 {
 	return s_gpu.splitIndex > 0;
+}
+
+
+void NativeGpu_SetActiveClipRect(int x, int y, int w, int h)
+{
+	activeDrawEnv.clip.x = (s16)x;
+	activeDrawEnv.clip.y = (s16)y;
+	activeDrawEnv.clip.w = (s16)w;
+	activeDrawEnv.clip.h = (s16)h;
+	activeDrawEnv.ofs[0] = (s16)x;
+	activeDrawEnv.ofs[1] = (s16)y;
+}
+
+void NativeGpu_SetActiveViewport(int x, int y, int w, int h)
+{
+	activeDrawEnv.clip.x = (s16)x;
+	activeDrawEnv.clip.y = (s16)y;
+	activeDrawEnv.clip.w = (s16)w;
+	activeDrawEnv.clip.h = (s16)h;
+	activeDispEnv.disp.x = (s16)x;
+	activeDispEnv.disp.y = (s16)y;
+	activeDispEnv.disp.w = (s16)w;
+	activeDispEnv.disp.h = (s16)h;
 }
 
 void NativeGpu_RegisterCustomTexture(u16 idx, TextureID tex, int width, int height)
@@ -814,12 +837,14 @@ internal void NativeGpu_PrepareFramebufferFeedback(int tpage)
 	// polygons consume the VRAM texture.
 	if (NativeGpu_HasPendingSplits())
 	{
-		DrawAllSplits();
+		NativeGpu_FlushAndDrawAllSplits();
 	}
 
 	NativeRenderer_StoreFrameBuffer(activeDrawEnv.clip.x, activeDrawEnv.clip.y, activeDrawEnv.clip.w, activeDrawEnv.clip.h);
 	s_gpu.framebufferFeedbackRunActive = true;
 }
+
+void NativeGpu_FlushAndDrawAllSplits(void);
 
 internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 {
@@ -833,6 +858,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	{
 		s_gpu.framebufferFeedbackRunActive = false;
 	}
+
 
 	GPUDrawSplit *curSplit = &s_gpu.splits[s_gpu.splitIndex];
 
@@ -904,6 +930,10 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	split->psxDrawMaskSet = s_gpu.psxDrawMaskSet;
 	split->drawenv = activeDrawEnv;
 	split->dispenv = activeDispEnv;
+	{ static int s = 0; if (s < 200 && split->drawenv.clip.w != 512 && split->drawenv.clip.w != 1024) { s++; fprintf(stderr, "[SPL-RACE] clip=(%d,%d,%d,%d) disp=(%d,%d,%d,%d) dfe=%d\n",
+		split->drawenv.clip.x, split->drawenv.clip.y, split->drawenv.clip.w, split->drawenv.clip.h,
+		split->dispenv.disp.x, split->dispenv.disp.y, split->dispenv.disp.w, split->dispenv.disp.h,
+		split->drawenv.dfe); } }
 	split->debugText = s_gpu.currentSplitDebugText;
 
 	split->drawenv.tw.w = overrideW;
@@ -989,7 +1019,7 @@ internal void SetPSXMaskState(u32 code)
 //
 // Draws all polygons after AggregatePTAG
 //
-void DrawAllSplits()
+void NativeGpu_FlushAndDrawAllSplits(void)
 {
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_DRAW_ALL_SPLITS);
 	// CPU-originated LoadImage, MoveImage, and fill commands are GPU-visible
@@ -1157,6 +1187,7 @@ void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive)
 		u8 *basePacket = (u8 *)p;
 		while (true)
 		{
+
 			const int tagLength = getlen(basePacket);
 			if (tagLength > 0)
 			{
@@ -1917,7 +1948,10 @@ int ParsePrimitive(P_TAG *polyTag)
 
 			if (NativeGpu_HasPendingSplits())
 			{
-				DrawAllSplits();
+			{
+				extern void NativeGpu_FlushAndDrawAllSplits(void);
+				NativeGpu_FlushAndDrawAllSplits();
+			}
 			}
 			MoveImage(&rect, x, y);
 			primLength = 5;
@@ -1937,7 +1971,7 @@ int ParsePrimitive(P_TAG *polyTag)
 
 			if (NativeGpu_HasPendingSplits())
 			{
-				DrawAllSplits();
+				NativeGpu_FlushAndDrawAllSplits();
 			}
 			ClearImage(&rect, fill->r0, fill->g0, fill->b0);
 			primLength = 3;

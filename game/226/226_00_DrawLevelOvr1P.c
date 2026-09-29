@@ -82,6 +82,13 @@ static u32 sDrawLevelOvr1P_PrimReserveBias;
 static u32 sDrawLevelOvr1P_MosaicReloadSpanOverride;
 static int sDrawLevelOvr1P_ListHandlersSeedRenderedCursor;
 
+static int sDrawLevelOvr1P_PlayerIndexOverride = -1;
+
+void DrawLevelOvr1P_SetPlayerIndexOverride(int index)
+{
+	sDrawLevelOvr1P_PlayerIndexOverride = index;
+}
+
 static u32 DrawLevelOvr1P_ReadPackedWord(const void *src)
 {
 	const u8 *bytes = (const u8 *)src;
@@ -8396,6 +8403,7 @@ static int DrawLevelOvr1P_EmitBspListQuadBlock(struct PushBuffer *pb, struct Pri
 static int DrawLevelOvr1P_DrawBspListQuadBlocks(struct VisMemBspListNode *slot, struct PushBuffer *pb, struct mesh_info *mesh, struct PrimMem *primMem,
                                                 const int *visFaceList, int role)
 {
+	{ static int s = 0; if (s < 30) { s++; fprintf(stderr, "[DBSP] role=%d slot=%p firstBsp=%p\n", role, (void*)slot, (void*)(slot ? slot->bsp : 0)); } }
 	if (sDrawLevelOvr1P_ListHandlersSeedRenderedCursor)
 	{
 		DrawLevelOvr1P_SetRenderedListCursor(DrawLevelOvr1P_GetRenderedOverflowBase());
@@ -9799,8 +9807,9 @@ void DrawLevelOvr1P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspL
 		return;
 	}
 
-	DrawLevelOvr1P_SetClipRecordStart(data.PtrClipBuffer[0]);
-	DrawLevelOvr1P_SetRenderedOverflowBase(sdata_static.quadBlocksRendered);
+	int playerIndex = (sDrawLevelOvr1P_PlayerIndexOverride >= 0) ? sDrawLevelOvr1P_PlayerIndexOverride : 0;
+	DrawLevelOvr1P_SetClipRecordStart(data.PtrClipBuffer[playerIndex]);
+	DrawLevelOvr1P_SetRenderedOverflowBase((struct QuadBlock **)data.ptrRenderedQuadblockDestination_forEachPlayer[playerIndex]);
 	DrawLevelOvr1P_SetPrimReserveBias(0);
 	DrawLevelOvr1P_SetListHandlersSeedRenderedCursor(1);
 	Ovr226_800a0d20_SeedEntryScratchPointers(renderList, pb);

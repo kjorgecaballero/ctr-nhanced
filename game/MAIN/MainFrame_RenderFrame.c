@@ -1316,7 +1316,25 @@ void RenderSubmit(struct GameTracker *gGT)
 
 	void *ot = &gGT->pushBuffer[0].ptrOT[0x3ff];
 
-	DrawOTag(ot);
+#if defined(CTR_NATIVE)
+    if (LevelRegistry_ShouldForceHiLod() && gGT->numPlyrCurrGame > 1)
+    {
+        extern void NativeGpu_SetActiveClipRect(int x, int y, int w, int h);
+        extern void ParsePrimitivesLinkedList(u32 *p, int singlePrimitive);
+        extern void NativeGpu_FlushAndDrawAllSplits(void);
+        for (int i = 0; i < gGT->numPlyrCurrGame; i++)
+        {
+            struct PushBuffer *pb = &gGT->pushBuffer[i];
+            NativeGpu_SetActiveClipRect(pb->rect.x, pb->rect.y, pb->rect.w, pb->rect.h);
+            ParsePrimitivesLinkedList(&pb->ptrOT[0x3ff], 0);
+            NativeGpu_FlushAndDrawAllSplits();
+        }
+    }
+    else
+#endif
+    {
+        DrawOTag(ot);
+    }
 
 	gGT->frameTimer_notPaused = gGT->frameTimer_VsyncCallback;
 

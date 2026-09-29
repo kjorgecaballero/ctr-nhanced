@@ -186,6 +186,13 @@ static int RenderLists_Select3P4PSlot(const struct BSP *bsp)
 		return 2;
 	}
 
+#if defined(CTR_NATIVE)
+	if (LevelRegistry_ShouldForceHiLod())
+	{
+		return 1;
+	}
+#endif
+
 	if ((bsp->flag & BSP_RENDER_LEAF_FLAG_DYNAMIC_SUBDIV) != 0)
 	{
 		return 3;

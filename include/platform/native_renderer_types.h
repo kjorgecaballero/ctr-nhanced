@@ -20,7 +20,7 @@
 #define TPAGE_WIDTH            (256)
 #define TPAGE_HEIGHT           (256)
 
-#define MAX_VERTEX_BUFFER_SIZE (1u << 16)
+#define MAX_VERTEX_BUFFER_SIZE (1u << 19)
 
 typedef struct
 {
