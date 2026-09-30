@@ -2115,12 +2115,22 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	idpp->instFlags = queuedFlags;
 	return rbi + 1;
 }
-
 void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState, void *rbi, u32 lodMask, u8 numPlyr, int gameMode1)
 {
-	struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
-	struct RenderBucketQueueState queueState = {0};
-	int count = (int)(u8)numPlyr;
+    struct RenderBucketEntry *entry = (struct RenderBucketEntry *)rbi;
+    struct RenderBucketQueueState queueState = {0};
+    int count = (int)(u8)numPlyr;
+
+#ifdef CTR_NATIVE
+    // Custom LEVs exported for 1P only carry lodMask=1 flags on their
+    // instances. Retail 3P/4P uses lodMask=4, so crates/items get
+    // silently skipped. When the active level is custom, accept every
+    // LOD bit so the queue doesn't drop them.
+    if (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL)
+    {
+        lodMask = 0xFFu;
+    }
+#endif
 
 	// Retail enters QueueDraw through a scratch/register
 	// ABI; native passes the same state as explicit C parameters.
