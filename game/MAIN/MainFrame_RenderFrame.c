@@ -976,8 +976,14 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 
 		// 226-229
 		DrawLevelOvr2P(&gGT->LevRenderLists[0], &gGT->pushBuffer[0], (struct BSP *)ptr_mesh_info, &gGT->backBuffer->primMem, gGT->visMem1->visFaceList[0],
-		               gGT->visMem1->visFaceList[1],
-		               level1->ptr_tex_waterEnvMap); // waterEnvMap?
+			       gGT->visMem1->visFaceList[1],
+			       level1->ptr_tex_waterEnvMap); // waterEnvMap?
+
+		// CTR Native: retail only draws the skybox in 1P (PS1 fillrate
+		// decision). DrawSky_Full is per-viewport (pb->matrix_ViewProj,
+		// pb->ptrOT[0x3ff], pb+0x20 frustum bounds), so loop it.
+		for (i = 0; i < numPlyrCurrGame; i++)
+			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
 
 		goto SkyboxGlow;
 	}
@@ -1018,6 +1024,12 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		DrawLevelOvr3P(&gGT->LevRenderLists[0], &gGT->pushBuffer[0], (struct BSP *)ptr_mesh_info, &gGT->backBuffer->primMem, gGT->visMem1->visFaceList[0],
 		               gGT->visMem1->visFaceList[1], gGT->visMem1->visFaceList[2],
 		               level1->ptr_tex_waterEnvMap); // waterEnvMap?
+
+		// CTR Native: retail only draws the skybox in 1P (PS1 fillrate
+		// decision). DrawSky_Full is per-viewport (pb->matrix_ViewProj,
+		// pb->ptrOT[0x3ff], pb+0x20 frustum bounds), so loop it.
+		for (i = 0; i < numPlyrCurrGame; i++)
+			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
 	}
 
 	else // 4P mode
@@ -1026,6 +1038,10 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		DrawLevelOvr4P(&gGT->LevRenderLists[0], &gGT->pushBuffer[0], (struct BSP *)ptr_mesh_info, &gGT->backBuffer->primMem, gGT->visMem1->visFaceList[0],
 		               gGT->visMem1->visFaceList[1], gGT->visMem1->visFaceList[2], gGT->visMem1->visFaceList[3],
 		               level1->ptr_tex_waterEnvMap); // waterEnvMap?
+
+		// CTR Native: see 3P branch.
+		for (i = 0; i < numPlyrCurrGame; i++)
+			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
 	}
 
 SkyboxGlow:
