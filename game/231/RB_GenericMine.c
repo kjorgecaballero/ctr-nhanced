@@ -85,15 +85,12 @@ void RB_GenericMine_ThTick(struct Thread *t)
 
 #ifdef CTR_NATIVE
         {
-                static int s_mhTickLog = 0;
-                if ((s_mhTickLog++ % 30) == 0 && inst->model->headers != NULL)
-                        fprintf(stderr, "[MineMH-tick] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x\n",
-                                sdata->gGT->numPlyrCurrGame, (int)model,
-                                (void*)inst->model->headers,
-                                inst->model->headers->scale.x,
-                                inst->model->headers->scale.y,
-                                inst->model->headers->scale.z,
-                                inst->model->headers->flags);
+                static int s_mineTickLog = 0;
+                if ((s_mineTickLog++ % 15) == 0)
+                        fprintf(stderr, "[MineTick] t=%p inst=%p model=%d scale=(%d,%d,%d) flags=0x%x animFrame=%d\n",
+                                (void*)t, (void*)inst, (int)model,
+                                inst->scale.x, inst->scale.y, inst->scale.z,
+                                inst->flags, inst->animFrame);
         }
 #endif
 
@@ -157,17 +154,19 @@ void RB_GenericMine_ThTick(struct Thread *t)
         }
 
 #ifdef CTR_NATIVE
-        if (inst->model != NULL && (inst->model->id == STATIC_CRATE_TNT
-            || inst->model->id == STATIC_BEAKER_GREEN
-            || inst->model->id == STATIC_BEAKER_RED))
-        {
-                static int s_animLog = 0;
-                if ((s_animLog++ % 20) == 0)
-                        fprintf(stderr, "[Anim] model=%d numFrames=%d animFrame=%d animIndex=%d mh=%p\n",
-                                (int)inst->model->id, numFrames, (int)inst->animFrame,
-                                (int)inst->animIndex,
-                                (void*)inst->model->headers);
-        }
+	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
+	{
+		static int s_mhLog = 0;
+		if ((s_mhLog++ % 15) == 0)
+			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
+				sdata->gGT->numPlyrCurrGame, (int)model,
+				(void*)inst->model->headers,
+				inst->model->headers->scale.x,
+				inst->model->headers->scale.y,
+				inst->model->headers->scale.z,
+				inst->model->headers->flags,
+				inst->model->headers->maxDistanceLOD);
+	}
 #endif
 
         // if animation is not over
@@ -521,7 +520,7 @@ LAB_800ad17c:
 
 void RB_GenericMine_ThDestroy(struct Thread *t, struct Instance *inst, struct MineWeapon *mw)
 {
-	u32 model;
+	u32 model;	model = inst->model->id;
 	u16 param;
 
 	model = inst->model->id;	model = inst->model->id;

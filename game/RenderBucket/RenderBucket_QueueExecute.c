@@ -2051,21 +2051,6 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
         idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
         pb = idpp->pushBuffer;
 
-#ifdef CTR_NATIVE
-        {
-                static int s_itemQLog = 0;
-                if (inst->model != NULL && (inst->model->id == STATIC_CRATE_TNT
-                    || inst->model->id == STATIC_BEAKER_GREEN
-                    || inst->model->id == STATIC_BEAKER_RED))
-                {
-                        if ((s_itemQLog++ % 15) == 0)
-                                fprintf(stderr, "[ItemQ] inst=%p player=%d model=%d scale=(%d,%d,%d) pb=%p\n",
-                                        (void*)inst, playerIndex, (int)inst->model->id,
-                                        inst->scale.x, inst->scale.y, inst->scale.z,
-                                        (void*)pb);
-                }
-        }
-#endif
 
 	if ((queuedFlags & lodMask) == 0)
 	{
