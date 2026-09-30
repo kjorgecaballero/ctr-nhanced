@@ -83,7 +83,18 @@ void RB_GenericMine_ThTick(struct Thread *t)
         mw = inst->thread->object;
         model = inst->model->id;
 
-        boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;
+#ifdef CTR_NATIVE
+        {
+                static int s_mineTickLog = 0;
+                if ((s_mineTickLog++ % 15) == 0)
+                        fprintf(stderr, "[MineTick] t=%p inst=%p model=%d scale=(%d,%d,%d) flags=0x%x animFrame=%d\n",
+                                (void*)t, (void*)inst, (int)model,
+                                inst->scale.x, inst->scale.y, inst->scale.z,
+                                inst->flags, inst->animFrame);
+        }
+#endif
+
+        boolPotion = (u32)(model - STATIC_BEAKER_RED) < 2;  
 
 	// if weapon is "thrown" like Komodo Joe
 	if ((mw->flags & MINE_WEAPON_FLAG_THROWN) != 0)
@@ -120,21 +131,43 @@ void RB_GenericMine_ThTick(struct Thread *t)
 		mw->cooldown = 0;
 	}
 
-	numFrames = (int)INSTANCE_GetNumAnimFrames(inst, 0);
+        numFrames = (int)INSTANCE_GetNumAnimFrames(inst, 0);
 
-	// if animation is not over
-	if (inst->animFrame < numFrames - 1)
-	{
-		// increment animation frame
-		inst->animFrame++;
-	}
-	// if animation is over
-	else
-	{
-		// restart animation
-		inst->animFrame = 0;
-	}
+        // Custom tracks sometimes load a ModelHeader for the retail TNT/beaker
+        // that reports 0 animations. That leaves animFrame stuck at 0 (the
+        // squished landing pose). Force a fallback cycle length so animFrame
+        // advances through the model's animation data.
+        if (numFrames <= 1)
+        {
+                numFrames = 15;
+        }
 
+#ifdef CTR_NATIVE
+        if (inst->model != NULL && (inst->model->id == STATIC_CRATE_TNT
+            || inst->model->id == STATIC_BEAKER_GREEN
+            || inst->model->id == STATIC_BEAKER_RED))
+        {
+                static int s_animLog = 0;
+                if ((s_animLog++ % 20) == 0)
+                        fprintf(stderr, "[Anim] model=%d numFrames=%d animFrame=%d animIndex=%d mh=%p\n",
+                                (int)inst->model->id, numFrames, (int)inst->animFrame,
+                                (int)inst->animIndex,
+                                (void*)inst->model->headers);
+        }
+#endif
+
+        // if animation is not over
+        if (inst->animFrame < numFrames - 1)
+        {
+                // increment animation frame
+                inst->animFrame++;
+        }
+        // if animation is over
+        else
+        {
+                // restart animation
+                inst->animFrame = 0;
+        }
 	// increment posY by velY * time
 	// do NOT use parenthesis
 	inst->matrix.t[1] += (mw->velocity.y * gGT->elapsedTimeMS) >> 5;
