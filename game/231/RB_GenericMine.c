@@ -85,6 +85,20 @@ void RB_GenericMine_ThTick(struct Thread *t)
 
 #ifdef CTR_NATIVE
         {
+                static int s_mhTickLog = 0;
+                if ((s_mhTickLog++ % 30) == 0 && inst->model->headers != NULL)
+                        fprintf(stderr, "[MineMH-tick] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x\n",
+                                sdata->gGT->numPlyrCurrGame, (int)model,
+                                (void*)inst->model->headers,
+                                inst->model->headers->scale.x,
+                                inst->model->headers->scale.y,
+                                inst->model->headers->scale.z,
+                                inst->model->headers->flags);
+        }
+#endif
+
+#ifdef CTR_NATIVE
+        {
                 static int s_mineTickLog = 0;
                 if ((s_mineTickLog++ % 15) == 0)
                         fprintf(stderr, "[MineTick] t=%p inst=%p model=%d scale=(%d,%d,%d) flags=0x%x animFrame=%d\n",
@@ -461,6 +475,22 @@ LAB_800ad17c:
 	// instance -> model -> modelID
 	model = inst->model->id;
 
+#ifdef CTR_NATIVE
+	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
+	{
+		static int s_mhLog = 0;
+		if ((s_mhLog++ % 15) == 0)
+			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
+				sdata->gGT->numPlyrCurrGame, (int)model,
+				(void*)inst->model->headers,
+				inst->model->headers->scale.x,
+				inst->model->headers->scale.y,
+				inst->model->headers->scale.z,
+				inst->model->headers->flags,
+				inst->model->headers->maxDistanceLOD);
+	}
+#endif
+
 	if (model == PU_EXPLOSIVE_CRATE)
 	{
 		// glass shatter sound
@@ -494,8 +524,23 @@ void RB_GenericMine_ThDestroy(struct Thread *t, struct Instance *inst, struct Mi
 	u32 model;
 	u16 param;
 
-	model = inst->model->id;
+	model = inst->model->id;	model = inst->model->id;
 
+#ifdef CTR_NATIVE
+	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
+	{
+		static int s_mhLog = 0;
+		if ((s_mhLog++ % 15) == 0)
+			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
+				sdata->gGT->numPlyrCurrGame, (int)model,
+				(void*)inst->model->headers,
+				inst->model->headers->scale.x,
+				inst->model->headers->scale.y,
+				inst->model->headers->scale.z,
+				inst->model->headers->flags,
+				inst->model->headers->maxDistanceLOD);
+	}
+#endif
 	if (model == PU_EXPLOSIVE_CRATE)
 	{
 		// glass shatter

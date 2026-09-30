@@ -1183,6 +1183,16 @@ static void RenderBucket_AdjustViewPositionForMvp(struct Instance *inst, VECTOR 
 	// translation at 0x80070a8c-0x80070ac8. Near instances are shifted left by 2
 	// to match the full-scale model matrix; DRAW_HUGE shifts that translation
 	// back down.
+#ifdef CTR_NATIVE
+	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
+	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED) &&
+	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
+	    inst->thread != NULL && inst->thread->funcThTick == (void *)RB_GenericMine_ThTick)
+	{
+		// skip ×4 shift
+	}
+	else
+#endif
 	if ((s32)((u32)viewPos->vz - 0x1000u) < 0)
 	{
 		viewPos->vx = RenderBucket_MipsSll(viewPos->vx, 2);
@@ -1345,19 +1355,25 @@ static void RenderBucket_BuildM3x3(struct Instance *inst, struct ModelHeader *mh
 	scaleXYShift = 0x12 - depthShift;
 	scaleZShift = 2 - depthShift;
 	packedScaleXY = RenderBucket_ReadPackedWord(&mh->scale.x);
+	u16 mhScaleZ = (u16)mh->scale.z;
+
+
+
 
 	CTC2((packedScaleXY << 16) >> scaleXYShift, 16);
 	CTC2(0, 17);
 	CTC2(packedScaleXY >> scaleXYShift, 18);
 	CTC2(0, 19);
-	CTC2((u16)mh->scale.z >> scaleZShift, 20);
+	CTC2(mhScaleZ >> scaleZShift, 20);
 
-	scaleX = inst->scale.x;
-	scaleY = inst->scale.y;
-	scaleZ = inst->scale.z;
-	if ((inst->flags & PIXEL_LOD) != 0)
-	{
-		int pixelScale = RenderBucket_MipsAdd(viewDepth >> 1, 0x1000);
+        scaleX = inst->scale.x;
+        scaleY = inst->scale.y;
+        scaleZ = inst->scale.z;
+
+
+        if ((inst->flags & PIXEL_LOD) != 0)
+        {
+                int pixelScale = RenderBucket_MipsAdd(viewDepth >> 1, 0x1000);
 
 		scaleX = RenderBucket_MipsMulLoSra12(pixelScale, scaleX);
 		scaleY = RenderBucket_MipsMulLoSra12(pixelScale, scaleY);
@@ -1381,6 +1397,17 @@ static void RenderBucket_BuildM3x3(struct Instance *inst, struct ModelHeader *mh
 	m3 = 0;
 	m4 = scaledZ & 0xffff;
 	RenderBucket_GteScaleMatrixColumns(&m0, &m1, &m2, &m3, &m4);
+
+#ifdef CTR_NATIVE
+	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
+	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED) &&
+	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
+	    inst->thread != NULL && inst->thread->funcThTick == (void *)RB_GenericMine_ThTick)
+	{
+		m0 = 0x160; m1 = 0; m2 = 0x160; m3 = 0; m4 = 0x160;
+	}
+#endif
+
 	matrixState->m0 = m0;
 	matrixState->m1 = m1;
 	matrixState->m2 = m2;
@@ -2019,10 +2046,26 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	}
 #endif
 
-	queuedFlags = inst->flags;
-	instPlayerBase = RenderBucket_InstancePlayerBase(inst, playerIndex);
-	idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
-	pb = idpp->pushBuffer;
+        queuedFlags = inst->flags;
+        instPlayerBase = RenderBucket_InstancePlayerBase(inst, playerIndex);
+        idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
+        pb = idpp->pushBuffer;
+
+#ifdef CTR_NATIVE
+        {
+                static int s_itemQLog = 0;
+                if (inst->model != NULL && (inst->model->id == STATIC_CRATE_TNT
+                    || inst->model->id == STATIC_BEAKER_GREEN
+                    || inst->model->id == STATIC_BEAKER_RED))
+                {
+                        if ((s_itemQLog++ % 15) == 0)
+                                fprintf(stderr, "[ItemQ] inst=%p player=%d model=%d scale=(%d,%d,%d) pb=%p\n",
+                                        (void*)inst, playerIndex, (int)inst->model->id,
+                                        inst->scale.x, inst->scale.y, inst->scale.z,
+                                        (void*)pb);
+                }
+        }
+#endif
 
 	if ((queuedFlags & lodMask) == 0)
 	{
