@@ -225,6 +225,7 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 void NativeCustomRacer_PreloadMaskMusic(struct GameTracker *gGT);
 int  NativeCustomRacer_UpdateMaskMusic(void);
 void NativeCustomRacer_PauseMaskMusic(void);
+void NativeCustomRacer_StopMaskMusic(void);
 
 /* === Custom engine loop (v2 del Custom Kart SFX, ENGINE-LOOP) ===
  * Continuous engine hum with pitch modulated by speed. One VAG
@@ -238,8 +239,24 @@ void NativeCustomRacer_PauseMaskMusic(void);
  *
  * SPU range 0x1A0000-0x1C0000 (128 KB, ~28 s of ADPCM @ 8000 Hz).
  * Voice 29 is mask music; 24 dance SFX; 25-28 kart SFX. */
+/* === Custom level music (VAG loop, 1P/2P) ===
+ * One loop per level, loaded from the level manifest's "music" field.
+ * Coexists with mask music (voice 29) and engine loop (voices 30-31);
+ * when a custom mask is active, mask music mutes this loop (no stop,
+ * so the SPU cursor keeps advancing silently). */
+#define NATIVE_LEVEL_MUSIC_SPU_BASE   0x1C0000u
+#define NATIVE_LEVEL_MUSIC_SPU_END    0x200000u
+#define NATIVE_LEVEL_MUSIC_VOICE      32
+
+void NativeCustomRacer_PreloadLevelMusic(struct GameTracker *gGT);
+int  NativeCustomRacer_StartLevelMusic(void);
+int  NativeCustomRacer_UpdateLevelMusic(int maskActive);
+void NativeCustomRacer_PauseLevelMusic(void);
+void NativeCustomRacer_StopLevelMusic(void);
+void NativeCustomRacer_SetLevelMusicPitchBoost(int boost);
 #define NATIVE_ENGINE_SFX_SPU_BASE    0x1A0000u
 #define NATIVE_ENGINE_SFX_SPU_END     0x1C0000u
+
 #define NATIVE_ENGINE_SFX_VOICE_BASE  30
 #define NATIVE_ENGINE_SFX_VOICE_COUNT 2
 

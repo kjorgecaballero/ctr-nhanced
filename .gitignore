@@ -60,3 +60,14 @@ tools/custom_racers/blender_addon/ctr_racer.zip
 run.log*
 
 *.BMP
+
+# Session helpers
+*.bak
+*.bak2
+*.bak3
+*.bak4
+*.bak5
+run_recon.sh.bak
+fix_level_music_dups.py
+tools/apply_music_fixes*.py
+tools/check_ogg_hooks.py

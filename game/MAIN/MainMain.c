@@ -7,6 +7,7 @@
 #endif
 
 #include <platform/native_custom_racer.h>
+#include <platform/native_custom_music.h>
 
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 static struct NativePerfFrameInfo MainPerf_FrameInfo(struct GameTracker *gGT)
@@ -138,6 +139,10 @@ u32 main(void)
       NativeCustomRacer_PreloadKartSfx(gGT);
       NativeCustomRacer_PreloadMaskMusic(gGT);
       NativeCustomRacer_PreloadEngineSfx(gGT);
+#ifdef CTR_NATIVE
+      if (NativeCustomMusic_TryStartLevel(gGT->levelID))
+              NativeCustomMusic_SetPaused(1);
+#endif
 
 			// 9 = intro cutscene
 			// 10 = traffic lights
@@ -647,9 +652,12 @@ void StateZero()
 
 	Music_SetIntro();
 	CseqMusic_StopAll();
-	CseqMusic_Start(CSEQ_SONG_LEVEL, 0, NULL, 0, 0);
-	Music_Start(0);
+  CseqMusic_Start(CSEQ_SONG_LEVEL, 0, NULL, 0, 0);    
+  Music_Start(0);
 
+  /* Custom level music: kill CSEQ and start our VAG loop if a
+  * custom VAG was loaded for this level. See PreloadLevelMusic. */
+  NativeCustomRacer_StartLevelMusic();
 	// "Start your engines, for Sony Computer..."
 	CDSYS_XAPlay(CDSYS_XA_TYPE_EXTRA, 0x50);
 

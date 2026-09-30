@@ -5,11 +5,13 @@
 #include <stdarg.h>
 
 #include <platform/native_custom_racer.h>
+#include <LevelRegistry.h>
 #include <platform/native_renderer.h>
 #include <platform/native_gpu.h>
 #include <platform/native_glad.h>
 #include <platform/native_audio.h>
 #include <platform/native_vag.h>
+#include <platform/native_custom_music.h>
 #include <psx/libspu.h>
 #include <ovr_230.h>
 
@@ -280,11 +282,20 @@ static u32 s_maskMusicSpuAddr [NATIVE_CUSTOM_COUNT];
 static u16 s_maskMusicSpuPitch[NATIVE_CUSTOM_COUNT];
 static int s_maskMusicPlaying;
 static int s_maskMusicCharIdx;
+static int s_maskMusicDriverID = -1;   /* -1 = nadie */
 
 /* === Custom engine loop (v2 del Custom Kart SFX, ENGINE-LOOP) === */
 static u32 s_engineSfxSpuAddr [NATIVE_CUSTOM_COUNT];
 static u16 s_engineSfxSpuPitch[NATIVE_CUSTOM_COUNT];
 static int s_engineSfxVoicePlaying[NATIVE_ENGINE_SFX_VOICE_COUNT];
+
+/* === Custom level music (VAG loop, 1P/2P) ===
+ * Loaded at race start from the level's manifest "music" field. */
+static u32 s_levelMusicSpuAddr;
+static u16 s_levelMusicSpuPitch;
+static int s_levelMusicLoaded;      /* VAG is resident in SPU */
+static int s_levelMusicPlaying;     /* NativeVag_Play keyed on */
+static int s_levelMusicMuted;       /* muted by active custom mask music */
 
 static int ParseEngineID(const char *s)
 {
@@ -1715,19 +1726,73 @@ void NativeCustomRacer_PauseMaskMusic(void)
         NativeVag_UpdateVolume(NATIVE_MASK_MUSIC_VOICE, 0, 0);
 }
 
+/* Hard stop. Called at AUDIO_RACE_END and AUDIO_STOP_ALL so the mask
+ * VAG does not bleed into the podium / menu. */
+void NativeCustomRacer_StopMaskMusic(void)
+{
+    NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
+    s_maskMusicPlaying = 0;
+    s_maskMusicCharIdx = -1;
+    s_maskMusicDriverID = -1;
+    NativeCustomMusic_SetPaused(0);
+    /* No tocar cseqHighestIndex: ver UpdateMaskMusic. */
+}
+
 int NativeCustomRacer_UpdateMaskMusic(void)
 {
     struct GameTracker *gGT = sdata->gGT;
     if (gGT == NULL)
         return 0;
 
+    /* --- CASO 1: ya está corriendo. Solo chequeamos que el driver
+     *             original conserve ACTION_MASK_WEAPON. heldItemID
+     *             ya cambió en el frame que usó el botón, por eso
+     *             no lo chequeamos acá. --------------------------- */
+    if (s_maskMusicPlaying)
+    {
+        struct Driver *d = NULL;
+        if (s_maskMusicDriverID >= 0 && s_maskMusicDriverID < 8)
+            d = gGT->drivers[s_maskMusicDriverID];
+
+        if (d != NULL && (d->actionsFlagSet & ACTION_MASK_WEAPON) != 0)
+        {
+            int vol = ((int)sdata->vol_Music * 0x3FFF) >> 7;
+            if (vol > 0x3FFF) vol = 0x3FFF;
+            if (vol < 0)      vol = 0;
+            NativeVag_UpdateVolume(NATIVE_MASK_MUSIC_VOICE, vol, vol);
+            return 1;
+        }
+
+        /* Máscara expiró. Parar VAG y restaurar OGG (si hay). */
+        NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
+        s_maskMusicPlaying = 0;
+        s_maskMusicCharIdx = -1;
+        s_maskMusicDriverID = -1;
+        sdata->cseqBoolPlay = 0;
+        NativeCustomMusic_SetPaused(0);
+        /* NO tocamos cseqHighestIndex ni Stop: retail llama
+         * Music_Adjust(0) en el siguiente frame y quiere arrancar la
+         * pista del nivel. */
+        return 0;
+    }
+
+    /* --- CASO 2: nadie la usa. Buscar quién acaba de recibir el
+     *             item MASK (heldItemID == HELD_ITEM_MASK) --------- */
     int charIdx = -1;
+    int driverID = -1;
+
     for (int i = 0; i < gGT->numPlyrCurrGame; i++)
     {
         struct Driver *d = gGT->drivers[i];
         if (d == NULL)
             continue;
+
+        /* Solo el frame exacto en que el item está en mano y todavía
+         * no se apretó el botón. En OOB, ACTION_MASK_WEAPON se setea
+         * pero heldItemID != MASK. */
         if ((d->actionsFlagSet & ACTION_MASK_WEAPON) == 0)
+            continue;
+        if (d->heldItemID != HELD_ITEM_MASK)
             continue;
 
         int charID = data.characterIDs[d->driverID];
@@ -1740,65 +1805,45 @@ int NativeCustomRacer_UpdateMaskMusic(void)
             continue;
 
         charIdx = idx;
+        driverID = d->driverID;
         break;
     }
 
     if (charIdx >= 0)
     {
-        /* Scale the SPU volume (0..0x3FFF) by the Music slider
-         * (sdata->vol_Music, 0..255). Retail mask music goes
-         * through CSEQ, which applies the same scaling. Computed
-         * every frame so the slider updates live. */
-        int vol = ((int)sdata->vol_Music * 0x3FFF) >> 8;
+        int vol = ((int)sdata->vol_Music * 0x3FFF) >> 7;
         if (vol > 0x3FFF) vol = 0x3FFF;
         if (vol < 0)      vol = 0;
 
-        if (!s_maskMusicPlaying)
-        {
-            CseqMusic_StopAll();
-            sdata->cseqBoolPlay = 0;
-            sdata->cseqHighestIndex = -1;
-            sdata->cseqTempo = 0;
+        NativeVag_Play(s_maskMusicSpuAddr[charIdx],
+                       NATIVE_MASK_MUSIC_VOICE,
+                       vol, vol,
+                       s_maskMusicSpuPitch[charIdx],
+                       /*loop=*/1);
 
-            NativeVag_Play(s_maskMusicSpuAddr[charIdx],
-                           NATIVE_MASK_MUSIC_VOICE,
-                           vol, vol,
-                           s_maskMusicSpuPitch[charIdx],
-                           /*loop=*/1);
+        s_maskMusicPlaying  = 1;
+        s_maskMusicCharIdx  = charIdx;
+        s_maskMusicDriverID = driverID;
 
-            s_maskMusicPlaying = 1;
-            s_maskMusicCharIdx = charIdx;
-            s_maskMusicPlaying = 1;
-            s_maskMusicCharIdx = charIdx;
+        NativeCustomMusic_SetPaused(1);
+
+        /* Parar el pool CSEQ del NIVEL y resetear el índice. Esto hace
+         * que cuando la máscara expire, el próximo Music_Adjust(0)
+         * desde retail vea -1 != 0 y arranque la pista desde 0
+         * (comportamiento retail: la música reinicia tras la máscara). */
+        CseqMusic_StopAll();
+        sdata->cseqHighestIndex = -1;
+        sdata->cseqBoolPlay = 0;
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
-            Log("[CustomRacer] mask music start: charIdx=%d spu=0x%X pitch=0x%X\n",
-                charIdx, s_maskMusicSpuAddr[charIdx],
-                s_maskMusicSpuPitch[charIdx]);
+        Log("[CustomRacer] mask music start: charIdx=%d spu=0x%X pitch=0x%X\n",
+            charIdx, s_maskMusicSpuAddr[charIdx],
+            s_maskMusicSpuPitch[charIdx]);
 #endif
-        }
-        else
-        {
-            /* Slider may have moved while the loop is playing.
-             * Update the L/R registers without retriggering. */
-            NativeVag_UpdateVolume(NATIVE_MASK_MUSIC_VOICE, vol, vol);
-        }
 
         return 1;
     }
 
-    if (s_maskMusicPlaying)
-    {
-        NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
-        s_maskMusicPlaying = 0;
-        s_maskMusicCharIdx = -1;
-        sdata->cseqBoolPlay = 0;
-        sdata->cseqHighestIndex = -1;
-
-#if defined(CTR_DEBUG_PODIUM_JUMP)
-        Log("[CustomRacer] mask music stop\n");
-#endif
-    }
     return 0;
 }
 
@@ -1894,6 +1939,197 @@ void NativeCustomRacer_PreloadEngineSfx(struct GameTracker *gGT)
     }
 }
 
+/* === Custom level music (VAG loop, 1P/2P) === */
+
+void NativeCustomRacer_PreloadLevelMusic(struct GameTracker *gGT)
+{
+    s_levelMusicSpuAddr  = 0;
+    s_levelMusicSpuPitch = 0;
+    s_levelMusicLoaded   = 0;
+    s_levelMusicPlaying  = 0;
+    s_levelMusicMuted    = 0;
+
+    NativeVag_Stop(NATIVE_LEVEL_MUSIC_VOICE);
+
+    if (gGT == NULL)
+        return;
+    if (sdata->boolAudioEnabled == 0)
+        return;
+
+    /* LevelRegistry returns a path without the "assets/" prefix. */
+    const char *rel = LevelRegistry_GetMusic(gGT->levelID);
+    if (rel == NULL)
+        return;
+
+    char path[256];
+    if (snprintf(path, sizeof(path), "assets/%s", rel)
+        >= (int)sizeof(path))
+        return;
+
+    /* Same probe as PreloadMaskMusic / PreloadEngineSfx. */
+    FILE *f = fopen(path, "rb");
+    if (f == NULL)
+        return;
+    u8 hdr[20] = {0};
+    size_t got = fread(hdr, 1, sizeof(hdr), f);
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    fclose(f);
+    if (file_size <= 48 || got < 20)
+        return;
+
+    u32 rate = (u32)hdr[0x10]
+             | ((u32)hdr[0x11] << 8)
+             | ((u32)hdr[0x12] << 16)
+             | ((u32)hdr[0x13] << 24);
+    u16 pitch = 0x1000;
+    if (rate > 0)
+        pitch = (u16)(((u64)rate * 0x1000u) / 44100u);
+
+    u32 needed = (u32)(file_size - 48);
+    needed = (needed + 15u) & ~15u;
+
+    if (NATIVE_LEVEL_MUSIC_SPU_BASE + needed > NATIVE_LEVEL_MUSIC_SPU_END)
+    {
+        Log("[CustomRacer] level music VAG too large "
+            "(need %u at 0x%X, ceiling 0x%X), dropped %s\n",
+            needed, NATIVE_LEVEL_MUSIC_SPU_BASE,
+            NATIVE_LEVEL_MUSIC_SPU_END, path);
+        return;
+    }
+
+    u32 loaded = NativeVag_Load(path, NATIVE_LEVEL_MUSIC_SPU_BASE, NULL);
+    if (loaded == 0)
+        return;
+
+    s_levelMusicSpuAddr  = loaded;
+    s_levelMusicSpuPitch = pitch;
+    s_levelMusicLoaded   = 1;
+
+    Log("[CustomRacer] level music VAG: levelID=%d spu=0x%X "
+        "size=%u rate=%u pitch=0x%X path=%s\n",
+        gGT->levelID, loaded, needed, rate, pitch, path);
+}
+
+/* Called from MainMain.c right after CseqMusic_Start(CSEQ_SONG_LEVEL).
+ * If a custom VAG is loaded for the current level, kill retail CSEQ
+ * and start the VAG loop. Returns 1 if it took over, 0 if retail
+ * should keep playing. */
+int NativeCustomRacer_StartLevelMusic(void)
+{
+    if (!s_levelMusicLoaded)
+        return 0;
+    if (sdata->boolAudioEnabled == 0)
+        return 0;
+
+    /* Custom level music plays on a single SPU voice, so it lacks the
+     * multichannel summation of CSEQ. Boost the effective gain to match
+     * retail loudness; the Music slider still scales it live. */
+    int vol = ((int)sdata->vol_Music * 0x7FFF) >> 8;
+    if (vol > 0x7FFF) vol = 0x7FFF;
+    if (vol < 0)      vol = 0;
+
+    CseqMusic_StopAll();
+    sdata->cseqBoolPlay = 0;
+    sdata->cseqHighestIndex = -1;
+    sdata->cseqTempo = 0;
+
+    NativeVag_Play(s_levelMusicSpuAddr, NATIVE_LEVEL_MUSIC_VOICE,
+                   vol, vol, s_levelMusicSpuPitch, /*loop=*/1);
+    s_levelMusicPlaying = 1;
+    s_levelMusicMuted   = 0;
+    NativeCustomRacer_SetLevelMusicPitchBoost(0);
+
+    Log("[CustomRacer] level music start: levelID=%d spu=0x%X pitch=0x%X\n",
+        sdata->gGT->levelID, s_levelMusicSpuAddr, s_levelMusicSpuPitch);
+    return 1;
+}
+
+/* Called every frame from Audio_SetMaskSong during RACING states.
+ * maskActive: 1 if UpdateMaskMusic() is currently playing mask music.
+ * Returns 1 if we are managing the level music (caller skips retail).
+ * Returns 0 if no custom level music is loaded (caller does retail). */
+int NativeCustomRacer_UpdateLevelMusic(int maskActive)
+{
+    if (!s_levelMusicLoaded)
+        return 0;
+
+    int vol = ((int)sdata->vol_Music * 0x7FFF) >> 8;
+    if (vol > 0x7FFF) vol = 0x7FFF;
+    if (vol < 0)      vol = 0;
+
+    if (maskActive)
+    {
+        /* Mask music takes over. Mute the level loop without stopping
+         * it, so the SPU cursor keeps advancing and the loop resumes
+         * mid-sample when the mask expires. */
+        if (s_levelMusicPlaying && !s_levelMusicMuted)
+        {
+            NativeVag_UpdateVolume(NATIVE_LEVEL_MUSIC_VOICE, 0, 0);
+            s_levelMusicMuted = 1;
+        }
+        return 1;
+    }
+
+    /* Mask off. Start or resume the loop. */
+    if (!s_levelMusicPlaying)
+    {
+        CseqMusic_StopAll();
+        sdata->cseqBoolPlay = 0;
+        sdata->cseqHighestIndex = -1;
+        sdata->cseqTempo = 0;
+
+        NativeVag_Play(s_levelMusicSpuAddr, NATIVE_LEVEL_MUSIC_VOICE,
+                       vol, vol, s_levelMusicSpuPitch, /*loop=*/1);
+        s_levelMusicPlaying = 1;
+        s_levelMusicMuted   = 0;
+    }
+    else
+    {
+        /* Track the Music slider live, and unmute if mask just expired. */
+        NativeVag_UpdateVolume(NATIVE_LEVEL_MUSIC_VOICE, vol, vol);
+        s_levelMusicMuted = 0;
+    }
+
+    /* Final lap -> pitch +4 (sounds like retail MUSIC_LAST_LAP). */
+    int boost = (sdata->audioState == AUDIO_FINAL_LAP) ? 4 : 0;
+    NativeCustomRacer_SetLevelMusicPitchBoost(boost);
+
+    return 1;
+}
+
+/* Called from MainFrame.c PAUSE_ALL branch. Audio_Update1 does not run
+ * during pause, so UpdateLevelMusic does not run either. Mute the loop
+ * (do not stop) so it resumes mid-sample on unpause. */
+void NativeCustomRacer_PauseLevelMusic(void)
+{
+    if (s_levelMusicPlaying)
+        NativeVag_UpdateVolume(NATIVE_LEVEL_MUSIC_VOICE, 0, 0);
+}
+
+/* Hard stop. Called when the race ends (AUDIO_RACE_END / AUDIO_STOP_ALL)
+ * so the loop does not bleed into the victory XA / menu music. */
+void NativeCustomRacer_StopLevelMusic(void)
+{
+    NativeVag_Stop(NATIVE_LEVEL_MUSIC_VOICE);
+    s_levelMusicPlaying = 0;
+    s_levelMusicMuted   = 0;
+}
+
+/* Final-lap pitch boost. boost=0 -> normal, boost=N -> pitch * (16+N)/16. */
+void NativeCustomRacer_SetLevelMusicPitchBoost(int boost)
+{
+    if (!s_levelMusicPlaying || s_levelMusicMuted)
+        return;
+
+    u32 pitch = s_levelMusicSpuPitch;
+    if (boost > 0)
+        pitch = (pitch * (16 + boost)) / 16;
+    if (pitch > 0x3FFF) pitch = 0x3FFF;
+
+    NativeVag_UpdatePitch(NATIVE_LEVEL_MUSIC_VOICE, (int)pitch);
+}
+
 int NativeCustomRacer_UpdateEngineSfx(struct Driver *d, int volume,
                                       int pitch_mult16)
 {
@@ -1955,11 +2191,12 @@ int NativeCustomRacer_UpdateEngineSfx(struct Driver *d, int volume,
     return 1;
 }
 
+/* === Custom level music (VAG loop, 1P/2P) === */
+
 /* Called from CS_Thread.c::CS_Thread_UseOpcode (ANIM_RANGE opcodes).
  * Returns the custom frame count for the given model, or 0 if the
  * model is not a custom dance (retail scripts keep their ranges). */
-u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model)
-{
+u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model){
     if (model == NULL)
         return 0;
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)

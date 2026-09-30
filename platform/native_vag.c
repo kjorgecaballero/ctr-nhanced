@@ -13,12 +13,26 @@
 #define NATIVE_VAG_TEST_ADDR  0x70000u
 #define NATIVE_VAG_TEST_VOICE 23
 
+/* Highest voice index supported. Keep in sync with
+ * NATIVE_AUDIO_SPU_VOICE_COUNT in platform/native_audio.c.
+ * 0-23 retail, 24 dance SFX, 25-28 kart SFX, 29 mask music,
+ * 30-31 engine loop, 32 level music. */
+#define NATIVE_VAG_MAX_VOICE  33
+
 /* Scratch buffer: 256 KB max VAG (enough for short SFX + short loops). */
 static u8 s_vagScratch[256 * 1024];
 
 static u32 ReadLE32(const u8 *p)
 {
     return (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
+}
+
+/* Bit mask for one SPU voice, as 64-bit so voices 32+ do not overflow
+ * u32. Requires SpuVoiceAttr.voice and NativeAudio_SpuSetKey to accept
+ * u64 as well (see psx/libspu.h and platform/native_audio.h/c). */
+static inline u64 VoiceBit(int voice)
+{
+    return (u64)1 << voice;
 }
 
 u32 NativeVag_Load(const char *path, u32 spu_addr, u32 *out_size)
@@ -76,12 +90,12 @@ u32 NativeVag_Load(const char *path, u32 spu_addr, u32 *out_size)
 
 void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pitch, int loop)
 {
-    if (voice < 0 || voice >= 32) return;
+    if (voice < 0 || voice >= NATIVE_VAG_MAX_VOICE) return;
     if (spu_addr == 0) return;
 
     SpuVoiceAttr attr;
     memset(&attr, 0, sizeof(attr));
-    attr.voice = (u32)(1u << voice);
+    attr.voice = VoiceBit(voice);
     attr.mask  = SPU_VOICE_WDSA
                | SPU_VOICE_VOLL | SPU_VOICE_VOLR
                | SPU_VOICE_PITCH
@@ -118,9 +132,9 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
     attr.s_mode = 0x01;
 
     /* Key off any previous state, set attr, then key on. */
-    NativeAudio_SpuSetKey(0, 1u << voice);
+    NativeAudio_SpuSetKey(0, VoiceBit(voice));
     NativeAudio_SpuSetVoiceAttr(&attr);
-    NativeAudio_SpuSetKey(1, 1u << voice);
+    NativeAudio_SpuSetKey(1, VoiceBit(voice));
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     if (voice == NATIVE_DANCE_SFX_SPU_VOICE)
@@ -135,11 +149,11 @@ void NativeVag_Play(u32 spu_addr, int voice, int volume_l, int volume_r, int pit
  * the L/R volume registers change. */
 void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r)
 {
-    if (voice < 0 || voice >= 32) return;
+    if (voice < 0 || voice >= NATIVE_VAG_MAX_VOICE) return;
 
     SpuVoiceAttr attr;
     memset(&attr, 0, sizeof(attr));
-    attr.voice = (u32)(1u << voice);
+    attr.voice = VoiceBit(voice);
     attr.mask  = SPU_VOICE_VOLL | SPU_VOICE_VOLR;
     attr.volume.left  = (short)volume_l;
     attr.volume.right = (short)volume_r;
@@ -151,11 +165,11 @@ void NativeVag_UpdateVolume(int voice, int volume_l, int volume_r)
  * the key. Used for engine loop pitch-modulation (v2 kart SFX). */
 void NativeVag_UpdatePitch(int voice, int pitch)
 {
-    if (voice < 0 || voice >= 32) return;
+    if (voice < 0 || voice >= NATIVE_VAG_MAX_VOICE) return;
 
     SpuVoiceAttr attr;
     memset(&attr, 0, sizeof(attr));
-    attr.voice = (u32)(1u << voice);
+    attr.voice = VoiceBit(voice);
     attr.mask  = SPU_VOICE_PITCH;
     attr.pitch = (u16)pitch;
 
@@ -164,8 +178,8 @@ void NativeVag_UpdatePitch(int voice, int pitch)
 
 void NativeVag_Stop(int voice)
 {
-    if (voice < 0 || voice >= 32) return;
-    NativeAudio_SpuSetKey(0, 1u << voice);
+    if (voice < 0 || voice >= NATIVE_VAG_MAX_VOICE) return;
+    NativeAudio_SpuSetKey(0, VoiceBit(voice));
 
 #if defined(CTR_DEBUG_PODIUM_JUMP)
     if (voice == NATIVE_DANCE_SFX_SPU_VOICE)

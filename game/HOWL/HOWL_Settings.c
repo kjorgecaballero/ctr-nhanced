@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_custom_music.h>
 
 int howl_Disable(void)
 {
@@ -151,6 +152,10 @@ void howl_VolumeSet(int type, u8 vol)
 		}
 
 		sdata->vol_Music = vol;
+
+#ifdef CTR_NATIVE
+		NativeCustomMusic_SetVolume(vol);
+#endif
 
 		Smart_EnterCriticalSection();
 

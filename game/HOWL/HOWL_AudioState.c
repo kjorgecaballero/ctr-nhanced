@@ -1,6 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
-
+#include <platform/native_custom_music.h>
 void Audio_SetState(u32 state)
 {
 	u8 XA_type;
@@ -24,14 +24,22 @@ void Audio_SetState(u32 state)
 		// erase backup, keep music, stop all fx
 		howl_StopAudio(1, 0, 1);
 		break;
-	case AUDIO_STOP_ALL:
-	case AUDIO_GARAGE_ENTRY:
+        case AUDIO_STOP_ALL:
+        case AUDIO_GARAGE_ENTRY:
 
-		CseqMusic_StopAll();
+                CseqMusic_StopAll();
 
-		Music_Adjust(0, 0, 0, 0);
+                Music_Adjust(0, 0, 0, 0);
 
-		break;
+#ifdef CTR_NATIVE
+                NativeCustomRacer_StopMaskMusic();
+#endif
+
+                /* Custom level music runs on SPU, so it is not silenced
+                 * by CseqMusic_StopAll. Kill it explicitly. */
+                NativeCustomRacer_StopLevelMusic();
+
+                break;
 	case AUDIO_ADV_HUB:
 
 		CseqMusic_StopAll();
@@ -82,6 +90,12 @@ void Audio_SetState(u32 state)
 
 		Music_LowerVolume();
 
+#ifdef CTR_NATIVE
+		/* Duck (bajar volumen) en vez de pausar: retail mantiene la
+		 * música de fondo debajo del jingle FINAL LAP. */
+		NativeCustomMusic_SetVolume((sdata->vol_Music * 40) / 100);
+#endif
+
 		// MUSIC_LAST_LAP
 		XA_index = 6;
 
@@ -94,13 +108,23 @@ void Audio_SetState(u32 state)
 
 		Music_RaiseVolume();
 
+#ifdef CTR_NATIVE
+		/* Restaurar el volumen normal (el jingle ya terminó). */
+		NativeCustomMusic_SetVolume(sdata->vol_Music);
+#endif
+
 		Voiceline_ToggleEnable(1);
 
 		break;
-	case AUDIO_RACE_END:
-		sdata->boolNeedXASeek = 0;
+        case AUDIO_RACE_END:
+                sdata->boolNeedXASeek = 0;
 
-		Music_Restart();
+#ifdef CTR_NATIVE
+                NativeCustomRacer_StopMaskMusic();
+                NativeCustomMusic_EndRace();
+#endif
+
+                Music_Restart();
 
 		// set XA
 		XA_index = sdata->desiredXA_RaceEndIndex;
@@ -142,12 +166,18 @@ void Audio_AdvHub_SwapSong(int levelID)
 
 void Audio_SetMaskSong(u32 tempo)
 {
-	/* Custom mask music takes over CSEQ when a custom with
-	 * mask_song.vag holds the mask. See native_custom_racer.c. */
-	if (NativeCustomRacer_UpdateMaskMusic() != 0)
-		return;
+        /* Custom mask music takes over CSEQ when a custom with
+         * mask_song.vag holds the mask. See native_custom_racer.c. */
+        int maskActive = (NativeCustomRacer_UpdateMaskMusic() != 0);
+        int customLevelMusic =
+                (NativeCustomRacer_UpdateLevelMusic(maskActive) != 0);
 
-	s32 i;
+        if (maskActive)
+                return;         /* mask wins */
+        if (customLevelMusic)
+                return;         /* custom level music wins */
+
+        s32 i;
 	u8 isMaskUsed;
 	u32 songID;
 	struct GameTracker *gGT = sdata->gGT;

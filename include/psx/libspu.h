@@ -110,7 +110,7 @@
 	(SPU_00CH | SPU_01CH | SPU_02CH | SPU_03CH | SPU_04CH | SPU_05CH | SPU_06CH | SPU_07CH | SPU_08CH | SPU_09CH | SPU_10CH | SPU_11CH | SPU_12CH | SPU_13CH | \
 	 SPU_14CH | SPU_15CH | SPU_16CH | SPU_17CH | SPU_18CH | SPU_19CH | SPU_20CH | SPU_21CH | SPU_22CH | SPU_23CH)
 
-#define SPU_KEYCH(x)   (0x1L << (x))
+#define SPU_KEYCH(x)   (0x1ULL << (x))
 #define SPU_VOICECH(x) SPU_KEYCH(x)
 
 #endif /* __SPU_VOICE */
@@ -215,8 +215,9 @@ typedef struct
 
 typedef struct
 {
-	unsigned int voice;         /* set voice:
+	unsigned long long voice;   /* set voice:
 	                        SpuSetVoiceAttr: each voice is a bit array
+	                        (u64 so voices 32+ do not overflow)
 	                        SpuGetVoiceAttr: voice is a bit value */
 	unsigned int mask;          /* settings attribute bit (invalid with Get) */
 	SpuVolume volume;           /* volume                         */
@@ -367,7 +368,7 @@ extern SpuIRQCallbackProc SpuSetIRQCallback(SpuIRQCallbackProc);
 
 extern void SpuSetVoiceAttr(SpuVoiceAttr *arg);
 extern void SpuGetVoiceAttr(SpuVoiceAttr *arg);
-extern void SpuSetKey(int on_off, unsigned int voice_bit);
+extern void SpuSetKey(int on_off, unsigned long long voice_bit);
 extern void SpuSetKeyOnWithAttr(SpuVoiceAttr *attr);
 extern int SpuGetKeyStatus(unsigned int voice_bit);
 extern void SpuGetAllKeysStatus(char *status);

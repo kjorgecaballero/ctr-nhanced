@@ -83,14 +83,20 @@ set(SDL_X11_XTEST OFF CACHE BOOL "" FORCE)
 add_subdirectory(externals/SDL)
 
 # CTR Native
-add_executable(ctr_native main.c)
+add_executable(ctr_native
+    main.c
+    externals/stb_vorbis.c
+)
 set_target_properties(ctr_native PROPERTIES
     C_STANDARD 17
     C_STANDARD_REQUIRED ON
     C_EXTENSIONS OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
-target_include_directories(ctr_native PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(ctr_native PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/externals
+)
 target_compile_definitions(ctr_native PRIVATE
     CTR_NATIVE
     CTR_INTERNAL

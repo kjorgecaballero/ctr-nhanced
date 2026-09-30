@@ -421,8 +421,9 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
                 /* PAUSE_ALL is set: Audio_Update1 doesn't run, so the
                  * mask music VAG loop would keep playing forever.
                  * Silently stop it; UpdateMaskMusic re-arms it on
-                 * resume with the current slider value. */
+                 * resume with the current slider value. */ 
                 NativeCustomRacer_PauseMaskMusic();
+                NativeCustomRacer_PauseLevelMusic();
         }
 
 	gGT->gameMode1_prevFrame = gGT->gameMode1;

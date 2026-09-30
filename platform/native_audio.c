@@ -3,6 +3,7 @@
 #include <platform/native_assets.h>
 #include <platform/native_disc_image.h>
 #include <platform/native_perf.h>
+#include <platform/native_custom_music.h>
 
 #include <SDL3/SDL.h>
 #include <limits.h>
@@ -18,7 +19,13 @@
  * HOWL_Channel.c still iterates only the first 24
  * (NUM_SFX_CHANNELS in regionsEXE.h), so retail audio is
  * byte-identical to PS1. */
-#define NATIVE_AUDIO_SPU_VOICE_COUNT         32
+/* 0-23 retail CSEQ + OtherFX
+ * 24   dance SFX
+ * 25-28 kart SFX
+ * 29   mask music
+ * 30-31 engine loop (1P/2P)
+ * 32   level music (custom tracks, 1P/2P) */
+#define NATIVE_AUDIO_SPU_VOICE_COUNT         33
 #define NATIVE_AUDIO_SPU_MEMSIZE             (2048 * 1024)
 // streaming ADPCM decode like the real SPU: 16-byte blocks decoded on the fly
 // per voice, reading SPU RAM live (psx-spx "SPU ADPCM Samples/Pitch") -penta3
@@ -376,7 +383,7 @@ internal b32 NativeAudio_OutputOpen(void)
 	return s_audio.output.stream != NULL;
 }
 
-internal void NativeAudio_LockOutput(void)
+void NativeAudio_LockOutput(void)
 {
 	if (s_audio.output.stream != NULL)
 	{
@@ -384,7 +391,7 @@ internal void NativeAudio_LockOutput(void)
 	}
 }
 
-internal void NativeAudio_UnlockOutput(void)
+void NativeAudio_UnlockOutput(void)
 {
 	if (s_audio.output.stream != NULL)
 	{
@@ -2744,6 +2751,9 @@ internal void NativeAudio_MixFrame(s16 *outLeft, s16 *outRight)
 		}
 	}
 
+	/* Custom OGG music is mixed into the same frame as the SPU voices. */
+	NativeCustomMusic_MixFrameNoLock(&mixLeft, &mixRight, s_audio.masterVolumeLeft, s_audio.masterVolumeRight);
+
 	NativeAudio_ReverbProcessNoLock(reverbSendLeft, reverbSendRight, &reverbWetLeft, &reverbWetRight);
 	NativeAudio_MixSample(&mixLeft, &mixRight, NativeAudio_ApplyMasterVolume(reverbWetLeft, s_audio.masterVolumeLeft),
 	                      NativeAudio_ApplyMasterVolume(reverbWetRight, s_audio.masterVolumeRight));
@@ -3079,7 +3089,7 @@ void NativeAudio_SpuSetVoiceAttr(SpuVoiceAttr *psxAttrib)
 	NativeAudio_UnlockOutput();
 }
 
-void NativeAudio_SpuSetKey(s32 on_off, u32 voice_bit)
+void NativeAudio_SpuSetKey(s32 on_off, u64 voice_bit)
 {
 	if (!s_audio.init)
 	{
