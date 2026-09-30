@@ -86,22 +86,12 @@ void RB_GenericMine_ThTick(struct Thread *t)
 #ifdef CTR_NATIVE
         {
                 static int s_mineTickLog = 0;
-                if ((s_mineTickLog++ % 15) == 0)
-                        fprintf(stderr, "[MineTick] t=%p inst=%p model=%d scale=(%d,%d,%d) flags=0x%x animFrame=%d\n",
-                                (void*)t, (void*)inst, (int)model,
-                                inst->scale.x, inst->scale.y, inst->scale.z,
-                                inst->flags, inst->animFrame);
         }
 #endif
 
 #ifdef CTR_NATIVE
         {
                 static int s_mineTickLog = 0;
-                if ((s_mineTickLog++ % 15) == 0)
-                        fprintf(stderr, "[MineTick] t=%p inst=%p model=%d scale=(%d,%d,%d) flags=0x%x animFrame=%d\n",
-                                (void*)t, (void*)inst, (int)model,
-                                inst->scale.x, inst->scale.y, inst->scale.z,
-                                inst->flags, inst->animFrame);
         }
 #endif
 
@@ -157,15 +147,6 @@ void RB_GenericMine_ThTick(struct Thread *t)
 	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
 	{
 		static int s_mhLog = 0;
-		if ((s_mhLog++ % 15) == 0)
-			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
-				sdata->gGT->numPlyrCurrGame, (int)model,
-				(void*)inst->model->headers,
-				inst->model->headers->scale.x,
-				inst->model->headers->scale.y,
-				inst->model->headers->scale.z,
-				inst->model->headers->flags,
-				inst->model->headers->maxDistanceLOD);
 	}
 #endif
 
@@ -478,15 +459,6 @@ LAB_800ad17c:
 	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
 	{
 		static int s_mhLog = 0;
-		if ((s_mhLog++ % 15) == 0)
-			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
-				sdata->gGT->numPlyrCurrGame, (int)model,
-				(void*)inst->model->headers,
-				inst->model->headers->scale.x,
-				inst->model->headers->scale.y,
-				inst->model->headers->scale.z,
-				inst->model->headers->flags,
-				inst->model->headers->maxDistanceLOD);
 	}
 #endif
 
@@ -529,15 +501,6 @@ void RB_GenericMine_ThDestroy(struct Thread *t, struct Instance *inst, struct Mi
 	if (model == STATIC_CRATE_TNT || model == STATIC_BEAKER_GREEN || model == STATIC_BEAKER_RED)
 	{
 		static int s_mhLog = 0;
-		if ((s_mhLog++ % 15) == 0)
-			fprintf(stderr, "[MineMH] ply=%d model=%d mh=%p scale=(%d,%d,%d) flags=0x%x maxLOD=%d\n",
-				sdata->gGT->numPlyrCurrGame, (int)model,
-				(void*)inst->model->headers,
-				inst->model->headers->scale.x,
-				inst->model->headers->scale.y,
-				inst->model->headers->scale.z,
-				inst->model->headers->flags,
-				inst->model->headers->maxDistanceLOD);
 	}
 #endif
 	if (model == PU_EXPLOSIVE_CRATE)

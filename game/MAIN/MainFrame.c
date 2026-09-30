@@ -423,7 +423,6 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
                  * Silently stop it; UpdateMaskMusic re-arms it on
                  * resume with the current slider value. */ 
                 NativeCustomRacer_PauseMaskMusic();
-                NativeCustomRacer_PauseLevelMusic();
         }
 
 	gGT->gameMode1_prevFrame = gGT->gameMode1;
