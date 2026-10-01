@@ -328,6 +328,36 @@ static int RenderLists_Walk3P4P(struct BSP *bspRoot, const int *visLeafList, str
 		return 0;
 	}
 
+#if defined(CTR_NATIVE)
+	// TEMP diag: dump the visLeafList the walk actually reads, per viewport.
+	// Remove once CUSTOM-LEVELS-NO-VISTREE is diagnosed.
+	{
+		static u32 lastLogFrame[4] = {0, 0, 0, 0};
+		int slot = (int)(pb - sdata->gGT->pushBuffer);
+		if (slot >= 0 && slot < 4 && visLeafList != NULL)
+		{
+			u32 now = (u32)sdata->gGT->timer;
+			if (now - lastLogFrame[slot] >= 60)
+			{
+				lastLogFrame[slot] = now;
+				int nonzeroWords = 0;
+				int onesBits = 0;
+				int totalWords = 40;
+				for (int w = 0; w < totalWords; w++)
+				{
+					u32 v = (u32)visLeafList[w];
+					if (v != 0) nonzeroWords++;
+					while (v) { onesBits += (v & 1); v >>= 1; }
+				}
+				fprintf(stderr,
+					"[WALK3P4P] slot=%d t=%u visLeafList=%p nonzero=%d/%d onesBits=%d\n",
+					slot, (unsigned)now, (const void*)visLeafList,
+					nonzeroWords, totalWords, onesBits);
+			}
+		}
+	}
+#endif
+
 	if ((bspRoot->flag & BSP_NODE_FLAG_LEAF) != 0)
 	{
 		int slotIndex = RenderLists_Select3P4PSlot(bspRoot);

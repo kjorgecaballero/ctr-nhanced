@@ -13,15 +13,18 @@
 #include <string.h>
 
 // Native uses the NTSC-U 926 mempack start address (0x800ba9f0) inside a
-// backing buffer. The retail 2 MiB window is too tight for a handful of
-// 1P arcade scenarios and custom tracks with high polygon counts; a
-// custom LEV's primitive buffer (prim_mem) can request 2-4 MB directly.
-// Splitscreen (2P/3P/4P) roughly doubles that pressure, so we bump the
-// backing buffer to 32 MiB. PC memory is not the constraint.
-#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0x800000u
+// backing buffer. Retail 2 MiB is too tight for custom tracks with high
+// polygon counts (LEV ~1 MB + primMem up to 4 MB + roster Sentinel
+// textures + doubled buffers in splitscreen). 8 MiB OOMs on dense custom
+// tracks (Kong Dungeon 4P: `alloc=15872 free=2692`); 16 MiB was flagged
+// as the point where a 24-bit offset truncation halo appeared, so this
+// stays at 12 MiB.
+//
+// BUFFER_SIZE = START_OFFSET + SIZE + GUARD
+//   0xC00000  = 0xba9f0     + 0xb44e10 + 0x800
+#define CTR_NATIVE_MEMPACK_BUFFER_SIZE  0xC00000u
 #define CTR_NATIVE_MEMPACK_START_OFFSET 0xba9f0u
-#define CTR_NATIVE_MEMPACK_SIZE         0x744e10u
-
+#define CTR_NATIVE_MEMPACK_SIZE         0xb44e10u
 CTR_STATIC_ASSERT(CTR_NATIVE_MEMPACK_START_OFFSET + CTR_NATIVE_MEMPACK_SIZE + MEMPACK_PS1_END_GUARD_SIZE == CTR_NATIVE_MEMPACK_BUFFER_SIZE);
 
 union NativeScratchpadStorage

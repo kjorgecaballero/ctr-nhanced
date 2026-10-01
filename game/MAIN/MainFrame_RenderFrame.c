@@ -989,7 +989,6 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 	}
 
 	// 3P or 4P
-	CTR_ClearRenderLists_3P4P(gGT, numPlyrCurrGame);
 
 	// if no SCVert
 	if ((level1->configFlags & 4) == 0)
@@ -1010,6 +1009,7 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 	}
 
 	RenderLists_PreInit();
+	CTR_ClearRenderLists_3P4P(gGT, numPlyrCurrGame);
 	gGT->bspLeafsDrawn = 0;
 
 	for (i = 0; i < numPlyrCurrGame; i++)

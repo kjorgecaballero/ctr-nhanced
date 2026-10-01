@@ -22,7 +22,13 @@ static void MainFrame_RegisterGpuLinkRanges(struct GameTracker *gGT)
 		NativeGpuLinks_RegisterRangeChecked(otLabels[i], db->otMem.start, db->otMem.capacityBytes);
 	}
 
-	u32 swapchainOTBytes = ((u32)gGT->numPlyrCurrGame << 12) | 0x18u;
+	// Register the full 4P-sized swapchain range regardless of current
+	// player count. MainFrame_ResetDB writes spare pushBuffer ptrOTs into
+	// the same buffer even in 1P (see the extra loop that parks unused
+	// slots at otSwapchainDB + 3 * 0x4000 + 0x18). If the link bridge only
+	// knows about the numPlyr-sized range, those accesses hit unregistered
+	// pointers and crash at boot.
+	u32 swapchainOTBytes = (4u << 14) | 0x18u;
 	for (int i = 0; i < 2; i++)
 	{
 		NativeGpuLinks_RegisterRangeChecked(swapchainLabels[i], gGT->otSwapchainDB[i], swapchainOTBytes);
@@ -81,17 +87,17 @@ void MainFrame_ResetDB(struct GameTracker *gGT)
 	CTR_EmptyFunc_MainFrame_ResetDB();
 	DecalGlobal_EmptyFunc_MainFrame_ResetDB();
 
-	ClearOTagR((u32 *)otSwapchainDB, sdata->gGT->numPlyrCurrGame << 10 | 6);
+	ClearOTagR((u32 *)otSwapchainDB, (sdata->gGT->numPlyrCurrGame << 12) | 6);
 
 	for (iVar4 = 0; iVar4 < sdata->gGT->numPlyrCurrGame; iVar4++)
 	{
-		gGT->pushBuffer[iVar4].ptrOT = (u32 *)((int)otSwapchainDB + (sdata->gGT->numPlyrCurrGame - iVar4 - 1) * 0x1000 + 0x18);
+		gGT->pushBuffer[iVar4].ptrOT = (u32 *)((int)otSwapchainDB + (sdata->gGT->numPlyrCurrGame - iVar4 - 1) * 0x4000 + 0x18);
 	}
 
 	for (; iVar4 < 4; iVar4++)
 	{
 		// but why?
-		gGT->pushBuffer[iVar4].ptrOT = (u32 *)((int)otSwapchainDB + 3 * 0x1000 + 0x18);
+		gGT->pushBuffer[iVar4].ptrOT = (u32 *)((int)otSwapchainDB + 3 * 0x4000 + 0x18);
 	}
 
 	puVar3 = (u32 *)((int)otSwapchainDB + 4);
@@ -221,6 +227,42 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 		}
 		gGT->timer = gGT->timer + 1;
 		gGT->framesInThisLEV = gGT->framesInThisLEV + 1;
+
+#if defined(CTR_NATIVE)
+		// TEMP diag: count OT entries each viewport wrote this frame.
+		// Remove once CUSTOM-LEVELS-NO-VISTREE is diagnosed.
+		if ((gGT->timer % 60) == 0 && gGT->numPlyrCurrGame >= 3)
+		{
+			for (int pb = 0; pb < gGT->numPlyrCurrGame; pb++)
+			{
+				u32 *ot = (u32 *)gGT->pushBuffer[pb].ptrOT;
+				int count = 0;
+				u32 *p = ot;
+				while (p && !isendprim(p) && count < 2048)
+				{
+					count++;
+					p = nextPrim(p);
+				}
+				fprintf(stderr, "[OTCNT] pb%d=%d\n", pb, count);
+			}
+		}
+#endif
+
+#if defined(CTR_NATIVE)
+		// TEMP diag: measure primMem pressure in 3P/4P. Remove once
+		// CUSTOM-LEVELS-NO-VISTREE is diagnosed.
+		if ((gGT->timer % 60) == 0 && gGT->numPlyrCurrGame >= 3)
+		{
+			struct DB *db = gGT->backBuffer;
+			u8 *start = (u8 *)db->primMem.start;
+			u8 *cursor = (u8 *)db->primMem.cursor;
+			u32 cap = (u32)db->primMem.capacityBytes;
+			u32 used = (u32)(cursor - start);
+			fprintf(stderr, "[PRIM] t=%u used=%u cap=%u (%.1f%%)\n",
+			        (unsigned)gGT->timer, used, cap,
+			        cap ? (100.0f * (float)used / (float)cap) : 0.0f);
+		}
+#endif
 		gGT->unk1cc4[4] = 0;
 
 		iVar4 = Timer_GetTime_Elapsed(gGT->clockFrameStart, &gGT->clockFrameStart);
@@ -721,8 +763,36 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 	mesh = level->ptr_mesh_info;
 
-	for (playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)
+#if defined(CTR_NATIVE)
+	// TEMP diagnostic: dump visMem state on every level change. Fires
+	// exactly once per load regardless of how long the loading screen
+	// took. Remove once CUSTOM-LEVELS-NO-VISTREE has a fix.
 	{
+		static int lastLevelID = -1;
+		static int lastNumPlyr = -1;
+		if (gGT->levelID != lastLevelID || gGT->numPlyrCurrGame != lastNumPlyr) {
+			lastLevelID = gGT->levelID;
+			lastNumPlyr = gGT->numPlyrCurrGame;
+			fprintf(stderr, "[VISMEM] level=%d numPlyr=%d bspNodes=%d quads=%d\n",
+			        gGT->levelID, gGT->numPlyrCurrGame,
+			        mesh ? mesh->numBspNodes : -1,
+			        mesh ? mesh->numQuadBlock : -1);
+			for (int d = 0; d < 4; d++) {
+				int *ll = visMem->visLeafList[d];
+				int *ff = visMem->visFaceList[d];
+				fprintf(stderr, "[VISMEM] slot %d: leafSrc=%p leafList=%p faceSrc=%p faceList=%p\n",
+				        d, (void*)visMem->visLeafSrc[d], (void*)ll,
+				        (void*)visMem->visFaceSrc[d], (void*)ff);
+				if (ll) fprintf(stderr, "[VISMEM]   leaf[%d] head: %08x %08x %08x %08x\n",
+				                d, ll[0], ll[1], ll[2], ll[3]);
+				if (ff) fprintf(stderr, "[VISMEM]   face[%d] head: %08x %08x %08x %08x\n",
+				                d, ff[0], ff[1], ff[2], ff[3]);
+			}
+		}
+	}
+#endif
+
+	for (playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)	{
 		struct CameraDC *camDC = &gGT->cameraDC[playerIndex];
 		struct Driver *driver = gGT->drivers[playerIndex];
 		struct QuadBlock *driverQuad = driver->underDriver;
@@ -816,6 +886,41 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 				memcpy(visMem->visSCVertList[playerIndex], level->visSCVertSrc, ((level->numSCVert + 0x1f) >> 5) << 2);
 			}
 		}
+
+#ifdef CTR_NATIVE
+		// Custom LEVs from CTR Editor (pre-VISTREE) have no PVS data:
+		// camDC->visLeafSrc / visFaceSrc and driverPVS->visLeafSrc are all
+		// NULL, so the per-frame visibility bitmask is never populated
+		// and stays zero. The retail render path falls back to "draw
+		// everything" inconsistently per viewport in 3P/4P (one viewport
+		// explodes into triangles, another culls nothing).
+		//
+		// Force the bitmap to all-visible for every viewport when no PVS
+		// source is available, matching DuckStation's behavior. Not a
+		// real PVS, but a deterministic fallback that removes the visual
+		// glitches in 3P/4P at the cost of no culling.
+		{
+			b32 hasPVS = (camDC->visLeafSrc != NULL) || (camDC->visFaceSrc != NULL) ||
+			             (driverPVS != NULL && (driverPVS->visLeafSrc != NULL || driverPVS->visFaceSrc != NULL));
+
+			if (!hasPVS)
+			{
+				int *leafList = visMem->visLeafList[playerIndex];
+				int *faceList = visMem->visFaceList[playerIndex];
+
+				if (leafList != NULL && mesh != NULL && mesh->numBspNodes > 0)
+				{
+					int words = ((mesh->numBspNodes + 0x1f) >> 5);
+					for (int w = 0; w < words; w++) leafList[w] = ~0;
+				}
+				if (faceList != NULL && mesh != NULL && mesh->numQuadBlock > 0)
+				{
+					int words = ((mesh->numQuadBlock + 0x1f) >> 5);
+					for (int w = 0; w < words; w++) faceList[w] = ~0;
+				}
+			}
+		}
+#endif
 	}
 }
 

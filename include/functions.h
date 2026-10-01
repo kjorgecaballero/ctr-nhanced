@@ -52,8 +52,6 @@ void CTR_CycleTex_LEV(struct AnimTex *animtex, int timer);
 void CTR_ErrorScreen(u8 r, u8 g, u8 b);
 void CTR_CycleTex_Model(struct AnimTex *animtex, int timer);
 void CTR_CycleTex_2p3p4pWumpaHUD(u32 *ptrActiveTex, u32 *ptrArray, int numFrames);
-void CTR_ClearRenderLists_1P2P(struct GameTracker *gGT, int numPlyrCurrGame);
-void CTR_ClearRenderLists_3P4P(struct GameTracker *gGT, int numPlyrCurrGame);
 void CTR_EmptyFunc_MainFrame_ResetDB(void);
 void CTR_MatrixToRot(SVECTOR *rot, MATRIX *matrix, u32 flags);
 void CTR_ScrambleGhostString(char *dst, const char *src);
@@ -1298,6 +1296,8 @@ void AnimateWater3P(int timer, int numWaterVertices, struct WaterVert *waterVert
 void AnimateWater4P(int timer, int numWaterVertices, struct WaterVert *waterVert, const struct TextureLayout *waterEnvMap, int *visOVertList0,
                     int *visOVertList1, int *visOVertList2, int *visOVertList3);
 int RenderLists_Init1P2P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList, u8 numPlyr);
+void CTR_ClearRenderLists_1P2P(struct GameTracker *gGT, int numPlyrCurrGame);
+void CTR_ClearRenderLists_3P4P(struct GameTracker *gGT, int numPlyrCurrGame);
 int RenderLists_Init3P4P(struct BSP *bspRoot, int *visLeafList, struct PushBuffer *pb, u32 LevRenderList, void *bspList);
 // TODO:
 // CTR_Box_DrawWirePrims change void* ot to u32* ot

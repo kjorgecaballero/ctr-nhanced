@@ -99,7 +99,13 @@ typedef struct
 	const char *debugText;
 } GPUDrawSplit;
 
-#define MAX_DRAW_SPLITS 16384
+// Custom LEVs without VISTREE force all-visible in every viewport; in
+// 3P/4P the draw-split count per frame (blend modes × texture formats ×
+// drawEnv clip rects) can exceed the old 16K budget and clip later
+// viewports to black. 8x headroom. sizeof(GPUDrawSplit) ≈ 80 B, so
+// 128K splits ≈ 10 MB. Already bumped 4K -> 16K once (029001cf8) for
+// the same class of issue.
+#define MAX_DRAW_SPLITS (1u << 17)
 
 typedef struct
 {

@@ -216,10 +216,21 @@ EndFunc:
 	MainDB_OTMem(&gGT->db[0].otMem, size);
 	MainDB_OTMem(&gGT->db[1].otMem, size);
 
-	// 0x1000 per player, plus 0x18 for linking
-	size = ((gGT->numPlyrCurrGame) << 0xC) | 0x18;
+	// Always allocate for 4 players. The extra "spare" pushBuffer slots
+	// (i >= numPlyrCurrGame) get a pointer inside the buffer even in 1P,
+	// so the buffer must be 4 * 0x4000 + 0x18 regardless of the current
+	// player count. Legacy CTR Editor LEVs without VISTREE emit ~100%
+	// of the BSP per view; 4096 entries per viewport gives headroom over
+	// the retail 1024.
+	size = (4 << 0xE) | 0x18;
 	gGT->otSwapchainDB[0] = MEMPACK_AllocMem(size); // "ot1"
 	gGT->otSwapchainDB[1] = MEMPACK_AllocMem(size); // "ot2"
+#if defined(CTR_NATIVE)
+	fprintf(stderr, "[OT] size=%u bytes, numPlyr needed=%u bytes (numPlyr=%d)\n",
+	        (unsigned)size,
+	        (unsigned)((sdata->gGT->numPlyrCurrGame << 10 | 6) * 4),
+	        sdata->gGT->numPlyrCurrGame);
+#endif
 }
 
 void MainInit_JitPoolsNew(struct GameTracker *gGT)
