@@ -2289,11 +2289,11 @@ void NativeRenderer_DrawTriangles(int start_vertex, int triangles)
 
 void NativeRenderer_PushDebugLabel(const char *label)
 {
-	if (!GLAD_GL_KHR_debug)
-	{
-		return;
-	}
-	glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0x8000, strlen(label), label);
+	// Disabled for custom levels. CTR Editor LEV split data can carry a
+	// non-relocated pointer that lands inside the mempack arena (e.g.
+	// 0x00F40000), where strlen reads garbage and crashes. GL debug groups
+	// are a debug-only nicety and not worth the crash surface.
+	(void)label;
 }
 
 void NativeRenderer_PopDebugLabel(void)

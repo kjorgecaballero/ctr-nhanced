@@ -20,7 +20,10 @@
 #define TPAGE_WIDTH            (256)
 #define TPAGE_HEIGHT           (256)
 
-#define MAX_VERTEX_BUFFER_SIZE (1u << 16)
+// Custom levels in 3P/4P can exceed the retail vertex budget (4 viewports
+// × HI LOD geometry). 512K vertices × ~24 bytes × 2 VBOs ≈ 24 MB, still
+// well under any modern GPU/CPU memory budget.
+#define MAX_VERTEX_BUFFER_SIZE (1u << 19)
 
 typedef struct
 {

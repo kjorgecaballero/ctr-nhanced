@@ -23,6 +23,15 @@ struct LevelDef
 };
 
 const char *LevelRegistry_GetMusic(int levelID);
+
+/* Resolve the fully-qualified relative path to a custom level's
+ * music file (e.g. "assets/mods/levels/my_track/music/music.ogg").
+ * Returns NULL for retail levels, for replace customs whose base
+ * doesn't match levelID, or for customs without a "music" field.
+ * The returned pointer is a static buffer; valid until the next
+ * call to either of these two functions. */
+const char *LevelRegistry_GetActiveMusicPath(int levelID);
+const char *LevelRegistry_GetActiveMusicFinalPath(int levelID);
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID);
 int LevelRegistry_GetAdditionalCount(void);
 const struct LevelDef *LevelRegistry_GetAdditional(int index);

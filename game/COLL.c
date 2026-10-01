@@ -556,6 +556,33 @@ void COLL_FIXED_BSPLEAF_TestInstance(struct BSP *node, struct ScratchpadStruct *
 			}
 		}
 
+#ifdef CTR_NATIVE
+		// Custom LEVs from CTR Editor can carry garbage pointers at
+		// multiple levels of the hitbox chain. Both instDef and
+		// instDef->ptrInstance can be non-relocated disk offsets.
+		// Validate each level before dereferencing. On any failure,
+		// treat the hitbox as non-collidable and skip it.
+		{
+			u32 instDefAddr = (u32)(uintptr_t)bspArray->data.hitbox.instDef;
+
+			// instDef is garbage (non-NULL, kernel-space address)
+			if (instDefAddr >= 0x80000000u)
+			{
+				goto NextBSP;
+			}
+
+			// instDef is valid non-NULL: also check ptrInstance
+			if (instDefAddr != 0)
+			{
+				u32 ptrInstAddr = (u32)(uintptr_t)bspArray->data.hitbox.instDef->ptrInstance;
+				if (ptrInstAddr >= 0x80000000u)
+				{
+					goto NextBSP;
+				}
+			}
+			// instDef == NULL: fall through, original code handles that.
+		}
+#endif
 		if ((
 		        // if hitbox data is not tied to an active visible instance
 		        (

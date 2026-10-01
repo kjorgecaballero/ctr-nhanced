@@ -159,7 +159,48 @@ const char *LevelRegistry_GetMusic(int levelID)
 		return NULL;
 	}
 
-	return level->music;
+        return level->music;
+}
+
+static char s_musicPathBuf[512];
+static char s_musicFinalPathBuf[512];
+
+static const struct LevelDef *LevelRegistry_ResolveForMusic(int levelID)
+{
+        LevelRegistry_Load();
+        if ((s_activeLevel != NULL) && (s_activeLevel->baseLevelID == levelID))
+                return s_activeLevel;
+        return LevelRegistry_GetReplacement(levelID);
+}
+
+const char *LevelRegistry_GetActiveMusicPath(int levelID)
+{
+        const struct LevelDef *level = LevelRegistry_ResolveForMusic(levelID);
+
+        if (level == NULL || level->music[0] == '\0' || level->assetName[0] == '\0')
+                return NULL;
+
+        snprintf(s_musicPathBuf, sizeof(s_musicPathBuf),
+                 "assets/%s", level->music);
+        return s_musicPathBuf;
+}
+
+const char *LevelRegistry_GetActiveMusicFinalPath(int levelID)
+{
+        const struct LevelDef *level = LevelRegistry_ResolveForMusic(levelID);
+        size_t len;
+
+        if (level == NULL || level->music[0] == '\0' || level->assetName[0] == '\0')
+                return NULL;
+
+        len = strlen(level->music);
+        if (len < 5 || strcmp(level->music + len - 4, ".ogg") != 0)
+                return NULL;
+
+        snprintf(s_musicFinalPathBuf, sizeof(s_musicFinalPathBuf),
+                 "assets/%.*s_final.ogg",
+                 (int)(len - 4), level->music);
+        return s_musicFinalPathBuf;
 }
 
 static void LevelJson_SkipWhitespace(struct LevelJson *json)
@@ -871,6 +912,8 @@ const int *LevelRegistry_GetRacers(int levelID, int *count) { (void)levelID; if 
 int LevelRegistry_GetPrimMemSize(int levelID) { (void)levelID; return 0; }
 int LevelRegistry_ShouldForceHiLod(void) { return 0; }
 const char *LevelRegistry_GetMusic(int levelID) { (void)levelID; return 0; }
+const char *LevelRegistry_GetActiveMusicPath(int levelID) { (void)levelID; return 0; }
+const char *LevelRegistry_GetActiveMusicFinalPath(int levelID) { (void)levelID; return 0; }
 char *LevelRegistry_GetName(int levelID, char *retailName) { (void)levelID; return retailName; }
 const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, int subfileIndex)
 {

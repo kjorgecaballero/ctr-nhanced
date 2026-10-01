@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_music.h>
+#include <LevelRegistry.h>
 #include <platform/native_audio.h>
 
 /* stb_vorbis es un solo archivo. Con STB_VORBIS_HEADER_ONLY solo
@@ -41,6 +42,7 @@ struct NativeCustomMusicState
         int hubFallback;
         int volume;
         int levelID;
+        char cachedPath[512];
 };
 
 static struct NativeCustomMusicState s_customMusic = {0};
@@ -178,8 +180,8 @@ static int NativeCustomMusic_FileExists(const char *path)
 
 static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
 {
-        char relativePath[128];
-        char finalRelativePath[128];
+        char relativePath[512];
+        char finalRelativePath[512];
         s16 *newPcm = NULL;
         s16 *newFinalPcm = NULL;
 
@@ -202,9 +204,34 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
                 bannerPrinted = 1;
         }
 
-        /* --- CACHE CHECK ------------------------------------------- */
+        /* --- RESOLVE PATHS (custom level or retail) ----------------- */
+        {
+                const char *customPath      = LevelRegistry_GetActiveMusicPath(levelID);
+                const char *customFinalPath = LevelRegistry_GetActiveMusicFinalPath(levelID);
+
+                if (customPath != NULL)
+                {
+                        snprintf(relativePath, sizeof(relativePath), "%s", customPath);
+                        if (customFinalPath != NULL)
+                                snprintf(finalRelativePath, sizeof(finalRelativePath),
+                                         "%s", customFinalPath);
+                        else
+                                finalRelativePath[0] = '\0';
+                }
+                else
+                {
+                        snprintf(relativePath, sizeof(relativePath),
+                                 "assets/MUSIC_CUSTOM/level_%02d.ogg", levelID);
+                        snprintf(finalRelativePath, sizeof(finalRelativePath),
+                                 "assets/MUSIC_CUSTOM/level_%02d_final.ogg", levelID);
+                }
+        }
+
+        /* --- CACHE CHECK (keyed by resolved path) ------------------- */
         NativeAudio_LockOutput();
-        if (s_customMusic.levelID == levelID && s_customMusic.pcm != NULL)
+        if (s_customMusic.pcm != NULL &&
+            s_customMusic.cachedPath[0] != '\0' &&
+            strcmp(s_customMusic.cachedPath, relativePath) == 0)
         {
                 s_customMusic.active = 1;
                 s_customMusic.paused = 0;
@@ -220,11 +247,6 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
         }
         /* silent cache miss */
         NativeAudio_UnlockOutput();
-
-        snprintf(relativePath, sizeof(relativePath),
-                 "assets/MUSIC_CUSTOM/level_%02d.ogg", levelID);
-        snprintf(finalRelativePath, sizeof(finalRelativePath),
-                 "assets/MUSIC_CUSTOM/level_%02d_final.ogg", levelID);
 
         if (!NativeCustomMusic_FileExists(relativePath))
         {
@@ -322,6 +344,12 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
         printf("[CustomMusic] Level %d: OK - %d Hz, %d canal(es), %d frames.\n",
                levelID, newSampleRate, newChannels, newFrameCount);
         fflush(stdout);
+
+        NativeAudio_LockOutput();
+        strncpy(s_customMusic.cachedPath, relativePath,
+                sizeof(s_customMusic.cachedPath) - 1);
+        s_customMusic.cachedPath[sizeof(s_customMusic.cachedPath) - 1] = '\0';
+        NativeAudio_UnlockOutput();
 
         return 1;
 }
