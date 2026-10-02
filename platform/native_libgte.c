@@ -10,6 +10,7 @@
 #include <psx/gtereg.h>
 #include <psx/inline_c.h>
 #include <psx/libgte.h>
+#include "platform/native_renderer.h"   // NATIVE-GFX: internal scale
 
 #include <assert.h>
 #include <stdio.h>
@@ -59,13 +60,16 @@ void InitGeom()
 
 void SetGeomOffset(int ofx, int ofy)
 {
-	C2_OFX = (ofx << 16);
-	C2_OFY = (ofy << 16);
+        // NATIVE-GFX: scale projection center with internal res.
+        int s = NativeRenderer_GetInternalScale();
+        C2_OFX = ((ofx * s) << 16);
+        C2_OFY = ((ofy * s) << 16);
 }
 
 void SetGeomScreen(int h)
 {
-	C2_H = h;
+        // NATIVE-GFX: scale FOV plane with internal res.
+        C2_H = h * NativeRenderer_GetInternalScale();
 }
 
 void SetRotMatrix(MATRIX *m)

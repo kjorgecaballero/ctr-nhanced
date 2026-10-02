@@ -2330,3 +2330,9 @@ void NativeRenderer_SetInternalScale(int scale)
         if (scale > 4) scale = 4;
         s_internalScale = scale;
 }
+
+// NATIVE-GFX: read current internal resolution scale.
+int NativeRenderer_GetInternalScale(void)
+{
+        return s_internalScale;
+}
