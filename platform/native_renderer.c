@@ -16,6 +16,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>   // NATIVE-GFX: getenv/atoi for NATIVE_RES
 
 #ifdef _WIN32
 #include "platform/native_win32.h"
@@ -106,6 +107,11 @@ struct NativeRenderTarget
 };
 
 global_variable struct NativeRenderTarget s_mainRenderTarget;
+
+// NATIVE-GFX: internal resolution scale (1=native 512x216, 2, 3, 4).
+// Read by BindMainRenderTarget, SetViewPort, SetScissor, PresentVRAMRect.
+// Set by NativeRenderer_SetInternalScale() or NATIVE_RES env (debug).
+internal int s_internalScale = 1;
 global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 
 global_variable TextureID s_whiteTexture = (TextureID)-1;
@@ -548,6 +554,18 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 
 internal void NativeRenderer_BindMainRenderTarget(void)
 {
+        // NATIVE-GFX: one-shot env read for NATIVE_RES=1..4
+        static int s_envChecked = 0;
+        if (!s_envChecked)
+        {
+                const char *env = getenv("NATIVE_RES");
+                if (env != NULL)
+                {
+                        int v = atoi(env);
+                        if (v >= 1 && v <= 4) s_internalScale = v;
+                }
+                s_envChecked = 1;
+        }
 	int width = activeDispEnv.disp.w;
 	int height = activeDispEnv.disp.h;
 	if ((width <= 0) || (height <= 0))
@@ -2303,4 +2321,12 @@ void NativeRenderer_PopDebugLabel(void)
 		return;
 	}
 	glPopDebugGroup();
+}
+
+// NATIVE-GFX: set internal resolution scale. Clamped to [1,4].
+void NativeRenderer_SetInternalScale(int scale)
+{
+        if (scale < 1) scale = 1;
+        if (scale > 4) scale = 4;
+        s_internalScale = scale;
 }
