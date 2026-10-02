@@ -111,7 +111,7 @@ global_variable struct NativeRenderTarget s_mainRenderTarget;
 // NATIVE-GFX: internal resolution scale (1=native 512x216, 2, 3, 4).
 // Read by BindMainRenderTarget, SetViewPort, SetScissor, PresentVRAMRect.
 // Set by NativeRenderer_SetInternalScale() or NATIVE_RES env (debug).
-internal int s_internalScale = 1;
+internal int s_internalScale = 2;
 global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 
 global_variable TextureID s_whiteTexture = (TextureID)-1;
@@ -144,6 +144,7 @@ int g_cfg_bilinearFiltering = 0;
 global_variable GLuint s_packShader = 0;
 global_variable GLint s_packFlipYLoc = -1;
 global_variable GLuint s_presentVramShader = 0;
+global_variable GLuint s_presentRgbaShader = 0;
 global_variable GLint s_presentVramSourceRectLoc = -1;
 global_variable GLuint s_vramQuadVAO = 0;
 global_variable GLuint s_vramQuadVBO = 0;
@@ -164,6 +165,7 @@ internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *targe
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
 internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y);
+void NativeRenderer_PresentMainRenderTarget(void);
 #if defined(CTR_INTERNAL)
 internal void NativeRenderer_ResolveGpuMeasurements(b32 waitForResults);
 #endif
@@ -286,6 +288,7 @@ void NativeRenderer_Shutdown(void)
 	NativeRenderer_DestroyTexture(s_rgLutTexture);
 	glDeleteProgram(s_packShader);
 	glDeleteProgram(s_presentVramShader);
+	glDeleteProgram(s_presentRgbaShader);
 	glDeleteVertexArrays(1, &s_vramQuadVAO);
 	glDeleteBuffers(1, &s_vramQuadVBO);
 }
@@ -574,6 +577,10 @@ internal void NativeRenderer_BindMainRenderTarget(void)
 		height = activeDrawEnv.clip.h;
 	}
 
+// RES-ARCH: scale main FBO by internal res.
+	width  *= s_internalScale;
+	height *= s_internalScale;
+
 	NativeRenderer_EnsureRenderTarget(&s_mainRenderTarget, width, height);
 	glBindFramebuffer(GL_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
 }
@@ -601,7 +608,8 @@ internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget 
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glViewport(0, 0, target->width, target->height);
-	NativeRenderer_DrawVRAMRegion(x, y, target->width, target->height);
+	// RES-ARCH: sample the native display rect from VRAM, not the FBO size.
+	NativeRenderer_DrawVRAMRegion(x, y, activeDispEnv.disp.w, activeDispEnv.disp.h);
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_STENCIL_TEST);
 
@@ -1134,8 +1142,30 @@ global_variable const char *ctr_present_vram_shader = "#ifdef VERTEX\n"
                                                       "}\n"
                                                       "#endif\n";
 
+global_variable const char *ctr_present_rgba_shader =
+    "#ifdef VERTEX\n"
+    "attribute vec2 a_position;\n"
+    "varying vec2 v_uv;\n"
+    "void main() {\n"
+    "\tv_uv = a_position * 0.5 + 0.5;\n"
+    "\tgl_Position = vec4(a_position, 0.0, 1.0);\n"
+    "}\n"
+    "#endif\n"
+    "#ifdef FRAGMENT\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D s_texture;\n"
+    "void main() {\n"
+    "\tfragColor = texture2D(s_texture, v_uv);\n"
+    "}\n"
+    "#endif\n";
+
 internal void NativeRenderer_InitVRAMPipelines(void)
 {
+	s_presentRgbaShader = NativeRenderer_Shader_Compile(ctr_present_rgba_shader, false);
+	glUseProgram(s_presentRgbaShader);
+	glUniform1i(glGetUniformLocation(s_presentRgbaShader, "s_texture"), 0);
+	glUseProgram(0);
+
 	local_persist const float quad[12] = {-1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f, -1.f};
 
 	s_packShader = NativeRenderer_Shader_Compile(ctr_pack_shader, false);
@@ -1349,8 +1379,9 @@ void NativeRenderer_SetupClipMode(const RECT16 *rect, const DISPENV *displayEnv,
 	// coordinates are introduced only by the final presentation pass.
 	const float viewportX = 0.0f;
 	const float viewportY = 0.0f;
-	const float viewportW = (float)displayEnv->disp.w;
-	const float viewportH = (float)displayEnv->disp.h;
+	// RES-ARCH: scissor in FBO pixel space.
+	const float viewportW = (float)(displayEnv->disp.w * s_internalScale);
+	const float viewportH = (float)(displayEnv->disp.h * s_internalScale);
 	const float flipOffset = viewportY + viewportH - clipRectH * viewportH;
 	const float crx = viewportX + clipRectX * viewportW;
 	const float cry = clipRectY * viewportH;
@@ -1726,12 +1757,13 @@ void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 		return;
 	}
 
+// RES-ARCH: scissor rect in FBO pixel space.
 	const int relX = overlapX - displayX;
 	const int relBottom = overlapBottom - displayY;
-	const int scissorX = relX;
-	const int scissorY = displayH - relBottom;
-	const int scissorW = overlapRight - overlapX;
-	const int scissorH = overlapBottom - overlapY;
+	const int scissorX = relX * s_internalScale;
+	const int scissorY = (displayH - relBottom) * s_internalScale;
+	const int scissorW = (overlapRight - overlapX) * s_internalScale;
+	const int scissorH = (overlapBottom - overlapY) * s_internalScale;
 
 	if ((scissorW <= 0) || (scissorH <= 0))
 	{
@@ -2140,10 +2172,58 @@ void NativeRenderer_UpdateVRAM(void)
 	NativePerf_EndScope(NATIVE_PERF_BUCKET_RENDERER_UPDATE_VRAM);
 }
 
+void NativeRenderer_PresentMainRenderTarget(void)
+{
+	if ((s_mainRenderTarget.width <= 0) || (s_mainRenderTarget.height <= 0))
+	{
+		return;
+	}
+
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	NativeRenderer_SetViewPort(s_presentViewport.x, s_presentViewport.y,
+	                          s_presentViewport.w, s_presentViewport.h);
+
+	NativeRenderer_SetScissorState(0);
+	NativeRenderer_EnableDepth(0);
+	NativeRenderer_SetBlendMode(BM_NONE);
+
+	glUseProgram(s_presentRgbaShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, s_mainRenderTarget.texture);
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
+	glBindVertexArray(0);
+
+	s_previousShader = (ShaderID)-1;
+	s_lastBoundTexture = (TextureID)-1;
+}
+
 void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, int displayH)
 {
 	if (displayW <= 0 || displayH <= 0)
 	{
+		return;
+	}
+
+	// RES-ARCH: at N>1 blit main FBO straight to window (skip VRAM).
+	if (s_internalScale > 1 && s_mainRenderTarget.framebuffer != 0)
+	{
+		glDisable(GL_SCISSOR_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_STENCIL_TEST);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+		glBlitFramebuffer(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height,
+		                  s_presentViewport.x, s_presentViewport.y,
+		                  s_presentViewport.x + s_presentViewport.w,
+		                  s_presentViewport.y + s_presentViewport.h,
+		                  GL_COLOR_BUFFER_BIT, GL_LINEAR);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		s_previousShader = (ShaderID)-1;
+		s_lastBoundTexture = (TextureID)-1;
 		return;
 	}
 

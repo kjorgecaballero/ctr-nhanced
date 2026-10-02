@@ -60,16 +60,13 @@ void InitGeom()
 
 void SetGeomOffset(int ofx, int ofy)
 {
-        // NATIVE-GFX: scale projection center with internal res.
-        int s = NativeRenderer_GetInternalScale();
-        C2_OFX = ((ofx * s) << 16);
-        C2_OFY = ((ofy * s) << 16);
+        C2_OFX = (ofx << 16);
+        C2_OFY = (ofy << 16);
 }
 
 void SetGeomScreen(int h)
 {
-        // NATIVE-GFX: scale FOV plane with internal res.
-        C2_H = h * NativeRenderer_GetInternalScale();
+        C2_H = h;
 }
 
 void SetRotMatrix(MATRIX *m)
