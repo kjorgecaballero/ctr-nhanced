@@ -225,12 +225,7 @@ EndFunc:
 	size = (4 << 0xE) | 0x18;
 	gGT->otSwapchainDB[0] = MEMPACK_AllocMem(size); // "ot1"
 	gGT->otSwapchainDB[1] = MEMPACK_AllocMem(size); // "ot2"
-#if defined(CTR_NATIVE)
-	fprintf(stderr, "[OT] size=%u bytes, numPlyr needed=%u bytes (numPlyr=%d)\n",
-	        (unsigned)size,
-	        (unsigned)((sdata->gGT->numPlyrCurrGame << 10 | 6) * 4),
-	        sdata->gGT->numPlyrCurrGame);
-#endif
+  
 }
 
 void MainInit_JitPoolsNew(struct GameTracker *gGT)

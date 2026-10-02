@@ -398,24 +398,6 @@ void DrawLevelOvr4P(void *LevRenderList, struct PushBuffer *pb, struct BSP *bspL
 	DrawLevelOvr4P_CopyScratchInitTable();
 	DrawLevelOvr1P_Scratch()->renderListPtr32 = (u32)(u32)LevRenderList;
 
-#if defined(CTR_NATIVE)
-	{
-		static int dbgFrames = 0;
-		dbgFrames++;
-		if (dbgFrames == 60 || dbgFrames == 120 || dbgFrames == 180)
-		{
-			for (int v = 0; v < 4; v++)
-			{
-				fprintf(stderr, "[D4P] f=%d v%d bspList=%p FDb=%p l0=%p l3=%p\n",
-				        dbgFrames, v,
-				        (void*)sdata->gGT->visMem1->bspList[v],
-				        (void*)renderLists[v].bspListStart_FullDynamic,
-				        (void*)renderLists[v].list[0].bspListStart,
-				        (void*)renderLists[v].list[3].bspListStart);
-			}
-		}
-	}
-#endif
 
 	if (!DrawLevelOvr4P_DispatchBucketTable(renderLists, pb, mesh, primMem, visFaceList0, visFaceList1, visFaceList2, visFaceList3, clipCursors))
 	{

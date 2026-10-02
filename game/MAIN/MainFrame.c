@@ -243,26 +243,10 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 					count++;
 					p = nextPrim(p);
 				}
-				fprintf(stderr, "[OTCNT] pb%d=%d\n", pb, count);
 			}
 		}
 #endif
 
-#if defined(CTR_NATIVE)
-		// TEMP diag: measure primMem pressure in 3P/4P. Remove once
-		// CUSTOM-LEVELS-NO-VISTREE is diagnosed.
-		if ((gGT->timer % 60) == 0 && gGT->numPlyrCurrGame >= 3)
-		{
-			struct DB *db = gGT->backBuffer;
-			u8 *start = (u8 *)db->primMem.start;
-			u8 *cursor = (u8 *)db->primMem.cursor;
-			u32 cap = (u32)db->primMem.capacityBytes;
-			u32 used = (u32)(cursor - start);
-			fprintf(stderr, "[PRIM] t=%u used=%u cap=%u (%.1f%%)\n",
-			        (unsigned)gGT->timer, used, cap,
-			        cap ? (100.0f * (float)used / (float)cap) : 0.0f);
-		}
-#endif
 		gGT->unk1cc4[4] = 0;
 
 		iVar4 = Timer_GetTime_Elapsed(gGT->clockFrameStart, &gGT->clockFrameStart);
@@ -763,34 +747,6 @@ void MainFrame_VisMemFullFrame(struct GameTracker *gGT, struct Level *level)
 
 	mesh = level->ptr_mesh_info;
 
-#if defined(CTR_NATIVE)
-	// TEMP diagnostic: dump visMem state on every level change. Fires
-	// exactly once per load regardless of how long the loading screen
-	// took. Remove once CUSTOM-LEVELS-NO-VISTREE has a fix.
-	{
-		static int lastLevelID = -1;
-		static int lastNumPlyr = -1;
-		if (gGT->levelID != lastLevelID || gGT->numPlyrCurrGame != lastNumPlyr) {
-			lastLevelID = gGT->levelID;
-			lastNumPlyr = gGT->numPlyrCurrGame;
-			fprintf(stderr, "[VISMEM] level=%d numPlyr=%d bspNodes=%d quads=%d\n",
-			        gGT->levelID, gGT->numPlyrCurrGame,
-			        mesh ? mesh->numBspNodes : -1,
-			        mesh ? mesh->numQuadBlock : -1);
-			for (int d = 0; d < 4; d++) {
-				int *ll = visMem->visLeafList[d];
-				int *ff = visMem->visFaceList[d];
-				fprintf(stderr, "[VISMEM] slot %d: leafSrc=%p leafList=%p faceSrc=%p faceList=%p\n",
-				        d, (void*)visMem->visLeafSrc[d], (void*)ll,
-				        (void*)visMem->visFaceSrc[d], (void*)ff);
-				if (ll) fprintf(stderr, "[VISMEM]   leaf[%d] head: %08x %08x %08x %08x\n",
-				                d, ll[0], ll[1], ll[2], ll[3]);
-				if (ff) fprintf(stderr, "[VISMEM]   face[%d] head: %08x %08x %08x %08x\n",
-				                d, ff[0], ff[1], ff[2], ff[3]);
-			}
-		}
-	}
-#endif
 
 	for (playerIndex = 0; playerIndex < gGT->numPlyrCurrGame; playerIndex++)	{
 		struct CameraDC *camDC = &gGT->cameraDC[playerIndex];
