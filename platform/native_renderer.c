@@ -148,7 +148,7 @@ internal void NativeRenderer_DestroyTexture(TextureID texture);
 internal void NativeRenderer_SetScissorState(int enable);
 internal void NativeRenderer_EnableDepth(int enable);
 internal void NativeRenderer_SetViewPort(int x, int y, int width, int height);
-internal void NativeRenderer_SetPresentationAspect(int width, int height);
+void NativeRenderer_SetPresentationAspect(int width, int height);
 internal void NativeRenderer_UpdatePresentationViewport(void);
 internal void NativeRenderer_ClearPresentationBars(void);
 internal void NativeRenderer_SetWireframe(int enable);

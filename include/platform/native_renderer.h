@@ -44,3 +44,4 @@ void NativeRenderer_PushDebugLabel(const char *label);
 void NativeRenderer_PopDebugLabel(void);
 
 #endif
+void NativeRenderer_SetPresentationAspect(int width, int height);

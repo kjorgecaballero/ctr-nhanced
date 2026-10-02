@@ -775,3 +775,6 @@ void Platform_WaitUntilVBlank(int targetVBlank)
 	NativeReplayScheduler_RecordVSyncPacket(emittedVBlanks);
 #endif
 }
+
+int Platform_IsFullscreen(void) { return (SDL_GetWindowFlags(g_window) & SDL_WINDOW_FULLSCREEN) != 0; }
+void Platform_GraphicsSetFullscreen(int on) { SDL_SetWindowFullscreen(g_window, on ? SDL_WINDOW_FULLSCREEN : 0); }

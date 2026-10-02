@@ -123,6 +123,7 @@
 #include "MAIN/MainFrame_RenderFrame.c"
 
 #include "MAIN/MainFreeze.c"
+#include "native_graphics.c"
 
 #include "MAIN/MainGameStart.c"
 #include "MAIN/MainGameEnd.c"

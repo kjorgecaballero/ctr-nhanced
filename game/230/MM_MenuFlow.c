@@ -1,4 +1,5 @@
 #include <common.h>
+#include "native_graphics.h"
 
 u8 MM_TransitionInOut(struct TransitionMeta *meta, int framesPassed, int numFrames)
 {
@@ -43,6 +44,19 @@ u8 MM_TransitionInOut(struct TransitionMeta *meta, int framesPassed, int numFram
 
 void MM_MenuProc_Main(struct RectMenu *mainMenu)
 {
+        // NATIVE-GFX: rename scrapbook row string
+        {
+                static int s_done = 0;
+                if (!s_done) { static char s_n[] = "GRAPHICS";
+                        sdata->lngStrings[LNG_SCRAPBOOK] = s_n; s_done = 1; }
+        }
+        // NATIVE-GFX: takeover while graphics is open
+        if (NativeGraphics_IsOpen())
+        {
+                NativeGraphics_MenuPtr(mainMenu);
+                return;
+        }
+
 	struct GameTracker *gGT = sdata->gGT;
 
 	// if scrapbook is unlocked, change "rows" to extended array
@@ -240,18 +254,13 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 		return;
 	}
-
-	// Scrapbook
-	if (choose == LNG_SCRAPBOOK)
-	{
-		// Set next stage to Scrapbook
-		D230.desiredMenuIndex = MM_EXIT_ROUTE_SCRAPBOOK;
-
-		// Leave main menu hierarchy
-		D230.titleMenuState = TITLE_MENU_STATE_EXITING;
-
-		return;
-	}
+        // NATIVE-GFX: scrapbook row opens graphics
+        if (choose == LNG_SCRAPBOOK)
+        {
+                mainMenu->state |= ONLY_DRAW_TITLE;
+                NativeGraphics_Open();
+                return;
+        }
 }
 
 void MM_ToggleRows_PlayerCount(void)
