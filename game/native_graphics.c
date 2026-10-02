@@ -3,15 +3,17 @@
 
 extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
+extern void NativeRenderer_SetInternalScale(int scale);
+extern int  NativeRenderer_GetInternalScale(void);
 
 static const char *const s_labels[4] = {
     "DISPLAY MODE", "ASPECT RATIO", "RESOLUTION", "ANTI-ALIASING"
 };
 static const char *const s_aspects[4] = {"AUTO","4:3","16:9","21:9"};
 
-static int s_open = 0, s_row = 0, s_aspect = 0, s_res = -1, s_msaa = 1;
+static int s_open = 0, s_row = 0, s_aspect = 0, s_res = 2, s_msaa = 1;
 
-void NativeGraphics_Open(void)  { s_open = 1; s_row = 0; }
+void NativeGraphics_Open(void)  { s_open = 1; s_row = 0; s_res = NativeRenderer_GetInternalScale(); }
 void NativeGraphics_Close(void) { s_open = 0; }
 int  NativeGraphics_IsOpen(void) { return s_open; }
 
@@ -37,8 +39,9 @@ static int ng_chg(int r, int d) {
         NativeRenderer_SetPresentationAspect(AW[v], AH[v]);
         return 1;
     }
-    case 2: if (d < 0) { if (s_res < 0) return 0; s_res--; if (s_res < 1) s_res = -1; }
+    case 2: if (d < 0) { if (s_res <= 1) return 0; s_res--; }
             else { if (s_res >= 4) return 0; s_res++; }
+            NativeRenderer_SetInternalScale(s_res);
             return 1;
     default: { static const int lv[3] = {1,2,4}; int i = 0;
                while (i < 2 && lv[i] < s_msaa) i++; i += d;
