@@ -42,13 +42,29 @@ u8 MM_TransitionInOut(struct TransitionMeta *meta, int framesPassed, int numFram
 	return allTransitionsDone;
 }
 
+// NATIVE-GFX: separate array. Do NOT grow OverlayDATA_230's
+// rowsMainMenuWithScrapbook[] — that shifts every field after it
+// and breaks the static_asserts at the bottom of ovr_230.h.
+static struct MenuRow s_rowsMainMenuWithGraphics[9] =
+{
+        {0x4C, 0, 1, 0, 0},
+        {0x4D, 0, 2, 1, 1},
+        {0x4E, 1, 3, 2, 2},
+        {0x4F, 2, 4, 3, 3},
+        {0x50, 3, 5, 4, 4},
+        {0x51, 4, 6, 5, 5},
+        {0x234, 5, 7, 6, 6},
+        {0x241, 6, 7, 7, 7},
+        {RECTMENU_STRING_NONE},
+};
+
 void MM_MenuProc_Main(struct RectMenu *mainMenu)
 {
-        // NATIVE-GFX: rename scrapbook row string
+        // NATIVE-GFX: put "GRAPHICS" in its own LNG slot (LNG_NA_241)
         {
                 static int s_done = 0;
                 if (!s_done) { static char s_n[] = "GRAPHICS";
-                        sdata->lngStrings[LNG_SCRAPBOOK] = s_n; s_done = 1; }
+                        sdata->lngStrings[LNG_NA_241] = s_n; s_done = 1; }
         }
         // NATIVE-GFX: takeover while graphics is open
         if (NativeGraphics_IsOpen())
@@ -62,7 +78,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 	// if scrapbook is unlocked, change "rows" to extended array
 	if (CHECK_ADV_BIT(sdata->gameProgress.unlocks, GAME_UNLOCK_BIT_SCRAPBOOK))
 	{
-		mainMenu->rows = &D230.rowsMainMenuWithScrapbook[0];
+		mainMenu->rows = &s_rowsMainMenuWithGraphics[0];
 	}
 
 	MM_ParseCheatCodes();
@@ -254,8 +270,15 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
 
 		return;
 	}
-        // NATIVE-GFX: scrapbook row opens graphics
+        // NATIVE-GFX: scrapbook row opens scrapbook
         if (choose == LNG_SCRAPBOOK)
+        {
+                D230.desiredMenuIndex = MM_EXIT_ROUTE_SCRAPBOOK;
+                D230.titleMenuState = TITLE_MENU_STATE_EXITING;
+                return;
+        }
+        // NATIVE-GFX: graphics row opens graphics menu
+        if (choose == LNG_NA_241)
         {
                 mainMenu->state |= ONLY_DRAW_TITLE;
                 NativeGraphics_Open();
