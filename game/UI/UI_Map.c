@@ -40,6 +40,16 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	gGT = sdata->gGT;
 
+	{
+		extern int NativeLevelTextures_IsCustomLevelActive(void);
+		extern void NativeLevelTextures_PatchTL(struct TextureLayout *tl);
+		if (NativeLevelTextures_IsCustomLevelActive())
+		{
+			NativeLevelTextures_PatchTL(&mapTop->texLayout);
+			NativeLevelTextures_PatchTL(&mapBottom->texLayout);
+		}
+	}
+
 	mapMetadata = NULL;
 
 	// draw minimap with neutral/none vertex color, minimap's regular color is white
@@ -108,7 +118,6 @@ void UI_Map_DrawMap(struct Icon *mapTop, struct Icon *mapBottom, s16 posX, s16 p
 
 	primMem->cursor = p + 1;
 }
-
 void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empty, struct PrimMem *primMem, u32 *otMem, u32 transparency)
 {
 	(void)empty;

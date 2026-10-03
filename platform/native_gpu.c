@@ -826,6 +826,33 @@ internal void NativeGpu_PrepareFramebufferFeedback(int tpage)
 	NativeRenderer_StoreFrameBuffer(activeDrawEnv.clip.x, activeDrawEnv.clip.y, activeDrawEnv.clip.w, activeDrawEnv.clip.h);
 	s_gpu.framebufferFeedbackRunActive = true;
 }
+/* ---- NLT_TRACE: temporary diagnostic (gated by NLT_TRACE=1) ---- */
+extern int NativeLevelTextures_IsCustomLevelActive(void);
+static struct { u16 tp, clut; u32 n; } s_nt[256];
+static int s_ntN = 0, s_ntOn = -1;
+
+static void NltTraceDump(void)
+{
+	fprintf(stderr, "[NT] textured prims WITHOUT sentinel (custom level active)\n");
+	for (int i = 0; i < s_ntN; i++)
+		fprintf(stderr, "[NT] tpage=0x%04X X=%d Y=%d mode=%d clut=(%d,%d) n=%u\n",
+		        s_nt[i].tp, (s_nt[i].tp & 0xF) * 64, ((s_nt[i].tp >> 4) & 1) * 256,
+		        (s_nt[i].tp >> 7) & 3, (s_nt[i].clut & 0x3F) << 4, s_nt[i].clut >> 6, s_nt[i].n);
+}
+
+static void NltTraceNote(u16 tpage, u16 clut)
+{
+	if (s_ntOn < 0) {
+		const char *e = getenv("NLT_TRACE");
+		s_ntOn = (e && e[0] == '1');
+		if (s_ntOn) atexit(NltTraceDump);
+	}
+	if (!s_ntOn || !NativeLevelTextures_IsCustomLevelActive()) return;
+	u16 key = tpage & 0x019F;
+	for (int i = 0; i < s_ntN; i++)
+		if (s_nt[i].tp == key && s_nt[i].clut == clut) { s_nt[i].n++; return; }
+	if (s_ntN < 256) { s_nt[s_ntN].tp = key; s_nt[s_ntN].clut = clut; s_nt[s_ntN].n = 1; s_ntN++; }
+}
 
 internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 {
@@ -855,10 +882,23 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	int overrideW = s_gpu.overrideTextureWidth;
 	int overrideH = s_gpu.overrideTextureHeight;
 
-	if (textured && (s_gpu.currentClut & NATIVE_GPU_CLUT_SENTINEL))
+	u16 effClut = (u16)s_gpu.currentClut;
+	if (textured && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+	{
+		extern int NativeLevelTextures_LookupPage(u16 tpage, u16 clut);
+		extern int NativeLevelTextures_IsCustomLevelActive(void);
+		int pg = NativeLevelTextures_LookupPage((u16)tpage, effClut);
+		if (pg >= 0 && NativeLevelTextures_IsCustomLevelActive())
+			effClut = (u16)(NATIVE_GPU_CLUT_SENTINEL | pg);
+	}
+
+	if (textured && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+		NltTraceNote((u16)tpage, effClut);
+
+	if (textured && (effClut & NATIVE_GPU_CLUT_SENTINEL))
 	{
 		// Sentinel CLUT: sample from a dedicated OpenGL texture instead of VRAM.
-		const u16 sentinelIdx = s_gpu.currentClut & 0x7FFF;
+		const u16 sentinelIdx = effClut & 0x7FFF;
 		if ((sentinelIdx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) && (s_gpu.customTextures[sentinelIdx] != 0))
 		{
 			texFormat = TF_32_BIT_RGBA;

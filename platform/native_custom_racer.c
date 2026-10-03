@@ -3553,3 +3553,8 @@ void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
     DecalFont_DrawLine(str, posX, posY, fontType, colorFlags);
     s_fontColorOverride = saved;
 }
+
+int NativeCustomRacer_AllocTexIdx(void)
+{
+        return AllocModelTexIdx();
+}

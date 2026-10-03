@@ -468,6 +468,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		sdata->load_inProgress = 1;
 
+		if (NativeLevelTextures_IsCustomLevelActive())
+		{
+			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, sdata->levelLOD, LVI_VRAM);
+		}
 		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
 
 		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
@@ -497,6 +501,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		gGT->level1 = lev;
 		gGT->visMem1 = lev->visMem;
+
+		if (NativeLevelTextures_IsCustomLevelActive())
+		{
+			NativeLevelTextures_PatchLev(lev);
+		}
 
 #ifdef CTR_NATIVE
 		// Custom LEVs (CTR Editor export) only fill visMem slot [0].

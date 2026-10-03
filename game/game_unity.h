@@ -100,6 +100,7 @@
 
 #include "LIST.c"
 #include "LevelRegistry.c"
+#include "platform/native_level_textures.c"
 #include "LOAD/LOAD_Callbacks.c"
 #include "LOAD/LOAD_ModelPtrs.c"
 #include "LOAD/LOAD_File.c"
