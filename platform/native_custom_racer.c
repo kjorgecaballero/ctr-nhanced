@@ -499,6 +499,12 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_engineSfxSpuAddr,  0, sizeof(s_engineSfxSpuAddr));
     memset(s_engineSfxSpuPitch, 0, sizeof(s_engineSfxSpuPitch));
     memset(s_engineSfxVoicePlaying, 0, sizeof(s_engineSfxVoicePlaying));
+    /* NOTE: this reset assumes no GL texture was allocated yet.
+     * ReloadRoster runs once at init, before any level or racer
+     * load. If a future refactor calls it mid-session, free the
+     * live GL names first (or add a public wrapper around
+     * NltFreeDecoded) so the bitmap does not mark as free a slot
+     * whose texture is still referenced. */
     memset(s_modelTexUsed, 0, sizeof(s_modelTexUsed));
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
@@ -1053,6 +1059,11 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
             {
                 Log("[CustomRacer] sentinel load failed (%s): %s\n",
                     kind_name, path);
+                /* Defensive: if the slot was reused after a roster
+                 * reload, customTextures[globalIdx] may still hold a
+                 * stale GL name. FreeCustomTexture is a no-op when
+                 * the slot is already 0. */
+                NativeGpu_FreeCustomTexture((u16)globalIdx);
                 NativeCustomRacer_FreeTexIdx(globalIdx);  /* rollback */
                 continue;
             }
