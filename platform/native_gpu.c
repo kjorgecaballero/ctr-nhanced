@@ -833,6 +833,13 @@ internal void NativeGpu_PrepareFramebufferFeedback(int tpage)
 	// same draw page. Native batches primitives, so screen-feedback effects
 	// like heat warp need an explicit barrier before their framebuffer-sampling
 	// polygons consume the VRAM texture.
+	// 4P: the clip here is a small HUD-prim rect (e.g. 32x24 at the
+	// icon atlas at VRAM x=800). In PS1 the framebuffer lives at (0,0)
+	// and StoreImage would never target the driver-icon atlas. Packing
+	// the FBO there corrupts the icon region and the next HUD draw
+	// samples the pack as junk (Wumpa counter + ranking icons).
+	// Skip the feedback pack in splitscreen until a proper (0,0)
+	// destination is implemented.
 	if (NativeGpu_HasPendingSplits())
 	{
 		DrawAllSplits();

@@ -164,7 +164,7 @@ internal void NativeRenderer_DestroyRenderTarget(struct NativeRenderTarget *targ
 internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *target, int width, int height);
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y);
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int w, int h);
 void NativeRenderer_PresentMainRenderTarget(void);
 #if defined(CTR_INTERNAL)
 internal void NativeRenderer_ResolveGpuMeasurements(b32 waitForResults);
@@ -356,7 +356,7 @@ void NativeRenderer_BeginScene(void)
 	NativeRenderer_UpdateVRAM();
 	if (!activeDrawEnv.isbg)
 	{
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y);
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_mainRenderTarget, activeDispEnv.disp.x, activeDispEnv.disp.y, activeDispEnv.disp.w, activeDispEnv.disp.h);
 	}
 	else
 	{
@@ -595,7 +595,7 @@ internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height)
 	NativeRenderer_DrawTriangles(0, 2);
 }
 
-internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y)
+internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int w, int h)
 {
 	const ShaderID previousShader = s_previousShader;
 	const TextureID previousTexture = s_lastBoundTexture;
@@ -608,8 +608,11 @@ internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget 
 	glDisable(GL_SCISSOR_TEST);
 	glDisable(GL_STENCIL_TEST);
 	glViewport(0, 0, target->width, target->height);
-	// RES-ARCH: sample the native display rect from VRAM, not the FBO size.
-	NativeRenderer_DrawVRAMRegion(x, y, activeDispEnv.disp.w, activeDispEnv.disp.h);
+	// Sample ONLY the requested rect (offscreen or main). Previously this
+	// used activeDispEnv.disp.w/h for every target, so a 32x24 offscreen
+	// target received the whole 512x216 display stretched into its FBO
+	// and then flushed back to VRAM as a mini-render.
+	NativeRenderer_DrawVRAMRegion(x, y, w, h);
 	glClear(GL_STENCIL_BUFFER_BIT);
 	glEnable(GL_STENCIL_TEST);
 
@@ -1918,8 +1921,6 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 		return;
 	}
 
-	// NOTE(aalhendi): Native offscreen draws produce RGBA pixels. Pack them into
-	// the persistent 5:5:5:1 VRAM texture instead of reading them through the CPU.
 	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
 	                                    s_previousOffscreen.h, true);
 }
@@ -1965,7 +1966,7 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 		s_previousOffscreenState = 1;
 		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, offscreenRect->w, offscreenRect->h);
 		s_previousOffscreen = *offscreenRect;
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y);
+		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y, offscreenRect->w, offscreenRect->h);
 	}
 	else
 	{
@@ -1999,6 +2000,9 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 	const TextureID previousTexture = s_lastBoundTexture;
 	const BlendMode previousBlendMode = s_previousBlendMode;
 	const int previousScissorState = s_previousScissorState;
+
+	fprintf(stderr, "[GpuPack] src=%u x=%d y=%d w=%d h=%d flipY=%d\n",
+	        (unsigned)sourceTexture, x, y, w, h, (int)flipY);
 
 	NativeRenderer_UpdateVRAM();
 
