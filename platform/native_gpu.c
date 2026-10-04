@@ -14,6 +14,7 @@
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
+#include "platform/native_glad.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -156,6 +157,20 @@ void NativeGpu_RegisterCustomTexture(u16 idx, TextureID tex, int width, int heig
 
 	s_gpu.customTextures[idx] = tex;
 	s_gpu.customTextureSizes[idx] = ((u32)(width & 0xFFFF)) | ((u32)(height & 0xFFFF) << 16);
+}
+
+void NativeGpu_FreeCustomTexture(u16 idx)
+{
+	if (idx >= NATIVE_GPU_MAX_CUSTOM_TEXTURES)
+	{
+		return;
+	}
+	if (s_gpu.customTextures[idx] != 0)
+	{
+		glDeleteTextures(1, &s_gpu.customTextures[idx]);
+		s_gpu.customTextures[idx] = 0;
+		s_gpu.customTextureSizes[idx] = 0;
+	}
 }
 
 void ClearSplits(void)

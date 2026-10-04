@@ -6,7 +6,8 @@
 #include "platform/native_glad.h"
 #include "LevelRegistry.h"
 
-extern int NativeCustomRacer_AllocTexIdx(void);
+extern int  NativeCustomRacer_AllocTexIdx(void);
+extern void NativeCustomRacer_FreeTexIdx(int idx);
 extern int LOAD_GetBigfileIndex(int levelID, int levelLOD, int subfileIndex);
 
 #define NLT_MAX       64     /* TIMs (rects) per VRM */
@@ -173,11 +174,27 @@ static void NltDecodePixels(const u8 *px, const u16 *clut, int bpp, int hasClut,
 
 static void NltFreeDecoded(void)
 {
+    /* Free the GL texture and the pool index for every previously
+     * allocated entry. Without this, each custom level load leaks
+     * ~34 indices + ~34 GL textures from the shared Sentinel pool
+     * (GL-INDEX-LEAK). Once exhausted, NltGetPage returns -1,
+     * NltPatchOne falls back to real VRAM and the bleed returns.
+     *
+     * The CPU-side rgba buffer of each TIM is also freed (existing
+     * behavior); the 256x256 page scratch buffer is already freed
+     * inside NltGetPage. */
     for (int i = 0; i < s_ltCount; i++) {
         free(s_lt[i].rgba);
         s_lt[i].rgba = NULL;
+        NativeGpu_FreeCustomTexture(s_lt[i].idx);
+        NativeCustomRacer_FreeTexIdx((int)s_lt[i].idx);
     }
     s_ltCount = 0;
+
+    for (int i = 0; i < s_pgCount; i++) {
+        NativeGpu_FreeCustomTexture(s_pg[i].idx);
+        NativeCustomRacer_FreeTexIdx((int)s_pg[i].idx);
+    }
     s_pgCount = 0;
 }
 

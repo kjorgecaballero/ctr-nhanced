@@ -41,8 +41,9 @@ s32 g_debugForcedPodiumRank = -1;
  * Each kind has its own localIdx cache (s_sentinelTexMap and
  * s_danceSentinelTexMap), so a dance with different textures than its
  * model does not collide with the model's cache. The GL texture
- * allocator (s_nextModelTexIdx) is shared — both kinds upload into the
- * 256..2047 pool and never free; that's fine for a session. */
+ * allocator is shared across all kinds (and custom-level Sentinel
+ * pages): per-custom caches (below) never free; custom-level pages
+ * do, via NativeCustomRacer_FreeTexIdx. */
 #define NATIVE_MODEL_TEX_BASE  256
 #define NATIVE_MODEL_TEX_END   2048
 #define NATIVE_MODEL_TEX_MAX   256    /* max localIdx per custom */
@@ -221,11 +222,19 @@ static long            s_menuVrmSize[NATIVE_CUSTOM_COUNT][NATIVE_MENU_PLAYER_SLO
 static void *s_playerModelPtr[NATIVE_PLAYER_MODEL_SLOTS];
 
 /* Sentinel texture allocator (see NATIVE_MODEL_TEX_BASE above).
- * Monotonic: textures are cached and never freed, so no freelist.
- * The allocator is shared between MODEL and DANCE kinds; the per-kind
- * localIdx caches (below) are separate so a dance's textures do not
- * alias the model's. */
-static int s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
+ * Free-list bitmap over the pool [NATIVE_MODEL_TEX_BASE,
+ * NATIVE_MODEL_TEX_END). 1 = allocated, 0 = free. The allocator is
+ * shared between MODEL / DANCE / MASK / MASK_BEAM / ITEM kinds and
+ * custom-level Sentinel pages; the per-kind localIdx caches (below)
+ * keep the dance's textures from aliasing the model's.
+ *
+ * The per-custom sentinel caches (RegisterModelTextures) allocate
+ * once per session and are never freed -- that is by design. Custom
+ * level pages (native_level_textures.c) are freed on level change
+ * via NativeCustomRacer_FreeTexIdx, avoiding GL-INDEX-LEAK. */
+#define NATIVE_MODEL_TEX_RANGE  (NATIVE_MODEL_TEX_END - NATIVE_MODEL_TEX_BASE)
+#define NATIVE_MODEL_TEX_WORDS  ((NATIVE_MODEL_TEX_RANGE + 31) / 32)
+static u32 s_modelTexUsed[NATIVE_MODEL_TEX_WORDS];
 static s16 s_sentinelTexMap       [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 static s16 s_danceSentinelTexMap  [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 static s16 s_maskSentinelTexMap   [NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
@@ -490,7 +499,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_engineSfxSpuAddr,  0, sizeof(s_engineSfxSpuAddr));
     memset(s_engineSfxSpuPitch, 0, sizeof(s_engineSfxSpuPitch));
     memset(s_engineSfxVoicePlaying, 0, sizeof(s_engineSfxVoicePlaying));
-    s_nextModelTexIdx = NATIVE_MODEL_TEX_BASE;
+    memset(s_modelTexUsed, 0, sizeof(s_modelTexUsed));
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++)
         s_customMenuID[i] = -1;
 
@@ -818,9 +827,25 @@ static void ExpandModelHeaders(unsigned char *buf, long fileSize)
 
 static int AllocModelTexIdx(void)
 {
-    if (s_nextModelTexIdx >= NATIVE_MODEL_TEX_END)
-        return -1;
-    return s_nextModelTexIdx++;
+    for (int i = 0; i < NATIVE_MODEL_TEX_RANGE; i++)
+    {
+        const int word = i >> 5;
+        const u32 bit  = 1u << (i & 31);
+        if ((s_modelTexUsed[word] & bit) == 0)
+        {
+            s_modelTexUsed[word] |= bit;
+            return NATIVE_MODEL_TEX_BASE + i;
+        }
+    }
+    return -1;
+}
+
+void NativeCustomRacer_FreeTexIdx(int idx)
+{
+    if (idx < NATIVE_MODEL_TEX_BASE || idx >= NATIVE_MODEL_TEX_END)
+        return;
+    const int i = idx - NATIVE_MODEL_TEX_BASE;
+    s_modelTexUsed[i >> 5] &= ~(1u << (i & 31));
 }
 
 static GLuint LoadSentinelBin(const char *path, int *outW, int *outH)
@@ -1028,7 +1053,7 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
             {
                 Log("[CustomRacer] sentinel load failed (%s): %s\n",
                     kind_name, path);
-                s_nextModelTexIdx--;  /* rollback */
+                NativeCustomRacer_FreeTexIdx(globalIdx);  /* rollback */
                 continue;
             }
 
