@@ -1718,6 +1718,8 @@ void NativeRenderer_ClearVRAM(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 	}
 
 	NativeRenderer_MarkVRAMDirty(x, y, w, h);
+	fprintf(stderr, "[ClearImage] x=%d y=%d w=%d h=%d r=%d g=%d b=%d\n",
+	        x, y, w, h, r, g, b);
 }
 
 void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
