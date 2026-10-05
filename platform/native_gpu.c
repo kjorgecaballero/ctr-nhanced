@@ -989,6 +989,14 @@ void DrawSplit(const GPUDrawSplit *split)
 	}
 
 	const bool drawOnScreen = split->drawenv.dfe;
+	if (!drawOnScreen)
+	{
+		fprintf(stderr, "[DS/Off] clip=(%d,%d,%d,%d) isbg=%d r=%d g=%d b=%d\n",
+		        split->drawenv.clip.x, split->drawenv.clip.y,
+		        split->drawenv.clip.w, split->drawenv.clip.h,
+		        split->drawenv.isbg,
+		        split->drawenv.r0, split->drawenv.g0, split->drawenv.b0);
+	}
 	if ((split->drawenv.clip.w <= 0) || (split->drawenv.clip.h <= 0))
 	{
 		// NOTE(aalhendi): VS/Battle end previews can shrink a losing viewport

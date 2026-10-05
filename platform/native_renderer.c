@@ -1968,7 +1968,36 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 		s_previousOffscreenState = 1;
 		NativeRenderer_EnsureRenderTarget(&s_offscreenRenderTarget, offscreenRect->w, offscreenRect->h);
 		s_previousOffscreen = *offscreenRect;
-		NativeRenderer_LoadRenderTargetFromVRAM(&s_offscreenRenderTarget, offscreenRect->x, offscreenRect->y, offscreenRect->w, offscreenRect->h);
+
+		// Clear the offscreen target for every enable. PS1's isbg=1 semantics
+		// mean the draw env clears its clip area before drawing; the retail
+		// re-draws the whole region every use. For karts LOW LOD this prevents
+		// ghost accumulation; for the Wumpa HUD sprite this prevents stale VRAM
+		// content from bleeding through (e.g. Holiday Hills grass).
+		{
+			const ShaderID prevShader = s_previousShader;
+			const TextureID prevTexture = s_lastBoundTexture;
+			const BlendMode prevBlend = s_previousBlendMode;
+			const int prevScissor = s_previousScissorState;
+			glBindFramebuffer(GL_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
+			glDisable(GL_BLEND);
+			glDisable(GL_SCISSOR_TEST);
+			glDisable(GL_STENCIL_TEST);
+			glViewport(0, 0, s_offscreenRenderTarget.width, s_offscreenRenderTarget.height);
+			glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+			glEnable(GL_STENCIL_TEST);
+			if (s_boundVertexBuffer >= 0) { glBindVertexArray(s_glVertexArray[s_boundVertexBuffer]); } else { glBindVertexArray(0); }
+			glUseProgram(prevShader == (ShaderID)-1 ? 0 : prevShader);
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, prevTexture == (TextureID)-1 ? 0 : prevTexture);
+			s_previousShader = prevShader;
+			s_lastBoundTexture = prevTexture;
+			s_previousBlendMode = BM_NONE;
+			s_previousScissorState = 0;
+			NativeRenderer_SetBlendMode(prevBlend);
+			NativeRenderer_SetScissorState(prevScissor);
+		}
 	}
 	else
 	{
