@@ -1724,8 +1724,11 @@ void NativeRenderer_ClearVRAM(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 	}
 
 	NativeRenderer_MarkVRAMDirty(x, y, w, h);
-	fprintf(stderr, "[ClearImage] x=%d y=%d w=%d h=%d r=%d g=%d b=%d\n",
-	        x, y, w, h, r, g, b);
+	if (x < 832 && x + w > 800 && y < 280 && y + h > 256)
+	{
+		fprintf(stderr, "[CLEAR-OVERLAP] f=%u rect=%d,%d,%d,%d r=%d g=%d b=%d\n",
+		        s_dbgFrame, x, y, w, h, r, g, b);
+	}
 }
 
 void NativeRenderer_Clear(int x, int y, int w, int h, u8 r, u8 g, u8 b)
@@ -1942,10 +1945,11 @@ internal u32 DbgHashVram(int x, int y, int w, int h, int *nz)
 
 void NativeRenderer_DbgCheckWumpaRead(void)
 {
-	if (s_dbgPackNz < 0) return;
+	// Always read; we want to see if the SPRT's VRAM snapshot differs from
+	// the last pack, regardless of whether we skipped it.
 	int nz; u32 hsh = DbgHashVram(800, 256, 32, 24, &nz);
 	if (hsh != s_dbgPackHash)
-		fprintf(stderr, "[VH-ANOM] f=%u read nz=%d h=%08x (pack nz=%d h=%08x)\n",
+		fprintf(stderr, "[VH-ANOM] f=%u read nz=%d h=%08x (last pack nz=%d h=%08x)\n",
 		        s_dbgFrame, nz, hsh, s_dbgPackNz, s_dbgPackHash);
 }
 
@@ -1993,12 +1997,55 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 
 		if (fboNz < 100)
 		{
+			// Dump FBO to TGA, max 5 files per session.
+			static int s_dumpCount = 0;
+			if (s_dumpCount < 5)
+			{
+				char path[64];
+				snprintf(path, sizeof(path), "wumpa_fbo_%d_%u.tga", s_dumpCount, s_dbgFrame);
+				FILE *fp = fopen(path, "wb");
+				if (fp)
+				{
+					u8 hdr[18] = {0};
+					hdr[2] = 2;
+					hdr[12] = 32; hdr[13] = 24;
+					hdr[14] = 32; hdr[16] = 0x20;
+					fwrite(hdr, 1, 18, fp);
+					// Flip Y for TGA (bottom-up).
+					for (int y = 23; y >= 0; y--)
+						fwrite(&px[y * 32 * 4], 4, 32, fp);
+					fclose(fp);
+					fprintf(stderr, "[FBO-DUMP] wrote %s\n", path);
+				}
+				s_dumpCount++;
+			}
 			return;
 		}
 
 		NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
 		                                    s_previousOffscreen.h, true);
 		return;
+	}
+
+	if (s_previousOffscreen.w == 96 && s_previousOffscreen.h == 64)
+	{
+		int fboNz = 0, rSum = 0, gSum = 0, bSum = 0;
+		GLint prevReadFb;
+		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
+		u8 px[96 * 64 * 4];
+		glReadPixels(0, 0, 96, 64, GL_RGBA, GL_UNSIGNED_BYTE, px);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
+		for (int i = 0; i < 96 * 64; i++)
+		{
+			rSum += px[i*4+0];
+			gSum += px[i*4+1];
+			bSum += px[i*4+2];
+			if (px[i*4+0] || px[i*4+1] || px[i*4+2]) fboNz++;
+		}
+		fprintf(stderr, "[KART-FBO] f=%u rect=%d,%d nz=%d r=%d g=%d b=%d\n",
+		        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
+		        fboNz, rSum, gSum, bSum);
 	}
 
 	fprintf(stderr, "[OFF-FLUSH] f=%u rect=%d,%d,%d,%d\n",
@@ -2158,8 +2205,11 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 	const BlendMode previousBlendMode = s_previousBlendMode;
 	const int previousScissorState = s_previousScissorState;
 
-	fprintf(stderr, "[GpuPack] src=%u x=%d y=%d w=%d h=%d flipY=%d\n",
-	        (unsigned)sourceTexture, x, y, w, h, (int)flipY);
+	if (x < 832 && x + w > 800 && y < 280 && y + h > 256)
+	{
+		fprintf(stderr, "[PACK-OVERLAP] f=%u src=%u rect=%d,%d,%d,%d\n",
+		        s_dbgFrame, (unsigned)sourceTexture, x, y, w, h);
+	}
 
 	NativeRenderer_UpdateVRAM();
 
@@ -2330,6 +2380,11 @@ void NativeRenderer_UpdateVRAM(void)
 	for (s32 i = 0; i < rectCount; i++)
 	{
 		const RECT16 r = s_vram.cpuDirtyRects[i];
+		if (r.x < 832 && r.x + r.w > 800 && r.y < 280 && r.y + r.h > 256)
+		{
+			fprintf(stderr, "[UPLOAD-OVERLAP] f=%u rect=%d,%d,%d,%d\n",
+			        s_dbgFrame, r.x, r.y, r.w, r.h);
+		}
 		glTexSubImage2D(GL_TEXTURE_2D, 0, r.x, r.y, r.w, r.h, VRAM_FORMAT, GL_UNSIGNED_BYTE, s_vram.cpuPixels + (size_t)r.y * VRAM_WIDTH + r.x);
 	}
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
