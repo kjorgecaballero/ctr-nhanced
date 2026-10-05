@@ -25,6 +25,7 @@
 void Platform_PollHostEvents(void);
 extern int g_cfg_bilinearFiltering;
 extern int g_dbg_emulatorPaused;
+extern unsigned int s_dbgFrame;
 extern int g_dbg_polygonSelected;
 
 #define NATIVE_GPU_LOG(fmt, ...)   Platform_Log("[CTR GPU] " fmt, __VA_ARGS__)
@@ -991,11 +992,12 @@ void DrawSplit(const GPUDrawSplit *split)
 	const bool drawOnScreen = split->drawenv.dfe;
 	if (!drawOnScreen)
 	{
-		fprintf(stderr, "[DS/Off] clip=(%d,%d,%d,%d) isbg=%d r=%d g=%d b=%d\n",
+		fprintf(stderr, "[DS/Off] clip=(%d,%d,%d,%d) isbg=%d r=%d g=%d b=%d nv=%u\n",
 		        split->drawenv.clip.x, split->drawenv.clip.y,
 		        split->drawenv.clip.w, split->drawenv.clip.h,
 		        split->drawenv.isbg,
-		        split->drawenv.r0, split->drawenv.g0, split->drawenv.b0);
+		        split->drawenv.r0, split->drawenv.g0, split->drawenv.b0,
+		        (unsigned)split->numVerts);
 	}
 	if ((split->drawenv.clip.w <= 0) || (split->drawenv.clip.h <= 0))
 	{
@@ -1027,6 +1029,23 @@ void DrawSplit(const GPUDrawSplit *split)
 	NativeRenderer_SetupClipMode(&split->drawenv.clip, &split->dispenv, drawOnScreen);
 	NativeRenderer_SetOffscreenState(&split->drawenv.clip, !drawOnScreen);
 	NativeRenderer_SetProjection(&split->drawenv.clip, &split->dispenv, !drawOnScreen);
+	NativeRenderer_NotifyOffscreenDraw();
+
+	if (!drawOnScreen && split->drawenv.clip.x == 800 && split->drawenv.clip.y == 256 &&
+	    split->drawenv.clip.w == 32 && split->drawenv.clip.h == 24)
+	{
+		int mnX = 0x7FFFFFFF, mnY = 0x7FFFFFFF, mxX = -0x7FFFFFFF, mxY = -0x7FFFFFFF;
+		for (int i = 0; i < split->numVerts; i++)
+		{
+			GrVertex *v = &s_gpu.vertexBuffer[split->startVertex + i];
+			if (v->x < mnX) mnX = v->x;
+			if (v->y < mnY) mnY = v->y;
+			if (v->x > mxX) mxX = v->x;
+			if (v->y > mxY) mxY = v->y;
+		}
+		fprintf(stderr, "[BBOX] f=%u nv=%u x[%d..%d] y[%d..%d]\n",
+		        s_dbgFrame, (unsigned)split->numVerts, mnX, mxX, mnY, mxY);
+	}
 
 	if (split->psxTexturedSemiTrans)
 	{
@@ -1049,6 +1068,11 @@ void DrawSplit(const GPUDrawSplit *split)
 		NativeRenderer_SetBlendMode(split->blendMode);
 		NativeRenderer_SetPSXTextureSemiTransPass(0);
 		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+	}
+
+	if (drawOnScreen && (split->drawenv.tpage & 0x1F) == 0x1C)
+	{
+		NativeRenderer_DbgCheckWumpaRead();
 	}
 
 	if (split->debugText)

@@ -67,6 +67,10 @@ global_variable int s_previousDepthMode = 0;
 global_variable int s_previousStencilMode = 0;
 global_variable int s_previousScissorState = 0;
 global_variable int s_previousOffscreenState = 0;
+global_variable int s_offscreenDrawCount = 0;
+global_variable u32 s_dbgFrame = 0;
+global_variable u32 s_dbgPackHash = 0;
+global_variable int s_dbgPackNz = -1;
 global_variable RECT16 s_previousOffscreen = {0, 0, 0, 0};
 
 global_variable ShaderID s_previousShader = (ShaderID)-1;
@@ -164,6 +168,7 @@ internal void NativeRenderer_DestroyRenderTarget(struct NativeRenderTarget *targ
 internal void NativeRenderer_EnsureRenderTarget(struct NativeRenderTarget *target, int width, int height);
 internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
+void NativeRenderer_NotifyOffscreenDraw(void);
 internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int w, int h);
 void NativeRenderer_PresentMainRenderTarget(void);
 #if defined(CTR_INTERNAL)
@@ -347,6 +352,7 @@ void NativeRenderer_BeginScene(void)
 #endif
 
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_RENDERER_BEGIN_SCENE);
+	s_dbgFrame++;
 	s_lastBoundTexture = 0;
 
 	NativeRenderer_UpdatePresentationViewport();
@@ -1916,12 +1922,88 @@ internal int NativeRenderer_RectEquals(const RECT16 *a, const RECT16 *b)
 	return a->x == b->x && a->y == b->y && a->w == b->w && a->h == b->h;
 }
 
+internal u32 DbgHashVram(int x, int y, int w, int h, int *nz)
+{
+	NativeRenderer_SyncGpuVRAMToCPU(x, y, w, h);
+	u32 hsh = 2166136261u;
+	int n = 0;
+	for (int j = 0; j < h; j++)
+	{
+		for (int i = 0; i < w; i++)
+		{
+			u16 p = s_vram.cpuPixels[(y + j) * VRAM_WIDTH + x + i];
+			hsh = (hsh ^ p) * 16777619u;
+			n += (p != 0);
+		}
+	}
+	*nz = n;
+	return hsh;
+}
+
+void NativeRenderer_DbgCheckWumpaRead(void)
+{
+	if (s_dbgPackNz < 0) return;
+	int nz; u32 hsh = DbgHashVram(800, 256, 32, 24, &nz);
+	if (hsh != s_dbgPackHash)
+		fprintf(stderr, "[VH-ANOM] f=%u read nz=%d h=%08x (pack nz=%d h=%08x)\n",
+		        s_dbgFrame, nz, hsh, s_dbgPackNz, s_dbgPackHash);
+}
+
 internal void NativeRenderer_FlushOffscreenToVRAM(void)
 {
 	if (s_previousOffscreen.w <= 0 || s_previousOffscreen.h <= 0)
 	{
 		return;
 	}
+
+	// Wumpa HUD rect: on some frames the retail emits the SPRT with all-zero
+	// color (or the shader discards all fragments), so the FBO ends up empty
+	// even though nv > 0. On PS1 the SPRT with color 0 is a no-op: VRAM keeps
+	// the previous frame. In native we clear the FBO, so an empty FBO means
+	// the pack would write zeros to VRAM and blank the sprite. Skip the pack
+	// in that case so VRAM retains the last good content.
+	// Wumpa HUD offscreen rect is 32x24 in every mode, but its position
+	// differs: (800,256) in 3P/4P, (992,384) in 2P, similar offsets in 1P.
+	// Gate by size only.
+	if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
+	{
+		int fboNz = 0;
+		int rSum = 0, gSum = 0, bSum = 0;
+		GLint prevReadFb;
+		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
+		u8 px[32 * 24 * 4];
+		glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
+		for (int i = 0; i < 32 * 24; i++)
+		{
+			rSum += px[i*4+0];
+			gSum += px[i*4+1];
+			bSum += px[i*4+2];
+			if (px[i*4+0] || px[i*4+1] || px[i*4+2]) fboNz++;
+		}
+
+		// Red-dominant flag: catches the custom-level VRAM bleed where the
+		// Wumpa FBO picks up garbage instead of the sprite content.
+		int redDominant = (rSum > gSum * 2 && rSum > bSum * 2 && rSum > 20000) ? 1 : 0;
+
+		fprintf(stderr, "[WUMPA-FBO] f=%u rect=%d,%d nz=%d r=%d g=%d b=%d red=%d\n",
+		        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
+		        fboNz, rSum, gSum, bSum, redDominant);
+
+		if (fboNz < 100)
+		{
+			return;
+		}
+
+		NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
+		                                    s_previousOffscreen.h, true);
+		return;
+	}
+
+	fprintf(stderr, "[OFF-FLUSH] f=%u rect=%d,%d,%d,%d\n",
+	        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
+	        s_previousOffscreen.w, s_previousOffscreen.h);
 
 	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
 	                                    s_previousOffscreen.h, true);
@@ -1943,6 +2025,14 @@ internal void NativeRenderer_SetScissorState(int enable)
 		glEnable(GL_SCISSOR_TEST);
 	}
 	s_previousScissorState = enable;
+}
+
+void NativeRenderer_NotifyOffscreenDraw(void)
+{
+	if (s_previousOffscreenState)
+	{
+		s_offscreenDrawCount++;
+	}
 }
 
 void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
@@ -1998,12 +2088,48 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 			NativeRenderer_SetBlendMode(prevBlend);
 			NativeRenderer_SetScissorState(prevScissor);
 		}
+
+		// Readback FBO right after clear, before the draws.
+		{
+			GLint prevReadFb;
+			glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
+			u8 px[32 * 24 * 4];
+			glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
+			int n = 0;
+			for (int i = 0; i < 32 * 24 * 4; i++) n += (px[i] != 0);
+			fprintf(stderr, "[FBO-CLEAR] f=%u nz=%d size=%dx%d\n",
+			        s_dbgFrame, n, s_offscreenRenderTarget.width, s_offscreenRenderTarget.height);
+		}
+
+		s_offscreenDrawCount = 0;
 	}
 	else
 	{
 		s_previousOffscreenState = 0;
 
-		NativeRenderer_FlushOffscreenToVRAM();
+
+		// FBO state right before flush.
+		if (s_previousOffscreen.x == 800 && s_previousOffscreen.y == 256 &&
+		    s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
+		{
+			GLint prevReadFb;
+			glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
+			u8 px[32 * 24 * 4];
+			glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
+			int n = 0;
+			for (int i = 0; i < 32 * 24 * 4; i++) n += (px[i] != 0);
+			fprintf(stderr, "[FBO-PREFLUSH] f=%u nz=%d size=%dx%d draws=%d\n",
+			        s_dbgFrame, n, s_offscreenRenderTarget.width, s_offscreenRenderTarget.height, s_offscreenDrawCount);
+		}
+
+		if (s_offscreenDrawCount > 0)
+		{
+			NativeRenderer_FlushOffscreenToVRAM();
+		}
 		NativeRenderer_BindMainRenderTarget();
 		NativeRenderer_SetViewPort(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height);
 	}
@@ -2097,6 +2223,7 @@ void NativeRenderer_StoreFrameBuffer(int x, int y, int w, int h)
 
 void NativeRenderer_CopyVRAM(u16 *src, int x, int y, int w, int h, int dst_x, int dst_y)
 {
+	const int isMove = (src == NULL);
 	int stride = w;
 
 	if (!src)
@@ -2118,6 +2245,10 @@ void NativeRenderer_CopyVRAM(u16 *src, int x, int y, int w, int h, int dst_x, in
 		dst += VRAM_WIDTH;
 		src += stride;
 	}
+
+	if (dst_x < 832 && dst_x + w > 800 && dst_y < 280 && dst_y + h > 256)
+		fprintf(stderr, "[DIRTY-HIT] f=%u %s src=%d,%d dst=%d,%d,%d,%d\n",
+		        s_dbgFrame, isMove ? "Move" : "Load", x, y, dst_x, dst_y, w, h);
 
 	NativeRenderer_MarkVRAMDirty(dst_x, dst_y, w, h);
 }
