@@ -223,8 +223,10 @@ int NativeLevelTextures_DecodeVRM(const u8 *buf, int size)
             continue;
         }
 
-        fprintf(stderr, "[NLT] TIM rect=(%d,%d,%d,%d) bpp=%d hasClut=%d\n",
-                rx, ry, rw, rh, bpp, hasClut);
+        fprintf(stderr, "[NLT] TIM rect=(%d,%d,%d,%d) bpp=%d hasClut=%d clutAddr=(%d,%d)\n",
+                rx, ry, rw, rh, bpp, hasClut,
+                hasClut && clut ? ((const int *)clut)[0] & 0x3F : -1,
+                hasClut && clut ? ((const int *)clut)[0] >> 6 : -1);
 
         /* VRM = raw VRAM: store halfwords as-is in the virtual VRAM. */
         if (bpp == 2 && rx >= 0 && ry >= 0 && rx < 1024 && ry < 512) {
@@ -498,6 +500,8 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
 int NativeLevelTextures_LookupPage(u16 tpage, u16 clut)
 {
     if (s_pgCount == 0) return -1;
+
+    
     const u16 key = tpage & 0x019F;
     for (int i = 0; i < s_pgCount; i++)
         if (s_pg[i].tpage == key && s_pg[i].clut == clut) return s_pg[i].idx;
