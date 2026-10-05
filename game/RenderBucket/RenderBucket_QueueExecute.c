@@ -1185,9 +1185,9 @@ static void RenderBucket_AdjustViewPositionForMvp(struct Instance *inst, VECTOR 
 	// back down.
 #ifdef CTR_NATIVE
 	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
-	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED) &&
+	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED || inst->model->id == PU_EXPLOSIVE_CRATE) &&
 	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
-	    inst->thread != NULL && inst->thread->funcThTick == (void *)RB_GenericMine_ThTick)
+	    inst->thread != NULL && (inst->thread->funcThTick == (void *)RB_GenericMine_ThTick || inst->thread->funcThTick == (void *)RB_Potion_ThTick_InAir))
 	{
 		// skip ×4 shift
 	}
@@ -1400,9 +1400,9 @@ static void RenderBucket_BuildM3x3(struct Instance *inst, struct ModelHeader *mh
 
 #ifdef CTR_NATIVE
 	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
-	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED) &&
+	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED || inst->model->id == PU_EXPLOSIVE_CRATE) &&
 	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
-	    inst->thread != NULL && inst->thread->funcThTick == (void *)RB_GenericMine_ThTick)
+	    inst->thread != NULL && (inst->thread->funcThTick == (void *)RB_GenericMine_ThTick || inst->thread->funcThTick == (void *)RB_Potion_ThTick_InAir))
 	{
 		m0 = 0x160; m1 = 0; m2 = 0x160; m3 = 0; m4 = 0x160;
 	}
