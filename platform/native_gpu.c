@@ -919,6 +919,14 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	int overrideH = s_gpu.overrideTextureHeight;
 
 	u16 effClut = (u16)s_gpu.currentClut;
+	// 16bpp has no CLUT in PS1; bit 15 of the clut field is unused and
+	// can hold garbage from retail-emitted prims (e.g. the HUD composer
+	// SPRT that displays the offscreen Wumpa render). Without clearing it,
+	// AddSplit misinterprets bit 15 as our Sentinel marker and swaps the
+	// texture for a registered custom GL texture at (clut & 0x7FFF),
+	// producing the intermittent color square on the HUD.
+	if (((tpage >> 7) & 3) == 2)
+		effClut &= 0x7FFF;
 	// LookupPage maps a (tpage, clut) to a composed page of the custom VRM.
 	// It only makes sense for ON-SCREEN prims: the sentinel was designed for
 	// karts/items/terrain that legitimately live in the VRM region.
@@ -1077,6 +1085,8 @@ void DrawSplit(const GPUDrawSplit *split)
 		}
 		return;
 	}
+
+
 
 	NativeRenderer_SetStencilMode(split->drawPrimMode); // draw with mask 0x16
 
