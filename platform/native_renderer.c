@@ -71,6 +71,18 @@ global_variable int s_offscreenDrawCount = 0;
 global_variable u32 s_dbgFrame = 0;
 global_variable u32 s_dbgPackHash = 0;
 global_variable int s_dbgPackNz = -1;
+
+// Per-rect scratch tracking. When an offscreen split is empty (retail didn't
+// redraw the sprite this frame), we want to skip the pack and let VRAM keep
+// the previous content. But that only works if VRAM actually holds OUR last
+// pack for that rect. In custom levels the VRM may have overwritten that
+// region, in which case "previous content" is the level's texture (tree/red).
+// Track which rects we have actually packed at least once, and invalidate
+// them when a CPU-side write (LoadImage/MoveImage) lands on top.
+#define SCRATCH_MAX 32
+global_variable RECT16 s_scratchRect[SCRATCH_MAX];
+global_variable int s_scratchValid[SCRATCH_MAX];
+global_variable int s_scratchCount = 0;
 global_variable RECT16 s_previousOffscreen = {0, 0, 0, 0};
 
 global_variable ShaderID s_previousShader = (ShaderID)-1;
@@ -1943,13 +1955,50 @@ internal u32 DbgHashVram(int x, int y, int w, int h, int *nz)
 	return hsh;
 }
 
+internal int NativeRenderer_ScratchIndex(const RECT16 *r, int create)
+{
+	for (int i = 0; i < s_scratchCount; i++)
+		if (NativeRenderer_RectEquals(&s_scratchRect[i], r)) return i;
+	if (!create || s_scratchCount >= SCRATCH_MAX) return -1;
+	s_scratchRect[s_scratchCount] = *r;
+	s_scratchValid[s_scratchCount] = 0;
+	return s_scratchCount++;
+}
+
+int NativeRenderer_ScratchHoldsOurContent(const RECT16 *r)
+{
+	int i = NativeRenderer_ScratchIndex(r, 0);
+	return i >= 0 && s_scratchValid[i];
+}
+
+internal void NativeRenderer_ScratchMarkPacked(const RECT16 *r)
+{
+	int i = NativeRenderer_ScratchIndex(r, 1);
+	if (i >= 0) s_scratchValid[i] = 1;
+}
+
+// True if any scratch rect (offscreen FBO region) falls inside the given
+// (tpage) page rect. Used to detect the Wumpa SPRT being intercepted by
+// LookupPage: the on-screen SPRT samples a page that also contains the
+// offscreen FBO scratch region, so it reads VRM content instead of the
+// freshly packed VRAM.
+int NativeRenderer_PageHasScratch(int tpX, int tpY, int wHW)
+{
+	for (int i = 0; i < s_scratchCount; i++)
+	{
+		const RECT16 *r = &s_scratchRect[i];
+		if (r->x >= tpX && r->x < tpX + wHW && r->y >= tpY && r->y < tpY + 256) return 1;
+	}
+	return 0;
+}
+
+
 void NativeRenderer_DbgCheckWumpaRead(void)
 {
-	// Always read; we want to see if the SPRT's VRAM snapshot differs from
-	// the last pack, regardless of whether we skipped it.
+	if (s_dbgPackNz < 0) return;
 	int nz; u32 hsh = DbgHashVram(800, 256, 32, 24, &nz);
 	if (hsh != s_dbgPackHash)
-		fprintf(stderr, "[VH-ANOM] f=%u read nz=%d h=%08x (last pack nz=%d h=%08x)\n",
+		fprintf(stderr, "[VH-ANOM] f=%u read nz=%d h=%08x (pack nz=%d h=%08x)\n",
 		        s_dbgFrame, nz, hsh, s_dbgPackNz, s_dbgPackHash);
 }
 
@@ -1959,101 +2008,44 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 	{
 		return;
 	}
-
-	// Wumpa HUD rect: on some frames the retail emits the SPRT with all-zero
-	// color (or the shader discards all fragments), so the FBO ends up empty
-	// even though nv > 0. On PS1 the SPRT with color 0 is a no-op: VRAM keeps
-	// the previous frame. In native we clear the FBO, so an empty FBO means
-	// the pack would write zeros to VRAM and blank the sprite. Skip the pack
-	// in that case so VRAM retains the last good content.
-	// Wumpa HUD offscreen rect is 32x24 in every mode, but its position
-	// differs: (800,256) in 3P/4P, (992,384) in 2P, similar offsets in 1P.
-	// Gate by size only.
+	// SKIP-FLUSH only applies to the Wumpa HUD sprite (32x24). For larger
+	// rects (karts LOW LOD 96x64, distant sprites), the skip breaks the
+	// render: those rects are scratch that need to be re-packed every frame,
+	// otherwise the kart LOD degrades and the sprite clips.
 	if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
 	{
-		int fboNz = 0;
-		int rSum = 0, gSum = 0, bSum = 0;
+		// Read back the FBO. If it is empty (retail didn't redraw the HUD
+		// this frame), skip the pack so VRAM keeps the previous content --
+		// but ONLY if VRAM still holds OUR last pack for that rect. In
+		// custom levels the VRM can overwrite the region with level
+		// textures, so skipping blindly would leave that content in place.
+		static u8 s_px[32 * 24 * 4];
 		GLint prevReadFb;
 		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
-		u8 px[32 * 24 * 4];
-		glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
+		glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, s_px);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
+
+		int fboNz = 0;
 		for (int i = 0; i < 32 * 24; i++)
 		{
-			rSum += px[i*4+0];
-			gSum += px[i*4+1];
-			bSum += px[i*4+2];
-			if (px[i*4+0] || px[i*4+1] || px[i*4+2]) fboNz++;
+			if (s_px[i*4+0] || s_px[i*4+1] || s_px[i*4+2]) fboNz++;
 		}
 
-		// Red-dominant flag: catches the custom-level VRAM bleed where the
-		// Wumpa FBO picks up garbage instead of the sprite content.
-		int redDominant = (rSum > gSum * 2 && rSum > bSum * 2 && rSum > 20000) ? 1 : 0;
-
-		fprintf(stderr, "[WUMPA-FBO] f=%u rect=%d,%d nz=%d r=%d g=%d b=%d red=%d\n",
-		        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
-		        fboNz, rSum, gSum, bSum, redDominant);
-
-		if (fboNz < 100)
+		if (fboNz < (32 * 24) / 20 && NativeRenderer_ScratchHoldsOurContent(&s_previousOffscreen))
 		{
-			// Dump FBO to TGA, max 5 files per session.
-			static int s_dumpCount = 0;
-			if (s_dumpCount < 5)
-			{
-				char path[64];
-				snprintf(path, sizeof(path), "wumpa_fbo_%d_%u.tga", s_dumpCount, s_dbgFrame);
-				FILE *fp = fopen(path, "wb");
-				if (fp)
-				{
-					u8 hdr[18] = {0};
-					hdr[2] = 2;
-					hdr[12] = 32; hdr[13] = 24;
-					hdr[14] = 32; hdr[16] = 0x20;
-					fwrite(hdr, 1, 18, fp);
-					// Flip Y for TGA (bottom-up).
-					for (int y = 23; y >= 0; y--)
-						fwrite(&px[y * 32 * 4], 4, 32, fp);
-					fclose(fp);
-					fprintf(stderr, "[FBO-DUMP] wrote %s\n", path);
-				}
-				s_dumpCount++;
-			}
+			fprintf(stderr, "[SKIP-FLUSH] f=%u rect=%d,%d,%d,%d fbo_nz=%d/%d\n",
+			        s_dbgFrame,
+			        s_previousOffscreen.x, s_previousOffscreen.y,
+			        32, 24, fboNz, 32 * 24);
 			return;
 		}
-
-		NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
-		                                    s_previousOffscreen.h, true);
-		return;
 	}
 
-	if (s_previousOffscreen.w == 96 && s_previousOffscreen.h == 64)
-	{
-		int fboNz = 0, rSum = 0, gSum = 0, bSum = 0;
-		GLint prevReadFb;
-		glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
-		u8 px[96 * 64 * 4];
-		glReadPixels(0, 0, 96, 64, GL_RGBA, GL_UNSIGNED_BYTE, px);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
-		for (int i = 0; i < 96 * 64; i++)
-		{
-			rSum += px[i*4+0];
-			gSum += px[i*4+1];
-			bSum += px[i*4+2];
-			if (px[i*4+0] || px[i*4+1] || px[i*4+2]) fboNz++;
-		}
-		fprintf(stderr, "[KART-FBO] f=%u rect=%d,%d nz=%d r=%d g=%d b=%d\n",
-		        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
-		        fboNz, rSum, gSum, bSum);
-	}
-
-	fprintf(stderr, "[OFF-FLUSH] f=%u rect=%d,%d,%d,%d\n",
-	        s_dbgFrame, s_previousOffscreen.x, s_previousOffscreen.y,
-	        s_previousOffscreen.w, s_previousOffscreen.h);
-
-	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture, s_previousOffscreen.x, s_previousOffscreen.y, s_previousOffscreen.w,
-	                                    s_previousOffscreen.h, true);
+	NativeRenderer_GpuPackTextureToVRAM(s_offscreenRenderTarget.texture,
+	                                    s_previousOffscreen.x, s_previousOffscreen.y,
+	                                    s_previousOffscreen.w, s_previousOffscreen.h, true);
+	NativeRenderer_ScratchMarkPacked(&s_previousOffscreen);
 }
 
 internal void NativeRenderer_SetScissorState(int enable)
@@ -2156,23 +2148,6 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 	{
 		s_previousOffscreenState = 0;
 
-
-		// FBO state right before flush.
-		if (s_previousOffscreen.x == 800 && s_previousOffscreen.y == 256 &&
-		    s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
-		{
-			GLint prevReadFb;
-			glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
-			u8 px[32 * 24 * 4];
-			glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
-			int n = 0;
-			for (int i = 0; i < 32 * 24 * 4; i++) n += (px[i] != 0);
-			fprintf(stderr, "[FBO-PREFLUSH] f=%u nz=%d size=%dx%d draws=%d\n",
-			        s_dbgFrame, n, s_offscreenRenderTarget.width, s_offscreenRenderTarget.height, s_offscreenDrawCount);
-		}
-
 		if (s_offscreenDrawCount > 0)
 		{
 			NativeRenderer_FlushOffscreenToVRAM();
@@ -2207,8 +2182,11 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 
 	if (x < 832 && x + w > 800 && y < 280 && y + h > 256)
 	{
-		fprintf(stderr, "[PACK-OVERLAP] f=%u src=%u rect=%d,%d,%d,%d\n",
-		        s_dbgFrame, (unsigned)sourceTexture, x, y, w, h);
+		const char *kind = (sourceTexture == s_mainRenderTarget.texture) ? "MAIN"
+		                 : (sourceTexture == s_offscreenRenderTarget.texture) ? "OFFSCREEN"
+		                 : "OTHER";
+		fprintf(stderr, "[PACK-OVERLAP] f=%u kind=%s src=%u rect=%d,%d,%d,%d\n",
+		        s_dbgFrame, kind, (unsigned)sourceTexture, x, y, w, h);
 	}
 
 	NativeRenderer_UpdateVRAM();
@@ -2299,6 +2277,16 @@ void NativeRenderer_CopyVRAM(u16 *src, int x, int y, int w, int h, int dst_x, in
 	if (dst_x < 832 && dst_x + w > 800 && dst_y < 280 && dst_y + h > 256)
 		fprintf(stderr, "[DIRTY-HIT] f=%u %s src=%d,%d dst=%d,%d,%d,%d\n",
 		        s_dbgFrame, isMove ? "Move" : "Load", x, y, dst_x, dst_y, w, h);
+
+	// Any CPU write overlapping a scratch rect invalidates our claim on it.
+	// VRAM no longer holds our last pack for that region.
+	for (int k = 0; k < s_scratchCount; k++)
+	{
+		const RECT16 *s = &s_scratchRect[k];
+		if (dst_x < s->x + s->w && dst_x + w > s->x &&
+		    dst_y < s->y + s->h && dst_y + h > s->y)
+			s_scratchValid[k] = 0;
+	}
 
 	NativeRenderer_MarkVRAMDirty(dst_x, dst_y, w, h);
 }

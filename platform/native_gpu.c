@@ -26,6 +26,8 @@ void Platform_PollHostEvents(void);
 extern int g_cfg_bilinearFiltering;
 extern int g_dbg_emulatorPaused;
 extern unsigned int s_dbgFrame;
+extern int NativeRenderer_ScratchHoldsOurContent(const RECT16 *r);
+extern int NativeRenderer_PageHasScratch(int tpX, int tpY, int wHW);
 extern int g_dbg_polygonSelected;
 
 #define NATIVE_GPU_LOG(fmt, ...)   Platform_Log("[CTR GPU] " fmt, __VA_ARGS__)
@@ -846,6 +848,17 @@ internal void NativeGpu_PrepareFramebufferFeedback(int tpage)
 		DrawAllSplits();
 	}
 
+	// Only pack the framebuffer into VRAM when the destination is the
+	// actual framebuffer location. In splitscreen the clip can be a small
+	// HUD icon rect (e.g. 32x24 at the icon atlas at VRAM (800,256));
+	// packing the framebuffer there corrupts the icon region and the next
+	// SPRT that samples it shows the packed frame content as bleed.
+	if (activeDrawEnv.clip.w < 64 || activeDrawEnv.clip.h < 64)
+	{
+		s_gpu.framebufferFeedbackRunActive = true;
+		return;
+	}
+
 	NativeRenderer_StoreFrameBuffer(activeDrawEnv.clip.x, activeDrawEnv.clip.y, activeDrawEnv.clip.w, activeDrawEnv.clip.h);
 	s_gpu.framebufferFeedbackRunActive = true;
 }
@@ -906,7 +919,15 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	int overrideH = s_gpu.overrideTextureHeight;
 
 	u16 effClut = (u16)s_gpu.currentClut;
-	if (textured && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+	// LookupPage maps a (tpage, clut) to a composed page of the custom VRM.
+	// It only makes sense for ON-SCREEN prims: the sentinel was designed for
+	// karts/items/terrain that legitimately live in the VRM region.
+	// Offscreen prims (the Wumpa HUD model rendered to a small FBO, the
+	// minimap, icon atlases) use their own textures that only happen to
+	// overlap the VRM in the tpage numbers; intercepting them replaces the
+	// HUD sprite with the level's texture (e.g. a snow tree instead of the
+	// Wumpa). Gate the lookup on the draw env's dfe.
+	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
 	{
 		extern int NativeLevelTextures_LookupPage(u16 tpage, u16 clut);
 		extern int NativeLevelTextures_IsCustomLevelActive(void);
@@ -915,7 +936,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 			effClut = (u16)(NATIVE_GPU_CLUT_SENTINEL | pg);
 	}
 
-	if (textured && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
 		NltTraceNote((u16)tpage, effClut);
 
 	if (textured && (effClut & NATIVE_GPU_CLUT_SENTINEL))
@@ -934,9 +955,14 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 			overrideH = (int)(s_gpu.customTextureSizes[sentinelIdx] >> 16);
 		}
 	}
-	else if (textured && s_gpu.overrideTexture != 0)
+	else if (textured && activeDrawEnv.dfe && s_gpu.overrideTexture != 0)
 	{
-		// override texture format, zero tpage
+		// Override texture (DR_PSYX_TEX, set by the custom racer) applies
+		// only to ON-SCREEN prims. It is a global that is never reset, so
+		// without this gate an override set by one custom kart render
+		// leaks into every subsequent prim — including HUD offscreen
+		// prims (Wumpa, minimap, far LOW LOD karts), which then sample
+		// the custom racer's texture instead of VRAM.
 		texFormat = TF_32_BIT_RGBA;
 		textureId = s_gpu.overrideTexture;
 		psxTexturedSemiTrans = false;
@@ -990,14 +1016,39 @@ void DrawSplit(const GPUDrawSplit *split)
 	}
 
 	const bool drawOnScreen = split->drawenv.dfe;
-	if (!drawOnScreen)
+	if (!drawOnScreen &&
+	    ((split->drawenv.clip.w == 32 && split->drawenv.clip.h == 24) ||
+	     (split->drawenv.clip.w == 96 && split->drawenv.clip.h == 64)))
 	{
-		fprintf(stderr, "[DS/Off] clip=(%d,%d,%d,%d) isbg=%d r=%d g=%d b=%d nv=%u\n",
+		const int tpX = (split->drawenv.tpage & 0xF) * 64;
+		const int tpY = ((split->drawenv.tpage >> 4) & 1) * 256;
+		const unsigned int texid = (unsigned int)split->textureId;
+		const int isSentinel = (split->texFormat == TF_32_BIT_RGBA &&
+		                        texid != 0 &&
+		                        texid != (unsigned)NativeRenderer_GetVRAMTexture() &&
+		                        texid != (unsigned)NativeRenderer_GetWhiteTexture()) ? 1 : 0;
+
+		// Clut of the first vertex of the split. This is what the model
+		// uses to look up palette entries in VRAM. If the CLUT coords fall
+		// inside the custom VRM's TIM rects, the palette entries get
+		// overwritten by the level (tree/terrain colors instead of the
+		// HUD sprite's palette).
+		const int clutOfVert = (split->numVerts > 0)
+		    ? (int)s_gpu.vertexBuffer[split->startVertex].clut
+		    : -1;
+		const int clutX = (clutOfVert >= 0) ? ((clutOfVert & 0x3F) << 4) : -1;
+		const int clutY = (clutOfVert >= 0) ? (clutOfVert >> 6) : -1;
+		const int clutInVrm = (clutX >= 512 && clutX < 1024 && clutY >= 0 && clutY < 512) ? 1 : 0;
+
+		fprintf(stderr, "[DS/Off] f=%u rect=%d,%d,%d,%d nv=%u tpage=0x%04X tpXY=(%d,%d) mode=%d clut=(%d,%d) clutVRM=%d sentinel=%d\n",
+		        s_dbgFrame,
 		        split->drawenv.clip.x, split->drawenv.clip.y,
 		        split->drawenv.clip.w, split->drawenv.clip.h,
-		        split->drawenv.isbg,
-		        split->drawenv.r0, split->drawenv.g0, split->drawenv.b0,
-		        (unsigned)split->numVerts);
+		        (unsigned)split->numVerts,
+		        split->drawenv.tpage & 0x1FF, tpX, tpY,
+		        (split->drawenv.tpage >> 7) & 3,
+		        clutX, clutY, clutInVrm,
+		        isSentinel);
 	}
 	if ((split->drawenv.clip.w <= 0) || (split->drawenv.clip.h <= 0))
 	{
@@ -1006,6 +1057,20 @@ void DrawSplit(const GPUDrawSplit *split)
 		// and must not leak stale native offscreen/scissor state.
 		NativeRenderer_SetupClipMode(&split->drawenv.clip, &split->dispenv, drawOnScreen);
 		NativeRenderer_SetOffscreenState(&split->drawenv.clip, 0);
+		if (split->debugText)
+		{
+			NativeRenderer_PopDebugLabel();
+		}
+		return;
+	}
+
+	// Empty offscreen split. Only skip for the Wumpa HUD rect (32x24);
+	// other rects (kart LOW LOD 96x64) must always go through the clear
+	// and pack cycle or the sprite degrades / clips.
+	if (!drawOnScreen && split->drawenv.clip.w == 32 && split->drawenv.clip.h == 24 &&
+	    split->numVerts < 3 &&
+	    NativeRenderer_ScratchHoldsOurContent(&split->drawenv.clip))
+	{
 		if (split->debugText)
 		{
 			NativeRenderer_PopDebugLabel();
@@ -1030,6 +1095,17 @@ void DrawSplit(const GPUDrawSplit *split)
 	NativeRenderer_SetOffscreenState(&split->drawenv.clip, !drawOnScreen);
 	NativeRenderer_SetProjection(&split->drawenv.clip, &split->dispenv, !drawOnScreen);
 	NativeRenderer_NotifyOffscreenDraw();
+
+	if (!drawOnScreen && split->texFormat == TF_32_BIT_RGBA)
+	{
+		fprintf(stderr, "[OFF-SENT] f=%u clip=%d,%d,%d,%d nv=%u tex=%u\n",
+		        s_dbgFrame,
+		        split->drawenv.clip.x, split->drawenv.clip.y,
+		        split->drawenv.clip.w, split->drawenv.clip.h,
+		        (unsigned)split->numVerts, (unsigned)split->textureId);
+	}
+
+	// (removed)
 
 	if (!drawOnScreen && split->drawenv.clip.x == 800 && split->drawenv.clip.y == 256 &&
 	    split->drawenv.clip.w == 32 && split->drawenv.clip.h == 24)
@@ -1068,6 +1144,21 @@ void DrawSplit(const GPUDrawSplit *split)
 		NativeRenderer_SetBlendMode(split->blendMode);
 		NativeRenderer_SetPSXTextureSemiTransPass(0);
 		NativeRenderer_DrawTriangles(split->startVertex, split->numVerts / 3);
+	}
+
+	if (drawOnScreen && split->texFormat == TF_32_BIT_RGBA && split->numVerts <= 12)
+	{
+		const int tp = split->drawenv.tpage;
+		const int tpX = (tp & 0xF) * 64, tpY = ((tp >> 4) & 1) * 256, mode = (tp >> 7) & 3;
+		if (NativeRenderer_PageHasScratch(tpX, tpY, mode == 0 ? 64 : mode == 1 ? 128 : 256))
+		{
+			static u32 seen[64]; static int n = 0;
+			u32 key = ((u32)tp << 16) ^ (u32)split->textureId;
+			int dup = 0; for (int i = 0; i < n; i++) if (seen[i] == key) dup = 1;
+			if (!dup && n < 64) { seen[n++] = key;
+				fprintf(stderr, "[SENT-ON-SCRATCH] f=%u tpage=0x%04X nv=%u tex=%u\n",
+				        s_dbgFrame, tp, (unsigned)split->numVerts, (unsigned)split->textureId); }
+		}
 	}
 
 	if (drawOnScreen && (split->drawenv.tpage & 0x1F) == 0x1C)
