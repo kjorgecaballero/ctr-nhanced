@@ -329,6 +329,8 @@ void NativeCustomRacer_DumpVRAMIfRequested(void);
  * i.e. it points to a valid `struct Model`. */
 void  NativeCustomRacer_SetPlayerModelPtr(int playerIndex, void *model);
 void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
+void **NativeCustomRacer_GetP4RetailHiLodSlot(void);
+void   NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes);
 
 /* Menu preview: real Oxide model (see native_custom_racer.c). */
 void  NativeCustomRacer_ResetOxideMenuModel(void);

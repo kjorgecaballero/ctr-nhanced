@@ -715,33 +715,41 @@ void VehBirth_NonGhost(struct Thread *t, int index)
     }
     else
     {
-        const char *searchName = GET_METADATA(id)->name_Debug;
-        struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
-
-        if (models != NULL && models[0] != NULL)
+        /* CUSTOM-LEVELS-3P4P-LOW-LOD-P4: for retail players, prefer the
+         * per-player driver slot FIRST (driverModelExtras[] for P1-P3,
+         * side table for P4). Those hold the HI LOD model in 1P/3P/4P.
+         * In 4P, PLYROBJECTLIST is the arcade pack (MED/LOW LOD), so
+         * looking there first would downgrade P1-P4. Fall back to the
+         * name lookup only if the driver slot is empty (2P VS edge cases
+         * where LOAD_Robots2P built an AI-only PLYROBJECTLIST). */
+        /* Only P1-P3 (driverModelExtras) and P4-human-in-4P (side table)
+         * have a slot. Bots with index >= 3 in 3P or >= 4 in 4P MUST NOT
+         * read the side table — it can hold stale pointers from a prior
+         * race and would crash. Let them fall through to the name lookup. */
+        if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
         {
-            for (int i = 0; models[i] != NULL; i++)
-            {
-                if (VehBirth_ModelNameEquals(models[i], searchName))
-                {
-                    m = models[i];
-                    break;
-                }
-            }
+            m = data.driverModelExtras[index].model;
+        }
+        else if (index == 3 && gGT->numPlyrCurrGame == 4)
+        {
+            m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
         }
 
         if (m == NULL)
         {
-            /* BUG-MENU-04: guard OOB read for index >= LOAD_DRIVER_MODEL_EXTRA_COUNT
-             * (P4 in 4P). Side table is our own BSS, safe to read. Returns NULL
-             * for originals, so we fall through to the Crash fallback. */
-            if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
+            const char *searchName = GET_METADATA(id)->name_Debug;
+            struct Model **models = (struct Model **)sdata->PLYROBJECTLIST;
+
+            if (models != NULL && models[0] != NULL)
             {
-                m = data.driverModelExtras[index].model;
-            }
-            else
-            {
-                m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
+                for (int i = 0; models[i] != NULL; i++)
+                {
+                    if (VehBirth_ModelNameEquals(models[i], searchName))
+                    {
+                        m = models[i];
+                        break;
+                    }
+                }
             }
         }
     }

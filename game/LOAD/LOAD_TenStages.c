@@ -418,9 +418,12 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		{
 			if (data.driverModelExtras[i].fileBase != NULL)
 			{
-				data.driverModelExtras[i].model = (struct Model *)((u8 *)data.driverModelExtras[i].fileBase + LOAD_MODEL_FILE_HEADER_BYTES);
-			}
-		}
+                  data.driverModelExtras[i].model = (struct Model *)((u8 *)data.driverModelExtras[i].fileBase + LOAD_MODEL_FILE_HEADER_BYTES);
+                 }
+                }
+#ifdef CTR_NATIVE
+                NativeCustomRacer_FinalizeP4RetailHiLod(LOAD_MODEL_FILE_HEADER_BYTES);
+#endif
 
 		if ((gGT->gameMode2 & LEV_SWAP) != 0)
 		{

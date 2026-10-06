@@ -135,10 +135,14 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 				unsigned char *buf = (unsigned char *)NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
 				if (buf != NULL)
 					buf += LOAD_MODEL_FILE_HEADER_BYTES;
-				NativeCustomRacer_SetPlayerModelPtr(i, buf);
-			}
-			/* Originals in 4P: PLYROBJECTLIST (4P low LOD) has them. */
-		}
+      NativeCustomRacer_SetPlayerModelPtr(i, buf);
+      }
+        else
+      {
+        void **rawSlot = NativeCustomRacer_GetP4RetailHiLodSlot();
+        LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], rawSlot, LOAD_DriverMPK_SetPointer);
+      }
+    }
 
 		// The 4P arcade MPK always loads; bots and game logic depend on its data.
 		lastFileIndexMPK = BI_4PARCADEPACK + GET_MPK_ID(data.characterIDs[3]);

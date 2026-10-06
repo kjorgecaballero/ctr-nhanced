@@ -2916,6 +2916,24 @@ void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex)
     return s_playerModelPtr[playerIndex];
 }
 
+/* P4 retail HI LOD (CUSTOM-LEVELS-3P4P-LOW-LOD-P4). */
+static void *s_p4RetailHiLodRaw = NULL;
+
+void **NativeCustomRacer_GetP4RetailHiLodSlot(void)
+{
+    s_p4RetailHiLodRaw = NULL;
+    return &s_p4RetailHiLodRaw;
+}
+
+void NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes)
+{
+    if (s_p4RetailHiLodRaw != NULL)
+    {
+        s_playerModelPtr[3] = (unsigned char *)s_p4RetailHiLodRaw + headerBytes;
+        s_p4RetailHiLodRaw = NULL;
+    }
+}
+
 /* === Menu preview: real Oxide model =====================================
  * Oxide has no entry in the char-select level's BSP (retail never made
  * him selectable), but his race model lives at BI_RACERMODELHI + 15 in
