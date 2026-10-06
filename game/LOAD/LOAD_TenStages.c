@@ -423,6 +423,27 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
                 }
 #ifdef CTR_NATIVE
                 NativeCustomRacer_FinalizeP4RetailHiLod(LOAD_MODEL_FILE_HEADER_BYTES);
+
+                /* PC port: LODs are not needed (plenty of fill rate vs the
+                 * PS1). Pin every driver model to its HI mesh by raising
+                 * maxDistanceLOD on header[0] to 0xFFFF. The walk in
+                 * RenderBucket_QueueExecute compares projectedDistance
+                 * against maxDistanceLOD and stops at the first header
+                 * where projDist < maxDistanceLOD; with 0xFFFF it always
+                 * stops at header[0] (the HI mesh) regardless of camera
+                 * distance. Same effect as ExpandModelHeaders for customs,
+                 * but 2 bytes instead of a full header copy. */
+                for (int i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
+                {
+                        struct Model *dm = data.driverModelExtras[i].model;
+                        if (dm != NULL && dm->headers != NULL && dm->numHeaders > 0)
+                                dm->headers[0].maxDistanceLOD = (s16)0xFFFF;
+                }
+                {
+                        struct Model *dm4 = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(3);
+                        if (dm4 != NULL && dm4->headers != NULL && dm4->numHeaders > 0)
+                                dm4->headers[0].maxDistanceLOD = (s16)0xFFFF;
+                }
 #endif
 
 		if ((gGT->gameMode2 & LEV_SWAP) != 0)
