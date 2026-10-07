@@ -955,10 +955,15 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 		{
 			texFormat = TF_32_BIT_RGBA;
 			textureId = s_gpu.customTextures[sentinelIdx];
-			psxTexturedSemiTrans = false;
+			/* Use the same 2-pass path retail uses for VRAM textures:
+			 * pass 1 draws STP=0 texels with BM_NONE, pass 2 draws
+			 * STP=1 texels with the prim's tpage blend mode. The 32-bit
+			 * shader decides which pass each texel belongs to via the
+			 * STP flag that NltExpand16 wrote into alpha. */
+			psxTexturedSemiTrans = semiTrans;
 			psxTextureOutputSTP = false;
-			blendMode = BM_SRC_ALPHA;
-			psxKeepTextureAlpha = true;
+			blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
+			psxKeepTextureAlpha = false;
 			overrideW = (int)(s_gpu.customTextureSizes[sentinelIdx] & 0xFFFF);
 			overrideH = (int)(s_gpu.customTextureSizes[sentinelIdx] >> 16);
 		}

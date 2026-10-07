@@ -126,7 +126,15 @@ static void NltExpand16(u16 px, u8 *dst)
     dst[0] = (u8)(((px >>  0) & 0x1F) << 3);
     dst[1] = (u8)(((px >>  5) & 0x1F) << 3);
     dst[2] = (u8)(((px >> 10) & 0x1F) << 3);
-    dst[3] = 0xFF;
+    /* Binary STP flag in alpha: 0 = STP=1 (blend in pass 2), 255 = STP=0
+     * (opaque in pass 1). The 32-bit shader reads this to reproduce the
+     * same 2-pass blend retail does for VRAM textures. */
+    /* 3-way alpha:
+     *   0   = fully transparent texel (never drawn, used by 0x0000)
+     *   128 = STP=1 (pass 2, blended)
+     *   255 = STP=0 (pass 1, opaque)
+     * The 32-bit shader reads these three values. */
+    dst[3] = (px & 0x8000) ? 128 : 255;
 }
 
 static int NltDecodeTIM(const u8 *tim, const u8 **px,

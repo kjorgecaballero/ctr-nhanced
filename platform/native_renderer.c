@@ -887,16 +887,21 @@ global_variable const char *gpu_shader_common = "	varying vec4 v_texcoord;\n"
 const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
-const char *gte_shader_32_rgba = "	uniform sampler2D s_texture;\n"
-                                 "	uniform int psxDrawMaskSet;\n"
-                                 "	uniform int psxKeepTextureAlpha;\n"
-                                 "	uniform vec2 texelSize;\n"
-                                 "	void main() {\n"
-                                 "		vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
-                                 "		vec4 color = texture2D(s_texture, tc);\n"
-                                 "		fragColor = dither(color * v_color);\n"
-                                 "		if (psxKeepTextureAlpha == 0) fragColor.a = float(psxDrawMaskSet);\n"
-                                 "	}\n";
+const char *gte_shader_32_rgba = "      uniform sampler2D s_texture;\n"
+                                 "      uniform int psxDrawMaskSet;\n"
+                                 "      uniform int psxKeepTextureAlpha;\n"
+                                 "      uniform int psxSemiTransPass;\n"
+                                 "      uniform vec2 texelSize;\n"
+                                 "      void main() {\n"
+                                 "              vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
+                                 "              vec4 color = texture2D(s_texture, tc);\n"
+                                 "              if (color.a < 0.25) discard;\n"
+                                 "              float stp = (color.a < 0.75) ? 1.0 : 0.0;\n"
+                                 "              if (psxSemiTransPass == 1 && stp > 0.5) discard;\n"
+                                 "              if (psxSemiTransPass == 2 && stp < 0.5) discard;\n"
+                                 "              fragColor = dither(color * v_color);\n"
+                                 "              if (psxSemiTransPass != 0 || psxKeepTextureAlpha == 0) fragColor.a = float(psxDrawMaskSet);\n"
+                                 "      }\n";
 
 #define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
 
