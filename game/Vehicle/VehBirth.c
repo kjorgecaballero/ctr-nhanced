@@ -25,7 +25,6 @@ enum
 	VEH_BIRTH_PLAYER_THREAD_FLAGS = SIZE_RELATIVE_POOL_BUCKET(DRIVER_NTSC_RETAIL_SIZE, NONE, LARGE, PLAYER),
 };
 
-
 static int VehBirth_IsDoor5InstDef(struct InstDef *instDef)
 {
 	if (instDef->modelID != STATIC_DOOR)
@@ -715,24 +714,26 @@ void VehBirth_NonGhost(struct Thread *t, int index)
     }
     else
     {
-        /* CUSTOM-LEVELS-3P4P-LOW-LOD-P4: for retail players, prefer the
-         * per-player driver slot FIRST (driverModelExtras[] for P1-P3,
-         * side table for P4). Those hold the HI LOD model in 1P/3P/4P.
-         * In 4P, PLYROBJECTLIST is the arcade pack (MED/LOW LOD), so
-         * looking there first would downgrade P1-P4. Fall back to the
-         * name lookup only if the driver slot is empty (2P VS edge cases
-         * where LOAD_Robots2P built an AI-only PLYROBJECTLIST). */
-        /* Only P1-P3 (driverModelExtras) and P4-human-in-4P (side table)
-         * have a slot. Bots with index >= 3 in 3P or >= 4 in 4P MUST NOT
-         * read the side table — it can hold stale pointers from a prior
-         * race and would crash. Let them fall through to the name lookup. */
-        if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
+        /* Human players (index < numPlyrCurrGame) read their driver slot:
+         * driverModelExtras[0..2] for P1-P3, side table for P4 in 4P.
+         * Bots read the bot side table (may be NULL — falls through to
+         * the name lookup below). */
+        if (index < gGT->numPlyrCurrGame)
         {
-            m = data.driverModelExtras[index].model;
+            if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
+            {
+                m = data.driverModelExtras[index].model;
+            }
+            else if (index == 3 && gGT->numPlyrCurrGame == 4)
+            {
+                m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
+            }
         }
-        else if (index == 3 && gGT->numPlyrCurrGame == 4)
+        else
         {
-            m = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(index);
+            m = (struct Model *)NativeCustomRacer_GetBotModelPtr(index);
+            fprintf(stderr, "[VehBirth]   botTable[%d] = %p\n",
+                    index, (void*)m);
         }
 
         if (m == NULL)
@@ -752,15 +753,27 @@ void VehBirth_NonGhost(struct Thread *t, int index)
                 }
             }
         }
+
+        /* Bots (index >= numPlyrCurrGame) resolve their model by name from
+         * the arcade MPK. Pin every header to 0xFFFF so the distance walk
+         * stays on header[0] (HI within the pack). Same trick as the humans. */
+        if (index >= gGT->numPlyrCurrGame && m != NULL && m->headers != NULL)
+        {
+            for (int h = 0; h < m->numHeaders; h++)
+                m->headers[h].maxDistanceLOD = (s16)0xFFFF;
+        }
+
+        if (m == NULL)
+        {
+            /* Last-resort fallback: Crash's level model. Should never happen. */
+            m = VehBirth_GetModelByName(GET_METADATA(CRASH_BANDICOOT)->name_Debug);
+        }
     }
 
-    if (m == NULL)
-    {
-        /* Last-resort fallback: Crash's level model. Should never happen. */
-        m = VehBirth_GetModelByName(GET_METADATA(CRASH_BANDICOOT)->name_Debug);
-    }
-
-struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
+fprintf(stderr, "[VehBirth] P%d idx=%d id=%d numPlyr=%d nh=%d m=%p name=%s\n",
+        index+1, index, id, gGT->numPlyrCurrGame,
+        m ? m->numHeaders : -1, (void*)m, m ? m->name : "(null)");
+	struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 
 	t->inst = inst;
 

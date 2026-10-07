@@ -423,6 +423,8 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
                 }
 #ifdef CTR_NATIVE
                 NativeCustomRacer_FinalizeP4RetailHiLod(LOAD_MODEL_FILE_HEADER_BYTES);
+                NativeCustomRacer_FinalizeBotModels(LOAD_MODEL_FILE_HEADER_BYTES, sdata->gGT->numPlyrCurrGame);
+                // NativeCustomRacer_FinalizeBotModels(LOAD_MODEL_FILE_HEADER_BYTES, sdata->gGT->numPlyrCurrGame);
 
                 /* PC port: LODs are not needed (plenty of fill rate vs the
                  * PS1). Pin every driver model to its HI mesh by raising
@@ -437,12 +439,20 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
                 {
                         struct Model *dm = data.driverModelExtras[i].model;
                         if (dm != NULL && dm->headers != NULL && dm->numHeaders > 0)
-                                dm->headers[0].maxDistanceLOD = (s16)0xFFFF;
+                        {
+                                for (int h = 0; h < dm->numHeaders; h++)
+                                        dm->headers[h].maxDistanceLOD = (s16)0xFFFF;
+                                fprintf(stderr, "[Pin] P%d name=%s numHeaders=%d\n", i+1, dm->name, dm->numHeaders);
+                        }
                 }
                 {
                         struct Model *dm4 = (struct Model *)NativeCustomRacer_GetPlayerModelPtr(3);
                         if (dm4 != NULL && dm4->headers != NULL && dm4->numHeaders > 0)
-                                dm4->headers[0].maxDistanceLOD = (s16)0xFFFF;
+                        {
+                                for (int h = 0; h < dm4->numHeaders; h++)
+                                        dm4->headers[h].maxDistanceLOD = (s16)0xFFFF;
+                                fprintf(stderr, "[Pin] P4 name=%s numHeaders=%d\n", dm4->name, dm4->numHeaders);
+                        }
                 }
 #endif
 

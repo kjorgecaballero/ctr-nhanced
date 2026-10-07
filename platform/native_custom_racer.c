@@ -2934,6 +2934,42 @@ void NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes)
     }
 }
 
+/* Bots HI LOD (CUSTOM-LEVELS-BOTS-LOD). */
+static void *s_botModelRaw[8];
+static void *s_botModelPtr[8];
+
+void **NativeCustomRacer_GetBotModelRawSlot(int driverID)
+{
+    if (driverID < 0 || driverID >= 8) return NULL;
+    s_botModelRaw[driverID] = NULL;
+    return &s_botModelRaw[driverID];
+}
+
+void NativeCustomRacer_FinalizeBotModels(int headerBytes, int numPlyr)
+{
+    fprintf(stderr, "[BotHiLod] finalize numPlyr=%d\n", numPlyr);
+    for (int _dbg = numPlyr; _dbg < 8; _dbg++)
+        fprintf(stderr, "[BotHiLod] i=%d raw=%p\n", _dbg, s_botModelRaw[_dbg]);
+
+    for (int i = numPlyr; i < 8; i++)
+    {
+        if (s_botModelRaw[i] != NULL)
+        {
+            struct Model *m = (struct Model *)((unsigned char *)s_botModelRaw[i] + headerBytes);
+            s_botModelPtr[i] = m;
+            if (m->headers != NULL && m->numHeaders > 0)
+                m->headers[0].maxDistanceLOD = (s16)0xFFFF;
+            s_botModelRaw[i] = NULL;
+        }
+    }
+}
+
+void *NativeCustomRacer_GetBotModelPtr(int driverID)
+{
+    if (driverID < 0 || driverID >= 8) return NULL;
+    return s_botModelPtr[driverID];
+}
+
 /* === Menu preview: real Oxide model =====================================
  * Oxide has no entry in the char-select level's BSP (retail never made
  * him selectable), but his race model lives at BI_RACERMODELHI + 15 in

@@ -332,6 +332,13 @@ void *NativeCustomRacer_GetPlayerModelPtr(int playerIndex);
 void **NativeCustomRacer_GetP4RetailHiLodSlot(void);
 void   NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes);
 
+/* Bots HI LOD (CUSTOM-LEVELS-BOTS-LOD). Bots ship from the arcade MPK
+ * in LOW/MED; load BI_RACERMODELHI for them into a parallel side table
+ * (indexed by driverID) and pin maxDistanceLOD=0xFFFF on header[0]. */
+void **NativeCustomRacer_GetBotModelRawSlot(int driverID);
+void   NativeCustomRacer_FinalizeBotModels(int headerBytes, int numPlyr);
+void  *NativeCustomRacer_GetBotModelPtr(int driverID);
+
 /* Menu preview: real Oxide model (see native_custom_racer.c). */
 void  NativeCustomRacer_ResetOxideMenuModel(void);
 void **NativeCustomRacer_GetOxideMenuModelSlot(void);

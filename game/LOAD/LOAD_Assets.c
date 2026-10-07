@@ -144,8 +144,16 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
       }
     }
 
-		// The 4P arcade MPK always loads; bots and game logic depend on its data.
-		lastFileIndexMPK = BI_4PARCADEPACK + GET_MPK_ID(data.characterIDs[3]);
+		        /* Bots HI LOD (CUSTOM-LEVELS-BOTS-LOD). Load BI_RACERMODELHI for
+         * each bot slot (index >= numPlyrCurrGame). Custom bots are skipped
+         * (already loaded via NativeCustomRacer_LoadModel). The arcade MPK
+         * still loads below for game logic. */
+        /* Bot HI LOD load disabled: in 3P/4P the bot characterIDs are not
+         * assigned yet when LOAD_DriverMPK runs, so we would queue Crash for
+         * every slot. Needs a different hook (after char assignment). */
+
+        // The 4P arcade MPK always loads; bots and game logic depend on its data.
+        lastFileIndexMPK = BI_4PARCADEPACK + GET_MPK_ID(data.characterIDs[3]);
 	}
 
 	else if (levelLOD == LOAD_LEVEL_LOD_1P)
@@ -250,7 +258,8 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	// else if (levelLOD == LOAD_LEVEL_LOD_2P)
 	else
 	{
-		// med models
+		// HI models for P1/P2 humans (matches 1P/3P/4P; also pinned at
+		// stage 6 via maxDistanceLOD so they stay HI at any distance).
 		for (i = 0; i < LOAD_MED_LOD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			if (NativeCustomRacer_HasSlot(data.characterIDs[i]))
@@ -260,12 +269,57 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			}
 			else
 			{
-				// med lod CTR model
 				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 			}
 		}
 
-		LOAD_Robots2P(bigfile, GET_MPK_ID(data.characterIDs[0]), GET_MPK_ID(data.characterIDs[1]), callback);
+		/* Bots HI LOD for 2P. Inline of LOAD_Robots2P so we can queue the
+		 * bot HI models BEFORE the arcade-pack callback fires. The callback
+		 * is attached to the last item queued; if bot HI came after it,
+		 * stage 6 would run FinalizeBotModels before they loaded and we
+		 * would fall back to the arcade MED pack. */
+		{
+			int setIndex;
+			u8 *robotSet = NULL;
+			int p1 = GET_MPK_ID(data.characterIDs[0]);
+			int p2 = GET_MPK_ID(data.characterIDs[1]);
+
+			for (setIndex = 0; setIndex < LOAD_2P_AI_SET_COUNT; setIndex++)
+			{
+				robotSet = data.characterIDs_2P_AIs[setIndex];
+				b32 foundRepeat = false;
+				for (int ri = 0; ri < LOAD_2P_AI_SET_RACER_COUNT; ri++)
+				{
+					if ((robotSet[ri] == p1) || (robotSet[ri] == p2))
+					{
+						foundRepeat = true;
+						break;
+					}
+				}
+				if (!foundRepeat) break;
+			}
+
+			if (setIndex < LOAD_2P_AI_SET_COUNT)
+			{
+				data.characterIDs[2] = robotSet[0];
+				data.characterIDs[3] = robotSet[1];
+				data.characterIDs[4] = robotSet[2];
+				data.characterIDs[5] = robotSet[3];
+
+				for (i = 2; i < 6; i++)
+				{
+					if (data.characterIDs[i] < NATIVE_CUSTOM_ID_BASE)
+					{
+						void **rawSlot = NativeCustomRacer_GetBotModelRawSlot(i);
+						if (rawSlot != NULL)
+							LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], rawSlot, LOAD_DriverMPK_SetPointer);
+					}
+				}
+
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + setIndex, NULL, callback);
+			}
+		}
+
 		return sdata->ptrMPK;
 	}
 
