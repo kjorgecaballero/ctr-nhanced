@@ -340,6 +340,16 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			data.driverModelExtras[i].fileBase = NULL;
 		}
 
+#ifdef CTR_NATIVE
+		/* Clear the P4 side slot every race: if the previous race was 4P
+		 * with P4 custom, s_playerModelPtr[3] holds a pointer into a
+		 * mempack buffer that MEMPACK_PopToState just freed. The pin loop
+		 * in case 6 would dereference it. Re-set by SetPlayerModelPtr
+		 * (P4 custom) or FinalizeP4RetailHiLod (P4 retail) later in the
+		 * load. */
+		NativeCustomRacer_SetPlayerModelPtr(3, NULL);
+#endif
+
 		sdata->load_inProgress = 1;
 
 		// Custom levels force sdata->levelLOD to 1P in case 0, because the
@@ -424,7 +434,6 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 #ifdef CTR_NATIVE
                 NativeCustomRacer_FinalizeP4RetailHiLod(LOAD_MODEL_FILE_HEADER_BYTES);
                 NativeCustomRacer_FinalizeBotModels(LOAD_MODEL_FILE_HEADER_BYTES, sdata->gGT->numPlyrCurrGame);
-                // NativeCustomRacer_FinalizeBotModels(LOAD_MODEL_FILE_HEADER_BYTES, sdata->gGT->numPlyrCurrGame);
 
                 /* PC port: LODs are not needed (plenty of fill rate vs the
                  * PS1). Pin every driver model to its HI mesh by raising
@@ -442,7 +451,6 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
                         {
                                 for (int h = 0; h < dm->numHeaders; h++)
                                         dm->headers[h].maxDistanceLOD = (s16)0xFFFF;
-                                fprintf(stderr, "[Pin] P%d name=%s numHeaders=%d\n", i+1, dm->name, dm->numHeaders);
                         }
                 }
                 {
@@ -451,7 +459,6 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
                         {
                                 for (int h = 0; h < dm4->numHeaders; h++)
                                         dm4->headers[h].maxDistanceLOD = (s16)0xFFFF;
-                                fprintf(stderr, "[Pin] P4 name=%s numHeaders=%d\n", dm4->name, dm4->numHeaders);
                         }
                 }
 #endif

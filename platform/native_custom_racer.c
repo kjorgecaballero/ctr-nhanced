@@ -2947,9 +2947,12 @@ void **NativeCustomRacer_GetBotModelRawSlot(int driverID)
 
 void NativeCustomRacer_FinalizeBotModels(int headerBytes, int numPlyr)
 {
-    fprintf(stderr, "[BotHiLod] finalize numPlyr=%d\n", numPlyr);
-    for (int _dbg = numPlyr; _dbg < 8; _dbg++)
-        fprintf(stderr, "[BotHiLod] i=%d raw=%p\n", _dbg, s_botModelRaw[_dbg]);
+    /* Clear every slot first: a 2P race leaves pointers in s_botModelPtr
+     * for indices 2..5; a later 1P/3P/4P race spawns bots at those same
+     * indices and would pick up stale pointers from the previous race,
+     * crashing in INSTANCE_Birth3D(m, m->name, t). */
+    for (int i = 0; i < 8; i++)
+        s_botModelPtr[i] = NULL;
 
     for (int i = numPlyr; i < 8; i++)
     {

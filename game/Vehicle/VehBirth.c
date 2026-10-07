@@ -732,8 +732,6 @@ void VehBirth_NonGhost(struct Thread *t, int index)
         else
         {
             m = (struct Model *)NativeCustomRacer_GetBotModelPtr(index);
-            fprintf(stderr, "[VehBirth]   botTable[%d] = %p\n",
-                    index, (void*)m);
         }
 
         if (m == NULL)
@@ -770,9 +768,6 @@ void VehBirth_NonGhost(struct Thread *t, int index)
         }
     }
 
-fprintf(stderr, "[VehBirth] P%d idx=%d id=%d numPlyr=%d nh=%d m=%p name=%s\n",
-        index+1, index, id, gGT->numPlyrCurrGame,
-        m ? m->numHeaders : -1, (void*)m, m ? m->name : "(null)");
 	struct Instance *inst = INSTANCE_Birth3D(m, m->name, t);
 
 	t->inst = inst;
