@@ -262,8 +262,13 @@ void RECTMENU_DrawInnerRect(RECT *r, int type, u32 *ot)
 
 		if ((type & 1) == 0)
 		{
-			drawMode = ((type & 0x100) != 0) ? 2 : 0;
-			colorDataSpecial = ((type & 0x100) != 0) ? &sdata->DrawSolidBoxData[1] : &sdata->DrawSolidBoxData[2];
+			/* CUSTOM-MENU-DIM-3P4P: retail switches to SUBTRACT 0xC0C0C0
+			 * when 0x100 (RECTMENU_DRAW_STYLE_3P4P_LAYOUT) is set, which
+			 * darkens the backdrop to near-black. Match the softer
+			 * AVERAGE 0x000000 used in 1P/2P so the menu stays readable
+			 * without hiding the race. */
+			drawMode = 0;
+			colorDataSpecial = &sdata->DrawSolidBoxData[2];
 
 			CTR_Box_DrawClearBox(&adjustedRect, (Color *)colorDataSpecial, drawMode, ot);
 		}
