@@ -1,4 +1,5 @@
 #include <common.h>
+#include "native_settings.h"
 
 
 struct RenderBucketEntry
@@ -1220,6 +1221,16 @@ static void RenderBucket_StoreMvpTranslation(struct InstDrawPerPlayer *idpp, con
 	CTC2(viewPos->vz, 7);
 }
 
+// True for human players and AI racers, false for scenery/items/effects.
+// Character Detail only overrides racer LOD selection.
+static int RenderBucket_IsRacerInstance(const struct Instance *inst)
+{
+        if (inst == NULL || inst->thread == NULL)
+                return 0;
+        int mid = inst->thread->modelIndex;
+        return (mid == DYNAMIC_PLAYER) || (mid == DYNAMIC_ROBOT_CAR);
+}
+
 static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst, struct PushBuffer *pb, int *lodIndexOut, int *lodExhaustedOut, int viewDepth)
 {
 	struct ModelHeader *mh;
@@ -1253,6 +1264,32 @@ static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst,
 	mh = inst->model->headers;
 	headersRemaining = inst->model->numHeaders;
 	lodIndex = 0;
+
+#ifdef CTR_NATIVE
+	if (RenderBucket_IsRacerInstance(inst))
+	{
+		const int detailMode = NativeSettings_GetCharacterDetail();
+		const struct ModelHeader *lastMh = mh + (headersRemaining - 1);
+
+		if (detailMode == 3)
+		{
+			*lodIndexOut = 0;
+			return mh;
+		}
+
+		if ((detailMode == 0) || (detailMode == 2))
+		{
+			if (RenderBucket_MipsSub(projectedDistance, (u16)lastMh->maxDistanceLOD) >= 0)
+			{
+				*lodExhaustedOut = 1;
+				return 0;
+			}
+
+			*lodIndexOut = (detailMode == 0) ? (headersRemaining - 1) : 0;
+			return (detailMode == 0) ? (struct ModelHeader *)lastMh : mh;
+		}
+	}
+#endif
 
 	// NOTE(aalhendi): Retail 0x80070ae4-0x80070b34 uses transformed GTE depth,
 	// GTE H, and a post-decrement s4/s5 header walk. Native keeps the same
@@ -2054,10 +2091,15 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 
 	if ((queuedFlags & lodMask) == 0)
 	{
-		// NOTE(aalhendi): Retail 0x80070950-0x80070964 exits through the common
-		// epilogue and still stores the current gp flags to IDPP+0xb8.
-		idpp->instFlags = queuedFlags;
-		return rbi;
+#ifdef CTR_NATIVE
+		if (!(RenderBucket_IsRacerInstance(inst) && (NativeSettings_GetCharacterDetail() == 3)))
+#endif
+		{
+			// NOTE(aalhendi): Retail 0x80070950-0x80070964 exits through the common
+			// epilogue and still stores the current gp flags to IDPP+0xb8.
+			idpp->instFlags = queuedFlags;
+			return rbi;
+		}
 	}
 
 	if (pb == 0)
@@ -2080,17 +2122,39 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	viewDepth = viewPos.vz;
 
 #ifdef CTR_NATIVE
+	// NOTE: even in ULTRA the bot cull at 0x1000 stays active. Without
+	// subpixel vertex rendering, HI bots at distance hit GTE overflow and
+	// produce the giant polygon artifact. Porting subpixel (see
+	// BOT_LOD_INVESTIGATION.md) is required before this cull can be lifted.
+	// When subpixel lands: change this condition back to
+	//   && NativeSettings_GetCharacterDetail() != 3
+	// so ULTRA bypasses the cull as designed.
 	if (inst->thread != NULL && inst->thread->modelIndex == DYNAMIC_ROBOT_CAR && viewDepth > 0x1000)
 	{
 		idpp->instFlags = queuedFlags;
 		return rbi;
 	}
-#endif
+
+	{
+		u32 alphaFlags = queuedFlags;
+		if (RenderBucket_IsRacerInstance(inst) && (NativeSettings_GetCharacterDetail() == 3))
+		{
+			alphaFlags &= ~DEPTH_FADE;
+		}
+
+		if (RenderBucket_WriteAlphaScale(inst, idpp, viewDepth, alphaFlags) == 0)
+		{
+			idpp->instFlags = queuedFlags;
+			return rbi;
+		}
+	}
+#else
 	if (RenderBucket_WriteAlphaScale(inst, idpp, viewDepth, queuedFlags) == 0)
 	{
 		idpp->instFlags = queuedFlags;
 		return rbi;
 	}
+#endif
 
 	RenderBucket_AdjustViewPositionForMvp(inst, &viewPos);
 	RenderBucket_StoreMvpTranslation(idpp, &viewPos);

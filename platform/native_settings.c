@@ -10,14 +10,16 @@ extern int  g_cfg_bilinearFiltering;
 extern void NativeRenderer_SetInternalScale(int scale);
 extern int  NativeRenderer_GetInternalScale(void);
 
-static int s_loaded     = 0;
-static int s_dithering  = 1;
-static int s_resolution = 2;
-static int s_bilinear   = 0;
+static int s_loaded           = 0;
+static int s_dithering        = 1;
+static int s_resolution       = 2;
+static int s_bilinear         = 0;
+static int s_character_detail = 1;
 
 int NativeSettings_GetDithering(void) { return s_dithering; }
 int NativeSettings_GetResolution(void) { return s_resolution; }
 int NativeSettings_GetBilinear(void)   { return s_bilinear; }
+int NativeSettings_GetCharacterDetail(void) { return s_character_detail; }
 
 void NativeSettings_Save(void)
 {
@@ -28,6 +30,7 @@ void NativeSettings_Save(void)
     fprintf(f, "dithering=%d\n",  s_dithering);
     fprintf(f, "resolution=%d\n", s_resolution);
     fprintf(f, "bilinear=%d\n",   s_bilinear);
+    fprintf(f, "character_detail=%d\n", s_character_detail);
     fclose(f);
 }
 
@@ -60,11 +63,14 @@ void NativeSettings_Load(void)
         if      (strcmp(key, "dithering")  == 0) s_dithering  = (value != 0);
         else if (strcmp(key, "resolution") == 0) s_resolution = value;
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
+        else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
     }
     fclose(f);
 
     if (s_resolution < 1) s_resolution = 1;
     if (s_resolution > 8) s_resolution = 8;
+    if (s_character_detail < 0) s_character_detail = 0;
+    if (s_character_detail > 3) s_character_detail = 3;
 
     NativeSettings_Apply();
 }
@@ -94,5 +100,14 @@ void NativeSettings_SetBilinear(int enabled)
     if (s_bilinear == enabled) return;
     s_bilinear = enabled;
     g_cfg_bilinearFiltering = enabled;
+    NativeSettings_Save();
+}
+
+void NativeSettings_SetCharacterDetail(int mode)
+{
+    if (mode < 0) mode = 0;
+    if (mode > 3) mode = 3;
+    if (s_character_detail == mode) return;
+    s_character_detail = mode;
     NativeSettings_Save();
 }
