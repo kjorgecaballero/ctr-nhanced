@@ -1,5 +1,6 @@
 #include <common.h>
 #include "native_graphics.h"
+#include "native_settings.h"
 
 extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
@@ -14,7 +15,11 @@ static const char *const s_aspects[4] = {"AUTO","4:3","16:9","21:9"};
 
 static int s_open = 0, s_row = 0, s_aspect = 0, s_res = 2, s_msaa = 1;
 
-void NativeGraphics_Open(void)  { s_open = 1; s_row = 0; s_res = NativeRenderer_GetInternalScale(); }
+void NativeGraphics_Open(void)  {
+    s_open = 1;
+    s_row = 0;
+    s_res = NativeSettings_GetResolution();
+}
 void NativeGraphics_Close(void) { s_open = 0; }
 int  NativeGraphics_IsOpen(void) { return s_open; }
 
@@ -43,12 +48,12 @@ static int ng_chg(int r, int d) {
     }
     case 2: if (d < 0) { if (s_res <= 1) return 0; s_res--; }
             else { if (s_res >= 8) return 0; s_res++; }
-            NativeRenderer_SetInternalScale(s_res);
+            NativeSettings_SetResolution(s_res);
             return 1;
     case 3: { static const int lv[3] = {1,2,4}; int i = 0;
               while (i < 2 && lv[i] < s_msaa) i++; i += d;
               if (i < 0 || i > 2) return 0; s_msaa = lv[i]; return 1; }
-    default: gNativeDitheringEnabled ^= 1; return 1;
+    default: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
     }
 }
 
