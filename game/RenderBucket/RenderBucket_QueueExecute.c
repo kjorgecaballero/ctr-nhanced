@@ -2078,6 +2078,14 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	RenderBucket_ApplyOwnerPushBufferGate(inst, playerIndex, &queuedFlags);
 	RenderBucket_GetViewPosition(inst, pb, &viewPos);
 	viewDepth = viewPos.vz;
+
+#ifdef CTR_NATIVE
+	if (inst->thread != NULL && inst->thread->modelIndex == DYNAMIC_ROBOT_CAR && viewDepth > 0x1000)
+	{
+		idpp->instFlags = queuedFlags;
+		return rbi;
+	}
+#endif
 	if (RenderBucket_WriteAlphaScale(inst, idpp, viewDepth, queuedFlags) == 0)
 	{
 		idpp->instFlags = queuedFlags;
