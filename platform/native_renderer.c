@@ -584,7 +584,7 @@ internal void NativeRenderer_BindMainRenderTarget(void)
                 if (env != NULL)
                 {
                         int v = atoi(env);
-                        if (v >= 1 && v <= 4) s_internalScale = v;
+                        if (v >= 1 && v <= 8) s_internalScale = v;
                 }
                 s_envChecked = 1;
         }
@@ -2634,7 +2634,7 @@ void NativeRenderer_PopDebugLabel(void)
 void NativeRenderer_SetInternalScale(int scale)
 {
         if (scale < 1) scale = 1;
-        if (scale > 4) scale = 4;
+        if (scale > 8) scale = 8;
         s_internalScale = scale;
 }
 

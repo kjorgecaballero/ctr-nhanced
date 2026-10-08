@@ -42,7 +42,7 @@ static int ng_chg(int r, int d) {
         return 1;
     }
     case 2: if (d < 0) { if (s_res <= 1) return 0; s_res--; }
-            else { if (s_res >= 4) return 0; s_res++; }
+            else { if (s_res >= 8) return 0; s_res++; }
             NativeRenderer_SetInternalScale(s_res);
             return 1;
     case 3: { static const int lv[3] = {1,2,4}; int i = 0;
