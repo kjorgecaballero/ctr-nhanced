@@ -5,9 +5,10 @@ extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
 extern void NativeRenderer_SetInternalScale(int scale);
 extern int  NativeRenderer_GetInternalScale(void);
+extern int  gNativeDitheringEnabled;
 
-static const char *const s_labels[4] = {
-    "DISPLAY MODE", "ASPECT RATIO", "RESOLUTION", "ANTI-ALIASING"
+static const char *const s_labels[5] = {
+    "DISPLAY MODE", "ASPECT RATIO", "RESOLUTION", "ANTI-ALIASING", "DITHERING"
 };
 static const char *const s_aspects[4] = {"AUTO","4:3","16:9","21:9"};
 
@@ -22,7 +23,8 @@ static const char *ng_val(int r, char *b, int n) {
     case 0: return Platform_IsFullscreen() ? "FULLSCREEN" : "WINDOWED";
     case 1: return s_aspects[s_aspect];
     case 2: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
-    default: if (s_msaa >= 4) return "4X"; if (s_msaa >= 2) return "2X"; return "OFF";
+    case 3: if (s_msaa >= 4) return "4X"; if (s_msaa >= 2) return "2X"; return "OFF";
+    default: return gNativeDitheringEnabled ? "ON" : "OFF";
     }
 }
 
@@ -43,9 +45,10 @@ static int ng_chg(int r, int d) {
             else { if (s_res >= 4) return 0; s_res++; }
             NativeRenderer_SetInternalScale(s_res);
             return 1;
-    default: { static const int lv[3] = {1,2,4}; int i = 0;
-               while (i < 2 && lv[i] < s_msaa) i++; i += d;
-               if (i < 0 || i > 2) return 0; s_msaa = lv[i]; return 1; }
+    case 3: { static const int lv[3] = {1,2,4}; int i = 0;
+              while (i < 2 && lv[i] < s_msaa) i++; i += d;
+              if (i < 0 || i > 2) return 0; s_msaa = lv[i]; return 1; }
+    default: gNativeDitheringEnabled ^= 1; return 1;
     }
 }
 
@@ -53,8 +56,8 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     u32 tap = sdata->AnyPlayerTap;
 
     if (tap != 0) {
-        if (tap & BTN_UP) { s_row = (s_row + 3) % 4; OtherFX_Play(0,1); }
-        else if (tap & BTN_DOWN) { s_row = (s_row + 1) % 4; OtherFX_Play(0,1); }
+        if (tap & BTN_UP) { s_row = (s_row + 4) % 5; OtherFX_Play(0,1); }
+        else if (tap & BTN_DOWN) { s_row = (s_row + 1) % 5; OtherFX_Play(0,1); }
         else if (tap & (BTN_LEFT | BTN_RIGHT)) {
             int ok = ng_chg(s_row, (tap & BTN_LEFT) ? -1 : 1);
             OtherFX_Play(ok ? 0 : 5, 1);
@@ -74,7 +77,7 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     int r;
 
     DecalFont_DrawLine("GRAPHICS", 256, 26, FONT_BIG, JUSTIFY_CENTER | ORANGE);
-    for (r = 0; r < 4; r++) {
+    for (r = 0; r < 5; r++) {
         int y = 58 + r * 18;
         DecalFont_DrawLine((char *)s_labels[r], 76, y, FONT_SMALL, ORANGE);
         DecalFont_DrawLine((char *)ng_val(r, buf, sizeof(buf)), 436, y,

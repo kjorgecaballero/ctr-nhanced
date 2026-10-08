@@ -154,6 +154,7 @@ int g_dbg_wireframeMode = 0;
 int g_dbg_texturelessMode = 0;
 
 int g_cfg_bilinearFiltering = 0;
+int gNativeDitheringEnabled = 1;
 
 // NOTE(aalhendi): Pack native RGBA render targets into the persistent RG8 VRAM
 // texture on the GPU instead of a GPU-to-CPU-to-GPU round trip.
@@ -724,6 +725,7 @@ typedef struct
 	GLint texLoc;
 	GLint lutLoc;
 	GLint psxSemiTransPassLoc;
+	GLint psxDitherEnabledLoc;
 	GLint psxDrawMaskSetLoc;
 	GLint psxTextureOutputStpLoc;
 	GLint psxKeepTextureAlphaLoc;
@@ -751,6 +753,7 @@ GLint u_projectionLoc;
 GLint u_bilinearFilterLoc;
 GLint u_texelSizeLoc;
 GLint u_psxSemiTransPassLoc;
+GLint u_psxDitherEnabledLoc;
 GLint u_psxDrawMaskSetLoc;
 GLint u_psxTextureOutputStpLoc;
 GLint u_psxKeepTextureAlphaLoc;
@@ -802,6 +805,7 @@ GLint u_psxKeepTextureAlphaLoc;
 	"	}\n"
 
 #define GPU_DITHERING                                             \
+	"	uniform int psxDitherEnabled;\n"                            \
 	"	const mat4 c_dither = mat4(\n"                              \
 	"		-4.0,  +0.0,  -3.0,  +1.0,\n"                              \
 	"		+2.0,  -2.0,  +3.0,  -1.0,\n"                              \
@@ -809,7 +813,7 @@ GLint u_psxKeepTextureAlphaLoc;
 	"		+3.0,  -1.0,  +2.0,  -2.0) / 255.0;\n"                     \
 	"	vec4 dither(vec4 color) {\n"                                \
 	"		ivec2 dc = ivec2(mod(floor(v_ditherCoord), 4.0));\n"       \
-	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w);\n" \
+	"		color.xyz += vec3(c_dither[dc.x][dc.y] * v_texcoord.w * float(psxDitherEnabled));\n" \
 	"		return color;\n"                                           \
 	"	}\n"
 
@@ -1106,6 +1110,7 @@ internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source)
 	sh->texLoc = glGetUniformLocation(sh->shader, "s_texture");
 	sh->lutLoc = glGetUniformLocation(sh->shader, "s_rgLut");
 	sh->psxSemiTransPassLoc = glGetUniformLocation(sh->shader, "psxSemiTransPass");
+	sh->psxDitherEnabledLoc = glGetUniformLocation(sh->shader, "psxDitherEnabled");
 	sh->psxDrawMaskSetLoc = glGetUniformLocation(sh->shader, "psxDrawMaskSet");
 	sh->psxTextureOutputStpLoc = glGetUniformLocation(sh->shader, "psxTextureOutputStp");
 	sh->psxKeepTextureAlphaLoc = glGetUniformLocation(sh->shader, "psxKeepTextureAlpha");
@@ -1438,6 +1443,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_projectionLoc = s_gteShader4.projectionLoc;
 		u_texelSizeLoc = -1;
 		u_psxSemiTransPassLoc = s_gteShader4.psxSemiTransPassLoc;
+		u_psxDitherEnabledLoc = s_gteShader4.psxDitherEnabledLoc;
 		u_psxDrawMaskSetLoc = s_gteShader4.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader4.psxTextureOutputStpLoc;
 		u_psxKeepTextureAlphaLoc = s_gteShader4.psxKeepTextureAlphaLoc;
@@ -1448,6 +1454,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_projectionLoc = s_gteShader8.projectionLoc;
 		u_texelSizeLoc = -1;
 		u_psxSemiTransPassLoc = s_gteShader8.psxSemiTransPassLoc;
+		u_psxDitherEnabledLoc = s_gteShader8.psxDitherEnabledLoc;
 		u_psxDrawMaskSetLoc = s_gteShader8.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader8.psxTextureOutputStpLoc;
 		u_psxKeepTextureAlphaLoc = s_gteShader8.psxKeepTextureAlphaLoc;
@@ -1458,6 +1465,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_projectionLoc = s_gteShader16.projectionLoc;
 		u_texelSizeLoc = -1;
 		u_psxSemiTransPassLoc = s_gteShader16.psxSemiTransPassLoc;
+		u_psxDitherEnabledLoc = s_gteShader16.psxDitherEnabledLoc;
 		u_psxDrawMaskSetLoc = s_gteShader16.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader16.psxTextureOutputStpLoc;
 		u_psxKeepTextureAlphaLoc = s_gteShader16.psxKeepTextureAlphaLoc;
@@ -1468,6 +1476,7 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 		u_projectionLoc = s_gteShader32Rgba.projectionLoc;
 		u_texelSizeLoc = s_gteShader32Rgba.texelSizeLoc;
 		u_psxSemiTransPassLoc = s_gteShader32Rgba.psxSemiTransPassLoc;
+		u_psxDitherEnabledLoc = s_gteShader32Rgba.psxDitherEnabledLoc;
 		u_psxDrawMaskSetLoc = s_gteShader32Rgba.psxDrawMaskSetLoc;
 		u_psxTextureOutputStpLoc = s_gteShader32Rgba.psxTextureOutputStpLoc;
 		u_psxKeepTextureAlphaLoc = s_gteShader32Rgba.psxKeepTextureAlphaLoc;
@@ -1486,6 +1495,10 @@ void NativeRenderer_SetTexture(TextureID texture, TexFormat texFormat)
 	if (u_bilinearFilterLoc >= 0)
 	{
 		glUniform1i(u_bilinearFilterLoc, g_cfg_bilinearFiltering);
+	}
+	if (u_psxDitherEnabledLoc >= 0)
+	{
+		glUniform1i(u_psxDitherEnabledLoc, gNativeDitheringEnabled != 0);
 	}
 	NativeRenderer_SetPSXTextureSemiTransPass(0);
 
