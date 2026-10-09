@@ -80,7 +80,7 @@ static void Log(const char *fmt, ...)
 /* Grid slot (0..15) -> enum Characters. Must match the permutation in
  * game/230/D230.c characterSelectMeta1P2P. Exposed via native_custom_racer.h
  * for GET_MPK_ID. */
-const u8 s_gridToCharID[18] = {
+const u8 s_gridToCharID[24] = {
     CRASH_BANDICOOT,   /* grid 0  */
     NEO_CORTEX,        /* grid 1  */
     TINY_TIGER,        /* grid 2  */
@@ -99,6 +99,12 @@ const u8 s_gridToCharID[18] = {
     NITROS_OXIDE,      /* grid 15 */
     N_TROPY,           /* grid 16 - page 0 slot 16 default */
     RIPPER_ROO,        /* grid 17 - page 0 slot 17 default */
+    N_TROPY,           /* grid 18 - page 0 slot 18 default */
+    RIPPER_ROO,        /* grid 19 - page 0 slot 19 default */
+    N_TROPY,           /* grid 20 - page 0 slot 20 default */
+    RIPPER_ROO,        /* grid 21 - page 0 slot 21 default */
+    N_TROPY,           /* grid 22 - page 0 slot 22 default */
+    RIPPER_ROO,        /* grid 23 - page 0 slot 23 default */
 };
 
 typedef struct

@@ -16,18 +16,18 @@ extern "C" {
  *   IDs 16+   -> s_customMeta.
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
-#define NATIVE_CUSTOM_COUNT   146   /* 128 (pages 1-8, slots 0-15)
-                                     * + 2 (page 0, slots 16-17)
-                                     * + 16 (pages 1-8, slots 16-17) */
+#define NATIVE_CUSTOM_COUNT   200   /* 128 (pages 1-8, slots 0-15)
+                                     * + 8 (page 0, slots 16-23)
+                                     * + 64 (pages 1-8, slots 16-23) */
 
-/* Page 0 grid slots 16 and 17 are custom. Their customIDs are the
- * last two of the custom ID space (see GET_MPK_ID). */
+/* Page 0 grid slots 16-23 are custom. Their customIDs are the
+ * last eight of the custom ID space (see GET_MPK_ID). */
 #define NATIVE_PAGE0_CUSTOM_BASE  144
-#define NATIVE_PAGE0_CUSTOM_COUNT 2
+#define NATIVE_PAGE0_CUSTOM_COUNT 8
 
-/* Pages 1-8 grid slots 16-17. IDs 146-161 (8 pages x 2 slots). */
-#define NATIVE_EXT_CUSTOM_BASE   146
-#define NATIVE_EXT_CUSTOM_COUNT  16
+/* Pages 1-8 grid slots 16-23. IDs 152-215 (8 pages x 8 slots). */
+#define NATIVE_EXT_CUSTOM_BASE   152
+#define NATIVE_EXT_CUSTOM_COUNT  64
 
 #define NATIVE_PAGE_SIZE      16
 
@@ -54,8 +54,8 @@ extern const u8 s_gridToCharID[NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT];
  *
  * ID ranges:
  *   16..143   pages 1-8, slots 0-15
- *   144..145  page 0, slots 16-17
- *   146..161  pages 1-8, slots 16-17
+ *   144..151  page 0, slots 16-23
+ *   152..215  pages 1-8, slots 16-23
  *
  * Was a macro; converted to static inline to (a) keep the 3-way branch
  * readable and (b) avoid evaluating the argument multiple times. */
