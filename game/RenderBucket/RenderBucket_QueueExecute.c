@@ -2084,6 +2084,15 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 #endif
 
         queuedFlags = inst->flags;
+#ifdef CTR_NATIVE
+        /* El path "small pushbuffer" de PS1 (PUSHBUFFER_EXISTS) pre-renderiza
+         * karts no-locales a un FBO de 96x64 y lo blitea como sprite. A 8x de
+         * resolucion interna ese sprite se ve pixelado. En PC no hay razon
+         * para usarlo: forzamos el path 3D normal para toda instancia.
+         * Los consumers que leen inst->flags (DrawTires, VehTurbo, Particle)
+         * siguen viendo el flag — solo se oculta para el OT range. */
+        queuedFlags &= ~PUSHBUFFER_EXISTS;
+#endif
         instPlayerBase = RenderBucket_InstancePlayerBase(inst, playerIndex);
         idpp = RenderBucket_InstancePlayerIdpp(instPlayerBase);
         pb = idpp->pushBuffer;
@@ -2129,11 +2138,14 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	// When subpixel lands: change this condition back to
 	//   && NativeSettings_GetCharacterDetail() != 3
 	// so ULTRA bypasses the cull as designed.
-	if (inst->thread != NULL && inst->thread->modelIndex == DYNAMIC_ROBOT_CAR && viewDepth > 0x1000)
-	{
-		idpp->instFlags = queuedFlags;
-		return rbi;
-	}
+        if (inst->thread != NULL &&
+            (inst->thread->modelIndex == DYNAMIC_ROBOT_CAR ||
+             inst->thread->modelIndex == DYNAMIC_PLAYER) &&
+            viewDepth > 0x1000)
+        {
+                idpp->instFlags = queuedFlags;
+                return rbi;
+        }
 
 	{
 		u32 alphaFlags = queuedFlags;
