@@ -71,3 +71,4 @@ run_recon.sh.bak
 fix_level_music_dups.py
 tools/apply_music_fixes*.py
 tools/check_ogg_hooks.py
+ctr_native.cfg

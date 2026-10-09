@@ -1,7 +1,7 @@
 # =========================================================================
 # MODULE: slots — state
 # =========================================================================
-"""_resolve_cells: compute the 18-slot cell map for a given page.
+"""_resolve_cells: compute the 24-slot cell map for a given page.
 
 Pure function. No classes, no registration. The view/selection globals
 live in ctr_racer.state (top-level) because they are shared between
@@ -37,7 +37,7 @@ _ORIGINALS = {
 
 def _resolve_cells(page, page_entries, active_racer, active_slug):
     cells = {}
-    n = 18
+    n = 24
     for slot in range(n):
         # Page 0, slots 0-15: always originals. Short-circuit before the
         # rest of the logic — the engine's meta array for this page is

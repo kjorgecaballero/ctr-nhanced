@@ -3028,7 +3028,7 @@ static void EnsureMetaBackup(void)
  * (0..12; 13-15 unused by the original engine). */
 static const struct {
     u16 px_x, px_y, clut_x, clut_y;
-} s_iconSlotRects[18] = {
+} s_iconSlotRects[24] = {
     {368, 216,  16, 251},  /* 0: crash     */
     {256, 216,  16, 252},  /* 1: cortex    */
     {267, 216,  16, 253},  /* 2: tiny      */
@@ -3047,19 +3047,25 @@ static const struct {
     {982, 216,  48, 252},  /* 15: synthetic (Sentinel only) */
     {960, 245,  48, 250},  /* 16: page-0 custom slot 16 */
     {971, 245,  48, 251},  /* 17: page-0 custom slot 17 */
+    {800, 400,  64, 248},  /* 18: page-0 custom slot 18 */
+    {811, 400,  64, 249},  /* 19: page-0 custom slot 19 */
+    {822, 400,  64, 250},  /* 20: page-0 custom slot 20 */
+    {833, 400,  64, 251},  /* 21: page-0 custom slot 21 */
+    {844, 400,  64, 252},  /* 22: page-0 custom slot 22 */
+    {855, 400,  64, 253},  /* 23: page-0 custom slot 23 */
 };
 
 /* Per-VRAM-slot page tracker. -1 = unknown, 0 = original atlas,
  * N>0 = custom page N. */
-static s16 s_iconSlotLoadedPage[18] = {
+static s16 s_iconSlotLoadedPage[24] = {
     -1, -1, -1, -1, -1, -1, -1, -1,
     -1, -1, -1, -1, -1, -1, -1, -1,
-    -1, -1
+    -1, -1, -1, -1, -1, -1, -1, -1
 };
 
 static void IconSlot_InvalidateAll(void)
 {
-    for (int i = 0; i < 18; i++)
+    for (int i = 0; i < 24; i++)
         s_iconSlotLoadedPage[i] = -1;
 }
 

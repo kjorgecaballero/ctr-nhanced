@@ -40,9 +40,8 @@ class NFR_OT_SlotClick(Operator):
 
         if entry is not None:
             obj = _find_object_by_slug(entry["folder"])
-            if obj is not None:
-                for o in bpy.data.objects:
-                    o.select_set(False)
+            if obj is not None and obj.name in context.view_layer.objects:
+                bpy.ops.object.select_all(action='DESELECT')
                 obj.select_set(True)
                 context.view_layer.objects.active = obj
                 self.report({"INFO"}, f"Selected {obj.name}")
@@ -167,8 +166,13 @@ class NFR_OT_SlotLoadToPanel(Operator):
                 f"No Blender object with slug '{self.slug}'")
             return {"CANCELLED"}
 
-        for o in bpy.data.objects:
-            o.select_set(False)
+        if obj.name not in context.view_layer.objects:
+            self.report({"INFO"},
+                f"'{self.slug}' is not in the active view layer "
+                f"(collection hidden or excluded)")
+            return {"CANCELLED"}
+
+        bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
         context.view_layer.objects.active = obj
 

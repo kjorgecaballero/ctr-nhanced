@@ -20,7 +20,7 @@ class NFR_RacerProps(PropertyGroup):
     is_racer:   BoolProperty(name="Is Racer", default=False)
     slug:       StringProperty(name="Slug", description="Folder name and internal .ctr name")
     page:       IntProperty(name="Page", default=1, min=0, max=8)
-    slot:       IntProperty(name="Slot", default=0, min=0, max=17)
+    slot:       IntProperty(name="Slot", default=0, min=0, max=23)
     engine:     EnumProperty(name="Engine", items=ENGINES, default="BALANCED")
     mask:       EnumProperty(
         name="Mask",
@@ -43,15 +43,14 @@ class NFR_RacerProps(PropertyGroup):
     icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH")
 
     def custom_id(self):
-        # Page 0,     slots 16-17 -> 144 + (slot - 16)
+        # Page 0,     slots 16-23 -> 144 + (slot - 16)
         # Pages 1-8,  slots 0-15  -> 16  + (page-1)*16 + slot
-        # Pages 1-8,  slots 16-17 -> 146 + (page-1)*2  + (slot - 16)
+        # Pages 1-8,  slots 16-23 -> 152 + (page-1)*8 + (slot - 16)
         if self.page == 0:
             return 144 + (self.slot - 16)
         if self.slot >= 16:
-            return 146 + (self.page - 1) * 2 + (self.slot - 16)
+            return 152 + (self.page - 1) * 8 + (self.slot - 16)
         return 16 + (self.page - 1) * 16 + self.slot
-
 
 _classes = (NFR_RacerProps,)
 

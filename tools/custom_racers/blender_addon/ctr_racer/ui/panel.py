@@ -246,44 +246,34 @@ class NFR_PT_Racer(Panel):
         cells = _resolve_cells(state._slot_view_page, page_entries,
                                active_racer, active_slug)
 
-        n = 18
+        n = 24
         occupied = sum(1 for k, _ in cells.values() if k != "empty")
         layout.label(text=f"{occupied}/{n} slots occupied")
 
         grid = layout.grid_flow(
-            row_major=True, columns=6,
+            row_major=True, columns=8,
             even_columns=True, even_rows=True, align=True)
 
         DISPLAY_ORDER = [
-            0, 1, 2, 3, 4, 5,
-            6, 7, 8, 9, 10, 11,
-            16, 12, 13, 14, 15, 17,
+            18, 8, 0, 1, 2, 3, 9, 19,
+            20, 10, 4, 5, 6, 7, 11, 21,
+            22, 16, 12, 13, 14, 15, 17, 23,
         ]
 
         for slot in DISPLAY_ORDER:
             kind, data = cells[slot]
 
+            icon = None
             if kind == "original":
                 icon = _get_original_icon(data["icon_file"])
-                if icon is not None:
-                    op = grid.operator("nfr.slot_click", text="",
-                                       icon_value=icon.icon_id)
-                else:
-                    op = grid.operator("nfr.slot_click", text=str(slot))
-                op.page = state._slot_view_page
-                op.slot = slot
-                continue
-
-            if kind in ("entry", "pending"):
+            elif kind in ("entry", "pending"):
                 folder = data["folder"]
                 png = prefs.racers_dir() / folder / "icon.png"
                 icon = _get_icon(folder, png) if png.is_file() else None
-                if icon is not None:
-                    op = grid.operator("nfr.slot_click", text="",
-                                       icon_value=icon.icon_id)
-                else:
-                    op = grid.operator("nfr.slot_click",
-                                       text=folder[:6])
+
+            if icon is not None:
+                op = grid.operator("nfr.slot_click", text="",
+                                   icon_value=icon.icon_id)
             else:
                 op = grid.operator("nfr.slot_click", text=str(slot))
             op.page = state._slot_view_page
