@@ -1,5 +1,7 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include "native_settings.h"
+#include <stdlib.h>
 
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 #include <platform/native_checkpoint.h>
@@ -50,10 +52,33 @@ void LOAD_Robots2P(struct BigHeader *bigfile, int p1, int p2, void (*callback)(s
 		return;
 	}
 
-	data.characterIDs[2] = robotSet[0];
-	data.characterIDs[3] = robotSet[1];
-	data.characterIDs[4] = robotSet[2];
-	data.characterIDs[5] = robotSet[3];
+#ifdef CTR_NATIVE
+	/* BOT-RANDOMIZATION: shuffle the 4 bots locally so the global set
+	 * table (data.characterIDs_2P_AIs) stays pristine across races.
+	 * Restricted to retail IDs so every bot has valid AI data. */
+	if (NativeSettings_GetBotRandomizer() != 0)
+	{
+		int pool[16];
+		int poolSize = 0;
+		for (int c = 0; c < 16; c++)
+		{
+			if (c != p1 && c != p2) pool[poolSize++] = c;
+		}
+		for (int k = 0; k < 4; k++)
+		{
+			int j = rand() % poolSize;
+			data.characterIDs[2 + k] = pool[j];
+			pool[j] = pool[--poolSize];
+		}
+	}
+	else
+#endif
+	{
+		data.characterIDs[2] = robotSet[0];
+		data.characterIDs[3] = robotSet[1];
+		data.characterIDs[4] = robotSet[2];
+		data.characterIDs[5] = robotSet[3];
+	}
 
 	LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + setIndex, NULL, callback);
 }
@@ -77,6 +102,27 @@ void LOAD_Robots1P(int characterID)
 
 		data.characterIDs[i] = newCharacterID;
 	}
+
+#ifdef CTR_NATIVE
+	/* BOT-RANDOMIZATION: draw 7 bot IDs from the full retail pool (0..15)
+	 * excluding the player's own mpkID, without replacement. Only runs
+	 * when the cheat is enabled. */
+	if (NativeSettings_GetBotRandomizer() != 0)
+	{
+		int pool[16];
+		int poolSize = 0;
+		for (int c = 0; c < 16; c++)
+		{
+			if (c != mpkID) pool[poolSize++] = c;
+		}
+		for (int i = 1; i < LOAD_CHARACTER_ID_COUNT; i++)
+		{
+			int j = rand() % poolSize;
+			data.characterIDs[i] = pool[j];
+			pool[j] = pool[--poolSize];
+		}
+	}
+#endif
 }
 
 static void (*const LOAD_DriverMPK_SetPointer)(struct LoadQueueSlot *) = LOAD_QUEUE_CALLBACK_SET_POINTER;
@@ -90,6 +136,12 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	gameMode1 = gGT->gameMode1;
 
 	int lastFileIndexMPK;
+
+#ifdef CTR_NATIVE
+	/* Seed the PRNG per race so bot randomization varies between races. */
+	if (NativeSettings_GetBotRandomizer() != 0)
+		srand((unsigned int)Platform_GetVBlankCount());
+#endif
 
 	// 3P/4P
 	if ((u32)(levelLOD - LOAD_LEVEL_LOD_3P) < LOAD_LEVEL_LOD_3P4P_COUNT)
@@ -184,7 +236,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 
 		if (
 		    // If you are in Adventure cup
-		    ((gameMode1 & ADVENTURE_CUP) != 0) &&
+		    ((gameMode1 & (ADVENTURE_CUP)) != 0) &&
 
 		    // purple gem cup
 		    (gGT->cup.cupID == 4))
@@ -214,6 +266,33 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		if ((gameMode1 & (TIME_TRIAL | MAIN_MENU)) != MAIN_MENU)
 		{
 			LOAD_Robots1P(data.characterIDs[0]);
+
+#ifdef CTR_NATIVE
+			/* BOT-RANDOMIZATION: load HI model per shuffled bot ID, but
+			 * only if there's room in the fixed-size load queue. Reserve
+			 * 2 slots for the player HI + arcade pack below; the pack's
+			 * callback is what ends the loading stage, so if it drops,
+			 * the game hangs on the checkered screen. Bots that don't
+			 * fit fall back to the arcade pack name lookup in VehBirth. */
+			if (NativeSettings_GetBotRandomizer() != 0)
+			{
+				int room = LOAD_QUEUE_SLOT_COUNT - (int)sdata->queueLength - 2;
+				for (i = 1; i < LOAD_CHARACTER_ID_COUNT && room > 0; i++, room--)
+				{
+					int cid = data.characterIDs[i];
+					if (cid >= 0 && cid < 16)
+					{
+						void **rawSlot = NativeCustomRacer_GetBotModelRawSlot(i);
+						if (rawSlot != NULL)
+						{
+							LOAD_AppendQueue(bigfile, LT_GETADDR,
+							    BI_RACERMODELHI + cid,
+							    rawSlot, LOAD_DriverMPK_SetPointer);
+						}
+					}
+				}
+			}
+#endif
 		}
 
 		// arcade 1P. Replace the player's model with the custom one, but keep
@@ -301,10 +380,32 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 
 			if (setIndex < LOAD_2P_AI_SET_COUNT)
 			{
-				data.characterIDs[2] = robotSet[0];
-				data.characterIDs[3] = robotSet[1];
-				data.characterIDs[4] = robotSet[2];
-				data.characterIDs[5] = robotSet[3];
+#ifdef CTR_NATIVE
+				/* BOT-RANDOMIZATION: draw 4 bots from the 16-retail pool,
+				 * excluding P1 and P2's mpkIDs. Same pattern as 1P. */
+				if (NativeSettings_GetBotRandomizer() != 0)
+				{
+					int pool[16];
+					int poolSize = 0;
+					for (int c = 0; c < 16; c++)
+					{
+						if (c != p1 && c != p2) pool[poolSize++] = c;
+					}
+					for (int k = 0; k < 4; k++)
+					{
+						int j = rand() % poolSize;
+						data.characterIDs[2 + k] = pool[j];
+						pool[j] = pool[--poolSize];
+					}
+				}
+				else
+#endif
+				{
+					data.characterIDs[2] = robotSet[0];
+					data.characterIDs[3] = robotSet[1];
+					data.characterIDs[4] = robotSet[2];
+					data.characterIDs[5] = robotSet[3];
+				}
 
 				for (i = 2; i < 6; i++)
 				{

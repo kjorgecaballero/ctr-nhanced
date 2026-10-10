@@ -125,6 +125,8 @@
 
 #include "MAIN/MainFreeze.c"
 #include "native_graphics.c"
+#include "native_options.c"
+#include "native_cheats.c"
 
 #include "MAIN/MainGameStart.c"
 #include "MAIN/MainGameEnd.c"

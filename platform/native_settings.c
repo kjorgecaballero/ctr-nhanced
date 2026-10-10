@@ -15,11 +15,13 @@ static int s_dithering        = 1;
 static int s_resolution       = 2;
 static int s_bilinear         = 0;
 static int s_character_detail = 1;
+static int s_bot_randomizer   = 0;
 
 int NativeSettings_GetDithering(void) { return s_dithering; }
 int NativeSettings_GetResolution(void) { return s_resolution; }
 int NativeSettings_GetBilinear(void)   { return s_bilinear; }
 int NativeSettings_GetCharacterDetail(void) { return s_character_detail; }
+int NativeSettings_GetBotRandomizer(void)   { return s_bot_randomizer; }
 
 void NativeSettings_Save(void)
 {
@@ -31,6 +33,7 @@ void NativeSettings_Save(void)
     fprintf(f, "resolution=%d\n", s_resolution);
     fprintf(f, "bilinear=%d\n",   s_bilinear);
     fprintf(f, "character_detail=%d\n", s_character_detail);
+    fprintf(f, "bot_randomizer=%d\n", s_bot_randomizer);
     fclose(f);
 }
 
@@ -64,6 +67,7 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "resolution") == 0) s_resolution = value;
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
+        else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = (value != 0);
     }
     fclose(f);
 
@@ -109,5 +113,13 @@ void NativeSettings_SetCharacterDetail(int mode)
     if (mode > 3) mode = 3;
     if (s_character_detail == mode) return;
     s_character_detail = mode;
+    NativeSettings_Save();
+}
+
+void NativeSettings_SetBotRandomizer(int enabled)
+{
+    enabled = (enabled != 0);
+    if (s_bot_randomizer == enabled) return;
+    s_bot_randomizer = enabled;
     NativeSettings_Save();
 }

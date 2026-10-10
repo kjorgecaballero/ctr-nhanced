@@ -13,4 +13,6 @@ void NativeSettings_SetCharacterDetail(int mode);
 void NativeSettings_Load(void);
 void NativeSettings_Save(void);
 
+int  NativeSettings_GetBotRandomizer(void);
+void NativeSettings_SetBotRandomizer(int enabled);
 #endif
