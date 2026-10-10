@@ -126,6 +126,11 @@ static int RenderLists_ProjectDistance(struct PushBuffer *pb, const struct Bound
 	return distance;
 }
 
+#ifdef CTR_NATIVE
+static int s_forceMaxLod = 0;
+void RenderLists_SetForceMaxLod(int v) { s_forceMaxLod = v; }
+#endif
+
 static int RenderLists_Select1P2PSlot(const struct BSP *bsp, struct PushBuffer *pb, int lodDistanceThreshold)
 {
 	if ((bsp->flag & BSP_LEAF_FLAG_WATER) != 0)
@@ -144,7 +149,7 @@ static int RenderLists_Select1P2PSlot(const struct BSP *bsp, struct PushBuffer *
 	// y el vistree descarta esos leaves basado en el bounding box
 	// "chico" del HI LOD. Cada leaf va a su bucket natural según flags.
 	// Los triblocks (4X1) NO se ven afectados: van a su bucket propio.
-	if (!LevelRegistry_ShouldForceHiLod())
+	if (!LevelRegistry_ShouldForceHiLod() && !s_forceMaxLod)
 #endif
 	if (RenderLists_ProjectDistance(pb, &bsp->box) > lodDistanceThreshold)
 	{

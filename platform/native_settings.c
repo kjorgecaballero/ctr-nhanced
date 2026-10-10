@@ -2,6 +2,7 @@
 #include "native_settings.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define NATIVE_SETTINGS_FILE "ctr_native.cfg"
 
@@ -16,12 +17,24 @@ static int s_resolution       = 2;
 static int s_bilinear         = 0;
 static int s_character_detail = 1;
 static int s_bot_randomizer   = 0;
+static int s_high_mp          = -1;
 
 int NativeSettings_GetDithering(void) { return s_dithering; }
 int NativeSettings_GetResolution(void) { return s_resolution; }
 int NativeSettings_GetBilinear(void)   { return s_bilinear; }
 int NativeSettings_GetCharacterDetail(void) { return s_character_detail; }
 int NativeSettings_GetBotRandomizer(void)   { return s_bot_randomizer; }
+
+int NativeSettings_GetHighMp(void)
+{
+	if (s_high_mp < 0)
+	{
+		const char *env = getenv("CTR_HIGHMP");
+		/* Default ON. CTR_HIGHMP=0 explicitly disables. */
+		s_high_mp = (env != NULL && env[0] == '0') ? 0 : 1;
+	}
+	return s_high_mp;
+}
 
 void NativeSettings_Save(void)
 {

@@ -5,6 +5,7 @@ int  NativeSettings_GetResolution(void);
 int  NativeSettings_GetBilinear(void);
 int  NativeSettings_GetCharacterDetail(void);
 int  NativeSettings_GetBotRandomizer(void);
+int  NativeSettings_GetHighMp(void);
 void NativeSettings_SetDithering(int);
 void NativeSettings_SetResolution(int);
 void NativeSettings_SetBilinear(int);

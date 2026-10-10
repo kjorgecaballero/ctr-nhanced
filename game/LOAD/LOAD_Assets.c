@@ -435,6 +435,13 @@ void LOAD_LangFile(int bigfilePtr, int lang)
 
 int LOAD_GetBigfileIndex(u32 levelID, int lod, int fileIndexInGroup)
 {
+#ifdef CTR_NATIVE
+	if (NativeSettings_GetHighMp() != 0 && levelID < NITRO_COURT)
+	{
+		lod = 1;
+	}
+#endif
+
 	if (levelID < NITRO_COURT)
 	{
 		return BI_ARCADETRACKS + levelID * LOAD_TRACK_FILES_PER_LOD_GROUP + sdata->levBigLodIndex[lod - 1] + fileIndexInGroup;

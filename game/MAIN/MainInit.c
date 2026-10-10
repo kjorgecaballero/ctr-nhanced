@@ -108,6 +108,20 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 
 	levelID = gGT->levelID;
 
+#if defined(CTR_NATIVE)
+	/* Multiplayer Maxed Mod: with HIGHMP every viewport renders the full
+	 * 1P geometry. The retail 4P sizes assume LOW LOD, so boost 4x. */
+	if (NativeSettings_GetHighMp() != 0 && gGT->numPlyrCurrGame > 1 &&
+	    levelID < GEM_STONE_VALLEY)
+	{
+		int base = data.primMem_SizePerLEV_4P[levelID] << 10;
+		int boosted = base * 4;
+		if (boosted < 0x100000) boosted = 0x100000;
+		if (boosted > 0x300000) boosted = 0x300000;
+		return boosted;
+	}
+#endif
+
 	switch (gGT->numPlyrCurrGame)
 	{
 	case 0:
@@ -212,6 +226,15 @@ void MainInit_OTMem(struct GameTracker *gGT)
 	size = 0x3000;
 
 EndFunc:
+
+#if defined(CTR_NATIVE)
+	/* Multiplayer Maxed Mod: each viewport emits the full 1P geometry
+	 * when HIGHMP is on, so the OT needs 8x the retail 3P/4P entries. */
+	if (NativeSettings_GetHighMp() != 0 && gGT->numPlyrCurrGame > 1)
+	{
+		size = 0x20000;
+	}
+#endif
 
 	MainDB_OTMem(&gGT->db[0].otMem, size);
 	MainDB_OTMem(&gGT->db[1].otMem, size);
