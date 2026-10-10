@@ -137,7 +137,22 @@ void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamep
 			else
 #endif
 			{
+#ifdef CTR_NATIVE
+				/* Multiplayer Maxed Mod (HIGHMP) in 1P: force max LOD for
+				 * visual parity with the 3P/4P path. The HIGHMP path already
+				 * does this around its own loop; here we mirror it for 1P so
+				 * distant leaves go to their natural HI bucket instead of
+				 * RENDER_LIST_SLOT_FULL_DYNAMIC. Gate on GetHighMp() so
+				 * CTR_HIGHMP=0 preserves retail behavior exactly. */
+				int bHighMp = (NativeSettings_GetHighMp() != 0);
+				if (bHighMp)
+					RenderLists_SetForceMaxLod(1);
+#endif
 				RenderAllLevelGeometry(gGT, lev, ptr_mesh_info);
+#ifdef CTR_NATIVE
+				if (bHighMp)
+					RenderLists_SetForceMaxLod(0);
+#endif
 			}
 			MAINFRAME_PERF_END(NATIVE_PERF_BUCKET_MAINFRAME_LEVEL_GEOMETRY);
 		}

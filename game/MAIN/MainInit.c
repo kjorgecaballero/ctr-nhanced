@@ -120,6 +120,23 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 		if (boosted > 0x300000) boosted = 0x300000;
 		return boosted;
 	}
+
+	/* HIGHMP in 1P: forcing max LOD at distance needs more primMem than
+	 * the retail 1P size (which assumes distant leaves drop to
+	 * FULL_DYNAMIC). Boost 4x matching the 4P path. Skip adventure arena
+	 * and intro cutscenes, which have dedicated sizes in the switch below
+	 * and no distance LOD drop to fix. */
+	if (NativeSettings_GetHighMp() != 0 && gGT->numPlyrCurrGame == 1 &&
+	    (gGT->gameMode1 & ADVENTURE_ARENA) == 0 &&
+	    (u32)(levelID - INTRO_RACE_TODAY) >= 9 &&
+	    levelID < GEM_STONE_VALLEY)
+	{
+		int base = data.primMem_SizePerLEV_1P[levelID] << 10;
+		int boosted = base * 4;
+		if (boosted < 0x100000) boosted = 0x100000;
+		if (boosted > 0x300000) boosted = 0x300000;
+		return boosted;
+	}
 #endif
 
 	switch (gGT->numPlyrCurrGame)
@@ -248,7 +265,7 @@ EndFunc:
 	size = (4 << 0xE) | 0x18;
 	gGT->otSwapchainDB[0] = MEMPACK_AllocMem(size); // "ot1"
 	gGT->otSwapchainDB[1] = MEMPACK_AllocMem(size); // "ot2"
-  
+
 }
 
 void MainInit_JitPoolsNew(struct GameTracker *gGT)
