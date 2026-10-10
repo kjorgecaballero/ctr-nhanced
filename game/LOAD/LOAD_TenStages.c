@@ -810,6 +810,12 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			{
 				NativeCustomRacer_ApplySlot(gGT->numPlyrCurrGame, data.characterIDs[1]);
 			}
+
+			/* Bot custom slots: apply the texture for each bot that was
+			 * picked with a custom ID in LOAD_PickBots. Must run AFTER the
+			 * human slots so the bot textures don't get overwritten by the
+			 * level's VRM load. */
+			NativeCustomRacer_ApplyBotSlots();
 		}
 
 		NativeCustomRacer_DumpVRAMIfRequested();

@@ -2944,6 +2944,12 @@ void NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes)
 static void *s_botModelRaw[8];
 static void *s_botModelPtr[8];
 
+void *NativeCustomRacer_GetBotModelPtr(int driverID)
+{
+    if (driverID < 0 || driverID >= 8) return NULL;
+    return s_botModelPtr[driverID];
+}
+
 void **NativeCustomRacer_GetBotModelRawSlot(int driverID)
 {
     if (driverID < 0 || driverID >= 8) return NULL;
@@ -2973,10 +2979,63 @@ void NativeCustomRacer_FinalizeBotModels(int headerBytes, int numPlyr)
     }
 }
 
-void *NativeCustomRacer_GetBotModelPtr(int driverID)
+/* === Bot custom VRAM slots ============================================== */
+
+#define NATIVE_BOT_VRAM_SLOTS 4   /* solo existen model_p0..p3 */
+
+static u8  s_botVramUsed[NATIVE_BOT_VRAM_SLOTS];
+static s8  s_botVramSlot[8];       /* driverID -> slot VRAM, -1 = ninguno */
+static int s_botCustomID[8];
+
+void NativeCustomRacer_ResetBotSlots(int numPlyr)
 {
-    if (driverID < 0 || driverID >= 8) return NULL;
-    return s_botModelPtr[driverID];
+    for (int s = 0; s < NATIVE_BOT_VRAM_SLOTS; s++)
+        s_botVramUsed[s] = (s < numPlyr);
+    for (int i = 0; i < 8; i++) { s_botVramSlot[i] = -1; s_botCustomID[i] = 0; }
+}
+
+int NativeCustomRacer_FreeBotSlots(void)
+{
+    int n = 0;
+    for (int s = 0; s < NATIVE_BOT_VRAM_SLOTS; s++) n += !s_botVramUsed[s];
+    return n;
+}
+
+int NativeCustomRacer_LoadBotModel(int driverID, int characterID)
+{
+    int n = -1;
+    for (int s = 0; s < NATIVE_BOT_VRAM_SLOTS; s++)
+        if (!s_botVramUsed[s]) { n = s; break; }
+    if (n < 0) return 0;
+
+    void **raw = NativeCustomRacer_GetBotModelRawSlot(driverID);
+    if (raw == NULL) return 0;
+
+    void *buf = NativeCustomRacer_LoadModel(n, characterID);
+    if (buf == NULL) return 0;
+
+    *raw = buf;
+    s_botVramUsed[n] = 1;
+    s_botVramSlot[driverID] = (s8)n;
+    s_botCustomID[driverID] = characterID;
+    return 1;
+}
+
+void NativeCustomRacer_ApplyBotSlots(void)
+{
+    for (int i = 0; i < 8; i++)
+        if (s_botVramSlot[i] >= 0)
+            NativeCustomRacer_ApplySlot(s_botVramSlot[i], s_botCustomID[i]);
+}
+
+int NativeCustomRacer_GetCustomPool(int *out, int maxOut)
+{
+    NativeCustomRacer_Init();
+    int n = 0;
+    for (int i = 0; i < NATIVE_CUSTOM_COUNT && n < maxOut; i++)
+        if (NativeCustomRacer_HasSlot(NATIVE_CUSTOM_ID_BASE + i))
+            out[n++] = NATIVE_CUSTOM_ID_BASE + i;
+    return n;
 }
 
 /* === Menu preview: real Oxide model =====================================

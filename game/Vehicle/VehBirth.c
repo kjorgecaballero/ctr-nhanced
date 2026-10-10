@@ -701,9 +701,14 @@ void VehBirth_NonGhost(struct Thread *t, int index)
     struct Model *m = NULL;
     if (id >= NATIVE_CUSTOM_ID_BASE)
     {
-        /* BUG-MENU-04: for index >= LOAD_DRIVER_MODEL_EXTRA_COUNT (P4 in 4P)
-         * driverModelExtras[index] is out of bounds. Use the BSS side table. */
-        if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
+        /* Bot custom (index >= numPlyrCurrGame): the model was loaded into
+         * s_botModelPtr[index] by NativeCustomRacer_LoadBotModel. Humans
+         * read driverModelExtras[index] (P1-P3) or the side table (P4 in 4P). */
+        if (index >= gGT->numPlyrCurrGame)
+        {
+            m = (struct Model *)NativeCustomRacer_GetBotModelPtr(index);
+        }
+        else if (index < LOAD_DRIVER_MODEL_EXTRA_COUNT)
         {
             m = data.driverModelExtras[index].model;
         }

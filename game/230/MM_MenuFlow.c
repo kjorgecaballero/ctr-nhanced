@@ -63,13 +63,23 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
         // NATIVE-GFX: put "GRAPHICS" in its own LNG slot (LNG_NA_241)
         {
                 static int s_done = 0;
-                if (!s_done) { static char s_n[] = "GRAPHICS";
+                if (!s_done) { static char s_n[] = "OPTIONS";
                         sdata->lngStrings[LNG_NA_241] = s_n; s_done = 1; }
         }
         // NATIVE-GFX: takeover while graphics is open
+        if (NativeOptions_IsOpen())
+        {
+                NativeOptions_MenuPtr(mainMenu);
+                return;
+        }
         if (NativeGraphics_IsOpen())
         {
                 NativeGraphics_MenuPtr(mainMenu);
+                return;
+        }
+        if (NativeCheats_IsOpen())
+        {
+                NativeCheats_MenuPtr(mainMenu);
                 return;
         }
 
@@ -281,7 +291,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
         if (choose == LNG_NA_241)
         {
                 mainMenu->state |= ONLY_DRAW_TITLE;
-                NativeGraphics_Open();
+                NativeOptions_Open();
                 return;
         }
 }

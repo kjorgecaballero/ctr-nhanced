@@ -2085,15 +2085,15 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 
         queuedFlags = inst->flags;
 #ifdef CTR_NATIVE
-        /* El path "small pushbuffer" de PS1 (PUSHBUFFER_EXISTS) pre-renderiza
-         * karts no-locales a un FBO de 96x64 y lo blitea como sprite. A 8x
-         * de resolucion interna ese sprite se ve pixelado, asi que para
-         * racers (humanos + bots) forzamos el path 3D normal.
+        /* The PS1 "small pushbuffer" path (PUSHBUFFER_EXISTS) pre-renders
+         * non-local karts to a 96x64 FBO and blits it as a sprite. At 8x
+         * internal resolution that sprite looks pixelated, so for racers
+         * (humans + bots) we force the normal 3D path.
          *
-         * Los demas instances (Wumpa HUD, decals, minimapa) SI necesitan el
-         * small pushbuffer: se renderizan a un FBO chico y se empaquetan a
-         * VRAM. Sin el flag caen al path normal con coords de VRAM y
-         * aparecen flotando en el centro de la pantalla. */
+         * All other instances (Wumpa HUD, decals, minimap) DO need the
+         * small pushbuffer: they render to a small FBO and pack into
+         * VRAM. Without the flag they fall to the normal path with VRAM
+         * coords and end up floating in the center of the screen. */
         if (inst->thread != NULL &&
             (inst->thread->modelIndex == DYNAMIC_PLAYER ||
              inst->thread->modelIndex == DYNAMIC_ROBOT_CAR))

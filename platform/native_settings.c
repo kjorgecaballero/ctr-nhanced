@@ -116,10 +116,11 @@ void NativeSettings_SetCharacterDetail(int mode)
     NativeSettings_Save();
 }
 
-void NativeSettings_SetBotRandomizer(int enabled)
+void NativeSettings_SetBotRandomizer(int mode)
 {
-    enabled = (enabled != 0);
-    if (s_bot_randomizer == enabled) return;
-    s_bot_randomizer = enabled;
+    if (mode < 0) mode = 0;
+    if (mode > 2) mode = 2;
+    if (s_bot_randomizer == mode) return;
+    s_bot_randomizer = mode;
     NativeSettings_Save();
 }

@@ -14,7 +14,8 @@ void NativeCheats_MenuPtr(struct RectMenu *menu) {
 
     if (tap != 0) {
         if (tap & (BTN_LEFT | BTN_RIGHT | BTN_CROSS)) {
-            NativeSettings_SetBotRandomizer(!NativeSettings_GetBotRandomizer());
+            int v = NativeSettings_GetBotRandomizer();
+            NativeSettings_SetBotRandomizer((tap & BTN_LEFT) ? (v + 2) % 3 : (v + 1) % 3);
             OtherFX_Play(1, 1);
         } else if (tap & (BTN_TRIANGLE | BTN_SQUARE_one)) {
             OtherFX_Play(1, 1);
@@ -31,8 +32,8 @@ void NativeCheats_MenuPtr(struct RectMenu *menu) {
 
     DecalFont_DrawLine("CHEATS", 256, 26, FONT_BIG, JUSTIFY_CENTER | ORANGE);
     DecalFont_DrawLine((char *)s_cheat_labels[0], 76, 58, FONT_SMALL, ORANGE);
-    DecalFont_DrawLine(NativeSettings_GetBotRandomizer() ? "ON" : "OFF", 436, 58,
-                       FONT_SMALL, JUSTIFY_RIGHT | WHITE);
+    static const char *const s_brModes[3] = { "OFF", "RETAIL", "ALL" };
+    DecalFont_DrawLine((char *)s_brModes[NativeSettings_GetBotRandomizer()], 436, 58, FONT_SMALL, JUSTIFY_RIGHT | WHITE);
 
     RECT cur = {74, 55, 364, 14};
     CTR_Box_DrawClearBox(&cur, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, ot);
