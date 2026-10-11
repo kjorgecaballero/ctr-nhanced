@@ -2026,13 +2026,42 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 	{
 		return;
 	}
-	// SKIP-FLUSH only applies to the Wumpa HUD sprite (32x24). For larger
-	// rects (karts LOW LOD 96x64, distant sprites), the skip breaks the
-	// render: those rects are scratch that need to be re-packed every frame,
-	// otherwise the kart LOD degrades and the sprite clips.
-	if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
-	{
-		// Read back the FBO. If it is empty (retail didn't redraw the HUD
+        // SKIP-FLUSH only applies to the Wumpa HUD sprite (32x24). For larger
+        // rects (karts LOW LOD 96x64, distant sprites), the skip breaks the
+        // render: those rects are scratch that need to be re-packed every frame,
+        // otherwise the kart LOD degrades and the sprite clips.
+        if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
+        {
+#ifdef CTR_NATIVE
+                /* HIGHMP loads the 1P level VRM (lod=1 forced by the HIGHMP
+                 * path), which uses VRAM region (800,256)-(832,280) for
+                 * level textures. Retail 3P/4P loads a different VRM that
+                 * leaves that region free. Packing the Wumpa HUD FBO to
+                 * (800,256) overwrites the 1P VRM content, and since the
+                 * FBO changes every frame (the Wumpa counter changes as
+                 * fruit is collected), any level texture sampling that
+                 * region shows a moving pattern. This is the source of the
+                 * "animated" bleed reported on Hot Air Skyway (item boxes),
+                 * Tiger Temple (item boxes), Sewer Speedway (water),
+                 * Blizzard Bluff (wall), N.Gin Labs (turbo pad).
+                 *
+                 * Skip the pack so the 1P VRM stays intact. The HUD counter
+                 * will show whatever was in VRAM after load (a static image
+                 * instead of the live counter), which is a much smaller
+                 * visual regression than corrupting level textures. This is
+                 * a mitigation: the proper fix is to redirect the pack to a
+                 * VRAM region the 1P VRM does not use and update the
+                 * composer SPRT source coords to match. That requires a
+                 * full VRAM map for each track, which we do not have. */
+                {
+                        extern int NativeSettings_GetHighMp(void);
+                        if (NativeSettings_GetHighMp() != 0 && sdata != NULL && sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 1)
+                        {
+                                return;
+                        }
+                }
+#endif
+                // Read back the FBO. If it is empty (retail didn't redraw the HUD
 		// this frame), skip the pack so VRAM keeps the previous content --
 		// but ONLY if VRAM still holds OUR last pack for that rect. In
 		// custom levels the VRM can overwrite the region with level
