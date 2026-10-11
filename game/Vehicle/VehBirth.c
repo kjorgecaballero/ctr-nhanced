@@ -1,4 +1,5 @@
 #include <common.h>
+#include "native_settings.h"
 #include <platform/native_custom_racer.h>
 
 enum
@@ -182,7 +183,7 @@ void VehBirth_TeleportSelf(struct Driver *d, u8 spawnFlag, int spawnPosY)
 	// garbage, leaving every driver snapped to a phantom ground plane
 	// (karts spawn on the start line but cannot accelerate). Force HIGH
 	// LOD whenever the level is 1P-only, not just in 1P/2P.
-	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P || (gGT->numPlyrCurrGame > 2 && NativeSettings_GetHighMp() != 0))
 	{
 		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
 	}

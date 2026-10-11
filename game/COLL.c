@@ -1,4 +1,5 @@
 #include <common.h>
+#include "native_settings.h"
 #include <platform/native_custom_racer.h>
 #include <ctr_scratchpad.h>
 
@@ -1221,7 +1222,7 @@ internal void COLL_FIXED_PlayerSearch_SetupSearch(struct ScratchpadStruct *sps, 
         // collision data. In 3P/4P the retail guard would skip HIGH LOD
         // and this per-frame ground search would run against garbage.
         // Same fix as VehBirth_TeleportSelf / VehStuckProc_MaskDrop.
-        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P || (gGT->numPlyrCurrGame > 2 && NativeSettings_GetHighMp() != 0))
         {
                 sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
         }
@@ -2292,7 +2293,7 @@ void COLL_MOVED_PlayerSearch(struct Thread *t, struct Driver *d)
         sps->ptr_mesh_info = gGT->level1->ptr_mesh_info;
 
         // Same fix as above: no LOW LOD collision data on custom levels.
-        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+        if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P || (gGT->numPlyrCurrGame > 2 && NativeSettings_GetHighMp() != 0))
         {
                 sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_TEST_INSTANCES | COLL_SEARCH_HIGH_LOD;
         }

@@ -1,4 +1,5 @@
 #include <common.h>
+#include "native_settings.h"
 #include <platform/native_custom_racer.h>
 
 enum
@@ -92,7 +93,7 @@ static void VehStuckProc_MaskGrab_SearchBsp(struct Driver *d, struct ScratchpadS
 	// collision data. In 3P/4P the retail guard would skip HIGH LOD and
 	// the collision search would run against garbage, leaving the driver
 	// frozen in the rev-engine phase. Same fix as VehBirth_TeleportSelf.
-	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P)
+	if (gGT->numPlyrCurrGame < 3 || sdata->levelLOD == LOAD_LEVEL_LOD_1P || (gGT->numPlyrCurrGame > 2 && NativeSettings_GetHighMp() != 0))
 	{
 		sps->Union.QuadBlockColl.searchFlags = COLL_SEARCH_HIGH_LOD;
 	}

@@ -1076,6 +1076,10 @@ void DrawSplit(const GPUDrawSplit *split)
 		const int clutY = (clutOfVert >= 0) ? (clutOfVert >> 6) : -1;
 		const int clutInVrm = (clutX >= 512 && clutX < 1024 && clutY >= 0 && clutY < 512) ? 1 : 0;
 
+		{
+			static int s_dbgFlag = -1;
+			if (s_dbgFlag < 0) s_dbgFlag = (getenv("CTR_DBG_SPLIT") != NULL);
+			if (s_dbgFlag)
 		fprintf(stderr, "[DS/Off] f=%u rect=%d,%d,%d,%d nv=%u tpage=0x%04X tpXY=(%d,%d) mode=%d clut=(%d,%d) clutVRM=%d sentinel=%d\n",
 		        s_dbgFrame,
 		        split->drawenv.clip.x, split->drawenv.clip.y,
@@ -1085,6 +1089,7 @@ void DrawSplit(const GPUDrawSplit *split)
 		        (split->drawenv.tpage >> 7) & 3,
 		        clutX, clutY, clutInVrm,
 		        isSentinel);
+		}
 	}
 	if ((split->drawenv.clip.w <= 0) || (split->drawenv.clip.h <= 0))
 	{
@@ -1157,8 +1162,13 @@ void DrawSplit(const GPUDrawSplit *split)
 			if (v->x > mxX) mxX = v->x;
 			if (v->y > mxY) mxY = v->y;
 		}
+		{
+			static int s_dbgFlag = -1;
+			if (s_dbgFlag < 0) s_dbgFlag = (getenv("CTR_DBG_BBOX") != NULL);
+			if (s_dbgFlag)
 		fprintf(stderr, "[BBOX] f=%u nv=%u x[%d..%d] y[%d..%d]\n",
 		        s_dbgFrame, (unsigned)split->numVerts, mnX, mxX, mnY, mxY);
+		}
 	}
 
 	if (split->psxTexturedSemiTrans)

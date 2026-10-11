@@ -2148,6 +2148,17 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
         // otherwise the kart LOD degrades and the sprite clips.
         if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
         {
+#ifdef CTR_NATIVE
+		{
+			extern int NativeSettings_GetHighMp(void);
+			if (NativeSettings_GetHighMp() != 0 && sdata != NULL && sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 1)
+			{
+				NativeRenderer_ConvertOffscreenToWumpaTexture();
+				return;
+			}
+		}
+#endif
+
                 // Read back the FBO. If it is empty (retail didn't redraw the HUD
 		// this frame), skip the pack so VRAM keeps the previous content --
 		// but ONLY if VRAM still holds OUR last pack for that rect. In
@@ -2166,29 +2177,6 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 			if (s_px[i*4+0] || s_px[i*4+1] || s_px[i*4+2]) fboNz++;
 		}
 
-#ifdef CTR_NATIVE
-		/* HIGHMP: never pack the Wumpa HUD FBO to VRAM. The 1P level
-		 * VRM uses (800,256)-(832,280) for level textures on several
-		 * retail tracks (Hot Air Skyway, Tiger Temple, Sewer Speedway,
-		 * Blizzard Bluff, N.Gin Labs), and the pack overwrites them
-		 * every frame -> "animated" bleed on static textures.
-		 *
-		 * Instead convert the FBO to a dedicated RGBA texture that
-		 * the Wumpa FT4 samples directly via the tpage marker handled
-		 * in AddSplit. If the FBO has no content this frame (retail
-		 * did not redraw the HUD), keep the previous conversion. */
-		{
-			extern int NativeSettings_GetHighMp(void);
-			if (NativeSettings_GetHighMp() != 0 && sdata != NULL && sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 1)
-			{
-				if (fboNz >= (32 * 24) / 20)
-				{
-					NativeRenderer_ConvertOffscreenToWumpaTexture();
-				}
-				return;
-			}
-		}
-#endif
 
 		if (fboNz < (32 * 24) / 20 && NativeRenderer_ScratchHoldsOurContent(&s_previousOffscreen))
 		{
@@ -2286,19 +2274,6 @@ void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable)
 			NativeRenderer_SetScissorState(prevScissor);
 		}
 
-		// Readback FBO right after clear, before the draws.
-		{
-			GLint prevReadFb;
-			glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFb);
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, s_offscreenRenderTarget.framebuffer);
-			u8 px[32 * 24 * 4];
-			glReadPixels(0, 0, 32, 24, GL_RGBA, GL_UNSIGNED_BYTE, px);
-			glBindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)prevReadFb);
-			int n = 0;
-			for (int i = 0; i < 32 * 24 * 4; i++) n += (px[i] != 0);
-			fprintf(stderr, "[FBO-CLEAR] f=%u nz=%d size=%dx%d\n",
-			        s_dbgFrame, n, s_offscreenRenderTarget.width, s_offscreenRenderTarget.height);
-		}
 
 		s_offscreenDrawCount = 0;
 	}
