@@ -927,6 +927,18 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	// producing the intermittent color square on the HUD.
 	if (((tpage >> 7) & 3) == 2)
 		effClut &= 0x7FFF;
+
+#ifdef CTR_NATIVE
+	// HIGHMP Wumpa HUD: tpage mode 3 (reserved in PS1) is used as a marker
+	// to sample the converted offscreen FBO directly instead of VRAM.
+	const bool isWumpaHudFbo =
+	    textured &&
+	    activeDrawEnv.dfe &&
+	    (((tpage >> 7) & 3) == 3) &&
+	    (NativeRenderer_GetWumpaHudTexture() != 0);
+#else
+	const bool isWumpaHudFbo = 0;
+#endif
 	// LookupPage maps a (tpage, clut) to a composed page of the custom VRM.
 	// It only makes sense for ON-SCREEN prims: the sentinel was designed for
 	// karts/items/terrain that legitimately live in the VRM region.
@@ -935,7 +947,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	// overlap the VRM in the tpage numbers; intercepting them replaces the
 	// HUD sprite with the level's texture (e.g. a snow tree instead of the
 	// Wumpa). Gate the lookup on the draw env's dfe.
-	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0 && !isWumpaHudFbo)
 	{
 		extern int NativeLevelTextures_LookupPage(u16 tpage, u16 clut);
 		extern int NativeLevelTextures_IsCustomLevelActive(void);
@@ -944,10 +956,21 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 			effClut = (u16)(NATIVE_GPU_CLUT_SENTINEL | pg);
 	}
 
-	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0)
+	if (textured && activeDrawEnv.dfe && !(effClut & NATIVE_GPU_CLUT_SENTINEL) && s_gpu.overrideTexture == 0 && !isWumpaHudFbo)
 		NltTraceNote((u16)tpage, effClut);
 
-	if (textured && (effClut & NATIVE_GPU_CLUT_SENTINEL))
+	if (isWumpaHudFbo)
+	{
+		texFormat = TF_32_BIT_RGBA;
+		textureId = NativeRenderer_GetWumpaHudTexture();
+		overrideW = NativeRenderer_GetWumpaHudWidth();
+		overrideH = NativeRenderer_GetWumpaHudHeight();
+		psxTexturedSemiTrans = false;
+		psxTextureOutputSTP = false;
+		psxKeepTextureAlpha = true;
+		blendMode = semiTrans ? BM_SRC_ALPHA : BM_NONE;
+	}
+	else if (textured && (effClut & NATIVE_GPU_CLUT_SENTINEL))
 	{
 		// Sentinel CLUT: sample from a dedicated OpenGL texture instead of VRAM.
 		const u16 sentinelIdx = effClut & 0x7FFF;

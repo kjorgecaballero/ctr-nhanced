@@ -28,6 +28,14 @@ int NativeRenderer_CaptureVRAMState(void *dst, int dstSize);
 int NativeRenderer_RestoreVRAMState(const void *src, int srcSize);
 TextureID NativeRenderer_GetVRAMTexture(void);
 TextureID NativeRenderer_GetWhiteTexture(void);
+
+// Wumpa HUD FBO conversion target (HIGHMP path). The offscreen FBO of the
+// 3D Wumpa model is converted to this RGBA texture with 0/1 alpha
+// (transparent/opaque). Sampled by AddSplit for FT4s that carry the
+// NATIVE_GPU_WUMPA_HUD_MODE tpage marker.
+TextureID NativeRenderer_GetWumpaHudTexture(void);
+int       NativeRenderer_GetWumpaHudWidth(void);
+int       NativeRenderer_GetWumpaHudHeight(void);
 void NativeRenderer_SetBlendMode(BlendMode blendMode);
 void NativeRenderer_SetStencilMode(int drawPrim);
 void NativeRenderer_SetOffscreenState(const RECT16 *offscreenRect, int enable);

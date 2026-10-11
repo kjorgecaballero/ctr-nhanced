@@ -1,4 +1,6 @@
 #include <common.h>
+#include "native_settings.h"
+#include <platform/native_renderer.h>
 
 // To do: add a header
 
@@ -1137,10 +1139,30 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 		s16 posY = hud[UI_HUD_SLOT_FRUIT_MODEL].y + wumpaPushBuffer->rect.y - (viewport->h >> 1);
 
 		POLY_FT4 *prim = (POLY_FT4 *)gGT->backBuffer->primMem.cursor;
-		u8 u0 = (u8)(viewport->x & 0x3f);
-		u8 v0 = (u8)viewport->y;
-		u8 u1 = u0 + (u8)viewport->w;
-		u8 v1 = v0 + (u8)viewport->h;
+		u8 u0;
+		u8 v0;
+		u8 u1;
+		u8 v1;
+		u16 tpage;
+
+#ifdef CTR_NATIVE
+		if (NativeSettings_GetHighMp() != 0 && NativeRenderer_GetWumpaHudTexture() != 0)
+		{
+			u0 = 0;
+			v0 = 0;
+			u1 = (u8)viewport->w;
+			v1 = (u8)viewport->h;
+			tpage = (u16)(3 << 7);
+		}
+		else
+#endif
+		{
+			u0 = (u8)(viewport->x & 0x3f);
+			v0 = (u8)viewport->y;
+			u1 = u0 + (u8)viewport->w;
+			v1 = v0 + (u8)viewport->h;
+			tpage = (u16)getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)viewport->x, (u32)viewport->y);
+		}
 
 		prim->tag = 0x09000000;
 		CtrGpu_WriteColorCode(&prim->r0, 0x2c808080);
@@ -1155,7 +1177,6 @@ void UI_RenderFrame_Wumpa3D_2P3P4P(struct GameTracker *gGT)
 		CtrGpu_WritePackedUV(&prim->u2, (u16)u0 | ((u16)v1 << 8));
 		CtrGpu_WritePackedUV(&prim->u3, (u16)u1 | ((u16)v1 << 8));
 
-		u16 tpage = (u16)getTPage(TEXPAGE_COLOR_15BIT, TRANS_50, (u32)viewport->x, (u32)viewport->y);
 		prim->tpage = tpage;
 
 		if (driver->numWumpas >= DRIVER_WUMPA_JUICED_COUNT)

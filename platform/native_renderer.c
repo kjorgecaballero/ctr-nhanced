@@ -130,6 +130,18 @@ global_variable struct NativeRenderTarget s_mainRenderTarget;
 internal int s_internalScale = 2;
 global_variable struct NativeRenderTarget s_offscreenRenderTarget;
 
+// Wumpa HUD conversion target (HIGHMP path). Filled by
+// NativeRenderer_ConvertOffscreenToWumpaTexture from the offscreen FBO
+// instead of packing to VRAM. Sampled by AddSplit for FT4s that carry
+// the NATIVE_GPU_WUMPA_HUD_MODE tpage marker.
+global_variable struct NativeRenderTarget s_wumpaHudTarget;
+global_variable ShaderID s_wumpaConvShader = (ShaderID)-1;
+global_variable GLint s_wumpaConvSrcLoc = -1;
+
+TextureID NativeRenderer_GetWumpaHudTexture(void) { return s_wumpaHudTarget.texture; }
+int       NativeRenderer_GetWumpaHudWidth(void)  { return s_wumpaHudTarget.width; }
+int       NativeRenderer_GetWumpaHudHeight(void) { return s_wumpaHudTarget.height; }
+
 global_variable TextureID s_whiteTexture = (TextureID)-1;
 global_variable TextureID s_lastBoundTexture = (TextureID)-1;
 
@@ -183,6 +195,7 @@ internal void NativeRenderer_BindMainRenderTarget(void);
 internal void NativeRenderer_DrawVRAMRegion(int x, int y, int width, int height);
 void NativeRenderer_NotifyOffscreenDraw(void);
 internal void NativeRenderer_LoadRenderTargetFromVRAM(struct NativeRenderTarget *target, int x, int y, int w, int h);
+internal void NativeRenderer_ConvertOffscreenToWumpaTexture(void);
 void NativeRenderer_PresentMainRenderTarget(void);
 #if defined(CTR_INTERNAL)
 internal void NativeRenderer_ResolveGpuMeasurements(b32 waitForResults);
@@ -298,6 +311,11 @@ void NativeRenderer_Shutdown(void)
 
 	NativeRenderer_DestroyRenderTarget(&s_mainRenderTarget);
 	NativeRenderer_DestroyRenderTarget(&s_offscreenRenderTarget);
+	NativeRenderer_DestroyRenderTarget(&s_wumpaHudTarget);
+	if (s_wumpaConvShader != (ShaderID)-1)
+	{
+		glDeleteProgram(s_wumpaConvShader);
+	}
 	glDeleteFramebuffers(1, &s_glVramFramebuffer);
 
 	NativeRenderer_DestroyTexture(s_vram.texture);
@@ -742,6 +760,69 @@ internal void NativeRenderer_Ortho2D(float left, float right, float bottom, floa
 internal void NativeRenderer_SetShader(const ShaderID shader);
 internal void NativeRenderer_SyncGpuVRAMToCPU(int x, int y, int w, int h);
 internal void NativeRenderer_ResolveVRAMRead(int x, int y, int w, int h);
+// HIGHMP path: convert the offscreen FBO into a dedicated RGBA texture
+// instead of packing it into VRAM at (800,256). The 1P level VRM uses that
+// region for level textures on several tracks (Hot Air Skyway, Tiger Temple,
+// Sewer Speedway, Blizzard Bluff, N.Gin Labs), and the Wumpa pack overwrites
+// them every frame -> "animated" bleed on static level textures.
+// The resulting texture is sampled by the Wumpa FT4 via the
+// NATIVE_GPU_WUMPA_HUD_MODE tpage marker handled in AddSplit.
+internal void NativeRenderer_ConvertOffscreenToWumpaTexture(void)
+{
+	if (s_previousOffscreen.w <= 0 || s_previousOffscreen.h <= 0)
+	{
+		return;
+	}
+
+	const ShaderID previousShader = s_previousShader;
+	const TextureID previousTexture = s_lastBoundTexture;
+	const BlendMode previousBlendMode = s_previousBlendMode;
+	const int previousScissorState = s_previousScissorState;
+
+	NativeRenderer_EnsureRenderTarget(&s_wumpaHudTarget, s_previousOffscreen.w, s_previousOffscreen.h);
+	glBindTexture(GL_TEXTURE_2D, s_wumpaHudTarget.texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, s_wumpaHudTarget.framebuffer);
+	glDisable(GL_BLEND);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glViewport(0, 0, s_wumpaHudTarget.width, s_wumpaHudTarget.height);
+
+	glUseProgram(s_wumpaConvShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, s_offscreenRenderTarget.texture);
+
+	glBindVertexArray(s_vramQuadVAO);
+	NativeRenderer_DrawTriangles(0, 2);
+
+	if (s_boundVertexBuffer >= 0)
+	{
+		glBindVertexArray(s_glVertexArray[s_boundVertexBuffer]);
+	}
+	else
+	{
+		glBindVertexArray(0);
+	}
+
+	glEnable(GL_STENCIL_TEST);
+
+	NativeRenderer_BindMainRenderTarget();
+	glViewport(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height);
+
+	glUseProgram(previousShader == (ShaderID)-1 ? 0 : previousShader);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, previousTexture == (TextureID)-1 ? 0 : previousTexture);
+	s_previousShader = previousShader;
+	s_lastBoundTexture = previousTexture;
+	s_previousBlendMode = BM_NONE;
+	s_previousScissorState = 0;
+	NativeRenderer_SetBlendMode(previousBlendMode);
+	NativeRenderer_SetScissorState(previousScissorState);
+}
+
 internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x, int y, int w, int h, b32 flipY);
 
 global_variable GTEShader s_gteShader4;
@@ -1190,6 +1271,30 @@ global_variable const char *ctr_present_rgba_shader =
     "}\n"
     "#endif\n";
 
+// Wumpa HUD conversion shader (HIGHMP path). Reads the offscreen FBO (RGBA),
+// flips Y to match PS1 top-down sprite layout, discards near-black texels
+// (transparent in the PS1 15-bit framebuffer), and outputs 1.0 alpha for
+// opaque texels. Simple binary alpha: no STP handling needed.
+global_variable const char *ctr_wumpa_conv_shader =
+    "#ifdef VERTEX\n"
+    "attribute vec2 a_position;\n"
+    "varying vec2 v_uv;\n"
+    "void main() {\n"
+    "\tv_uv = a_position * 0.5 + 0.5;\n"
+    "\tv_uv.y = 1.0 - v_uv.y;\n"
+    "\tgl_Position = vec4(a_position, 0.0, 1.0);\n"
+    "}\n"
+    "#endif\n"
+    "#ifdef FRAGMENT\n"
+    "varying vec2 v_uv;\n"
+    "uniform sampler2D s_src;\n"
+    "void main() {\n"
+    "\tvec4 c = texture2D(s_src, v_uv);\n"
+    "\tif (c.r < 0.03 && c.g < 0.03 && c.b < 0.03) { fragColor = vec4(0.0); return; }\n"
+    "\tfragColor = vec4(c.rgb, 1.0);\n"
+    "}\n"
+    "#endif\n";
+
 internal void NativeRenderer_InitVRAMPipelines(void)
 {
 	s_presentRgbaShader = NativeRenderer_Shader_Compile(ctr_present_rgba_shader, false);
@@ -1204,6 +1309,12 @@ internal void NativeRenderer_InitVRAMPipelines(void)
 	const GLint packSrcLoc = glGetUniformLocation(s_packShader, "s_src");
 	s_packFlipYLoc = glGetUniformLocation(s_packShader, "flipY");
 	glUniform1i(packSrcLoc, 0);
+	glUseProgram(0);
+
+	s_wumpaConvShader = NativeRenderer_Shader_Compile(ctr_wumpa_conv_shader, false);
+	glUseProgram(s_wumpaConvShader);
+	s_wumpaConvSrcLoc = glGetUniformLocation(s_wumpaConvShader, "s_src");
+	glUniform1i(s_wumpaConvSrcLoc, 0);
 	glUseProgram(0);
 
 	s_presentVramShader = NativeRenderer_Shader_Compile(ctr_present_vram_shader, false);
@@ -1277,6 +1388,11 @@ int NativeRenderer_InitialisePSX(void)
 	// to presentation.
 	NativeRenderer_InitRenderTarget(&s_mainRenderTarget);
 	NativeRenderer_InitRenderTarget(&s_offscreenRenderTarget);
+	NativeRenderer_InitRenderTarget(&s_wumpaHudTarget);
+	glBindTexture(GL_TEXTURE_2D, s_wumpaHudTarget.texture);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// gen VRAM texture (single, persistent - mirrors PS1's single 1MB VRAM)
 	{
@@ -2032,35 +2148,6 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
         // otherwise the kart LOD degrades and the sprite clips.
         if (s_previousOffscreen.w == 32 && s_previousOffscreen.h == 24)
         {
-#ifdef CTR_NATIVE
-                /* HIGHMP loads the 1P level VRM (lod=1 forced by the HIGHMP
-                 * path), which uses VRAM region (800,256)-(832,280) for
-                 * level textures. Retail 3P/4P loads a different VRM that
-                 * leaves that region free. Packing the Wumpa HUD FBO to
-                 * (800,256) overwrites the 1P VRM content, and since the
-                 * FBO changes every frame (the Wumpa counter changes as
-                 * fruit is collected), any level texture sampling that
-                 * region shows a moving pattern. This is the source of the
-                 * "animated" bleed reported on Hot Air Skyway (item boxes),
-                 * Tiger Temple (item boxes), Sewer Speedway (water),
-                 * Blizzard Bluff (wall), N.Gin Labs (turbo pad).
-                 *
-                 * Skip the pack so the 1P VRM stays intact. The HUD counter
-                 * will show whatever was in VRAM after load (a static image
-                 * instead of the live counter), which is a much smaller
-                 * visual regression than corrupting level textures. This is
-                 * a mitigation: the proper fix is to redirect the pack to a
-                 * VRAM region the 1P VRM does not use and update the
-                 * composer SPRT source coords to match. That requires a
-                 * full VRAM map for each track, which we do not have. */
-                {
-                        extern int NativeSettings_GetHighMp(void);
-                        if (NativeSettings_GetHighMp() != 0 && sdata != NULL && sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 1)
-                        {
-                                return;
-                        }
-                }
-#endif
                 // Read back the FBO. If it is empty (retail didn't redraw the HUD
 		// this frame), skip the pack so VRAM keeps the previous content --
 		// but ONLY if VRAM still holds OUR last pack for that rect. In
@@ -2078,6 +2165,30 @@ internal void NativeRenderer_FlushOffscreenToVRAM(void)
 		{
 			if (s_px[i*4+0] || s_px[i*4+1] || s_px[i*4+2]) fboNz++;
 		}
+
+#ifdef CTR_NATIVE
+		/* HIGHMP: never pack the Wumpa HUD FBO to VRAM. The 1P level
+		 * VRM uses (800,256)-(832,280) for level textures on several
+		 * retail tracks (Hot Air Skyway, Tiger Temple, Sewer Speedway,
+		 * Blizzard Bluff, N.Gin Labs), and the pack overwrites them
+		 * every frame -> "animated" bleed on static textures.
+		 *
+		 * Instead convert the FBO to a dedicated RGBA texture that
+		 * the Wumpa FT4 samples directly via the tpage marker handled
+		 * in AddSplit. If the FBO has no content this frame (retail
+		 * did not redraw the HUD), keep the previous conversion. */
+		{
+			extern int NativeSettings_GetHighMp(void);
+			if (NativeSettings_GetHighMp() != 0 && sdata != NULL && sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 1)
+			{
+				if (fboNz >= (32 * 24) / 20)
+				{
+					NativeRenderer_ConvertOffscreenToWumpaTexture();
+				}
+				return;
+			}
+		}
+#endif
 
 		if (fboNz < (32 * 24) / 20 && NativeRenderer_ScratchHoldsOurContent(&s_previousOffscreen))
 		{
@@ -2390,6 +2501,8 @@ int NativeRenderer_RestoreVRAMState(const void *src, int srcSize)
 	s_mainRenderTarget.height = 0;
 	s_offscreenRenderTarget.width = 0;
 	s_offscreenRenderTarget.height = 0;
+	s_wumpaHudTarget.width = 0;
+	s_wumpaHudTarget.height = 0;
 	s_previousOffscreen = zeroRect;
 	s_previousOffscreenState = 0;
 	s_previousShader = (ShaderID)-1;
