@@ -146,14 +146,21 @@ int RB_Banner_Animate_Init(struct ModelHeader *mh)
 		}
 	}
 
-	if (sdata->gGT->numPlyrCurrGame >= 4)
-	{
-		vertex = RB_Banner_FirstVertex(mh);
-		for (int i = 0; i < count; i++, vertex += 3)
-		{
-			vertex[1] = 0x80;
-		}
-	}
+#ifdef CTR_NATIVE
+        // Retail flattens the banner wave in 4P (PS1 CPU budget). Under
+        // HIGHMP, keep the wave; only flatten when running retail behavior.
+        extern int NativeSettings_GetHighMp(void);
+        if (sdata->gGT->numPlyrCurrGame >= 4 && NativeSettings_GetHighMp() == 0)
+#else
+        if (sdata->gGT->numPlyrCurrGame >= 4)
+#endif
+        {
+                vertex = RB_Banner_FirstVertex(mh);      
+                for (int i = 0; i < count; i++, vertex += 3)
+                {
+                        vertex[1] = 0x80;
+                }
+        }
 
 	return count;
 }
@@ -226,10 +233,17 @@ void RB_Banner_LInB(struct Instance *inst)
 		return;
 	}
 
-	if (gGT->numPlyrCurrGame >= 4)
-	{
-		t->funcThTick = NULL;
-	}
+#ifdef CTR_NATIVE
+        // Retail disables the banner tick in 4P. Under HIGHMP, keep it
+        // enabled so the wave keeps animating.
+        extern int NativeSettings_GetHighMp(void);
+        if (gGT->numPlyrCurrGame >= 4 && NativeSettings_GetHighMp() == 0)
+#else
+        if (gGT->numPlyrCurrGame >= 4)
+#endif
+        {
+                t->funcThTick = NULL;
+        }
 
 	banner = t->object;
 	t->inst = inst;
@@ -249,18 +263,23 @@ void RB_Banner_LInB(struct Instance *inst)
 		return;
 	}
 
-	for (int i = 0; i < 0x40; i++)
-	{
-		u8 *color = (u8 *)&model->headers->ptrColors[i];
-		int value = (MATH_Sin((u32)i << 7) >> 6) + 0x80;
+  for (int i = 0; i < 0x40; i++)
+  {
+    u8 *color = (u8 *)&model->headers->ptrColors[i];
+    int value = (MATH_Sin((u32)i << 7) >> 6) + 0x80;
 
-		if (gGT->numPlyrCurrGame >= 4)
-		{
-			value = 0x80;
-		}
+#ifdef CTR_NATIVE
+    extern int NativeSettings_GetHighMp(void);
+    if (gGT->numPlyrCurrGame >= 4 && NativeSettings_GetHighMp() == 0)
+#else
+    if (gGT->numPlyrCurrGame >= 4)
+#endif
+    {
+      value = 0x80;
+    }
 
-		color[0] = (u8)value;
-		color[1] = (u8)value;
-		color[2] = (u8)value;
-	}
+      color[0] = (u8)value;
+      color[1] = (u8)value;
+      color[2] = (u8)value;
+  }
 }
