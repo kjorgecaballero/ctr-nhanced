@@ -2313,13 +2313,17 @@ internal void NativeRenderer_GpuPackTextureToVRAM(TextureID sourceTexture, int x
 	const BlendMode previousBlendMode = s_previousBlendMode;
 	const int previousScissorState = s_previousScissorState;
 
-	if (x < 832 && x + w > 800 && y < 280 && y + h > 256)
 	{
-		const char *kind = (sourceTexture == s_mainRenderTarget.texture) ? "MAIN"
-		                 : (sourceTexture == s_offscreenRenderTarget.texture) ? "OFFSCREEN"
-		                 : "OTHER";
-		fprintf(stderr, "[PACK-OVERLAP] f=%u kind=%s src=%u rect=%d,%d,%d,%d\n",
-		        s_dbgFrame, kind, (unsigned)sourceTexture, x, y, w, h);
+		static int s_dbgPack = -1;
+		if (s_dbgPack < 0) s_dbgPack = (getenv("CTR_DBG_PACK") != NULL);
+		if (s_dbgPack && x < 832 && x + w > 800 && y < 280 && y + h > 256)
+		{
+			const char *kind = (sourceTexture == s_mainRenderTarget.texture) ? "MAIN"
+			                 : (sourceTexture == s_offscreenRenderTarget.texture) ? "OFFSCREEN"
+			                 : "OTHER";
+			fprintf(stderr, "[PACK-OVERLAP] f=%u kind=%s src=%u rect=%d,%d,%d,%d\n",
+			        s_dbgFrame, kind, (unsigned)sourceTexture, x, y, w, h);
+		}
 	}
 
 	NativeRenderer_UpdateVRAM();
