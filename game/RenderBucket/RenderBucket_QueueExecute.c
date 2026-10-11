@@ -2250,6 +2250,16 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
     {
         lodMask = 0xFFu;
     }
+    // HIGHMP 3P/4P: the level geometry is drawn with the 1P pipeline, but
+    // LOAD_GetBigfileIndex still loads the 1P LEV (lod=1 forced for arcade
+    // tracks). 1P LEV instances carry lodMask=1 flags, while sdata->LOD[2]/[3]
+    // filters on bit 0x4, so level instances (Roos Tubes mushrooms, trees,
+    // decorations) never enter the render queue in 3P/4P. Force lodMask=0xFF
+    // so those instances queue and match the rendered geometry.
+    else if (NativeSettings_GetHighMp() != 0 && numPlyr > 2)
+    {
+        lodMask = 0xFFu;
+    }
 #endif
 
 	// Retail enters QueueDraw through a scratch/register
