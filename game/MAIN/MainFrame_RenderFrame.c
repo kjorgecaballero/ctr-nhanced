@@ -957,7 +957,18 @@ static void RenderAllLevelGeometry_HighMp(struct GameTracker *gGT, struct Level 
 
 	pushBuffer = &gGT->pushBuffer[0];
 	scratch = CTR_SCRATCHPAD_PTR(struct MainRenderLevelGeometryScratch, 0);
-	RenderAllLevelGeometry_ComputeThresholds(gGT, pushBuffer, scratch);
+	{
+	                // HIGHMP: force 1P distanceToScreen when computing LOD thresholds.
+	                // In 3P/4P, PushBuffer_Init sets distanceToScreen_PREV = 0x80
+	                // (half of 1P's 0x100), so every threshold would be halved and
+	                // distant leaves/textures drop to LOW LOD too early. HIGHMP
+	                // renders each viewport with the 1P pipeline, so the thresholds
+	                // must match 1P's.
+	                s16 savedDistToScreen = pushBuffer->distanceToScreen_PREV;
+	                pushBuffer->distanceToScreen_PREV = 0x100;
+	                RenderAllLevelGeometry_ComputeThresholds(gGT, pushBuffer, scratch);
+	                pushBuffer->distanceToScreen_PREV = savedDistToScreen;
+	        }
 
 	d0 = gGT->drivers[0];
 	memcpy(&dc0, &gGT->cameraDC[0], sizeof(struct CameraDC));
