@@ -20,6 +20,13 @@ struct LevelDef
 	int logicalLevelID;
 	int replacesRetailLevel;
 	int forceHiLod;
+
+	/* 1 if the custom is a battle arena (manifest "type": "battle", or
+	 * baseLevelID in [NITRO_COURT, LAB_BASEMENT]). Arenas live in a
+	 * separate logical ID range (LEVEL_REGISTRY_CUSTOM_BATTLE_BASE) so
+	 * they don't consume the 16 high-score / ghost slots reserved for
+	 * track additions. */
+	int isBattle;
 };
 
 const char *LevelRegistry_GetMusic(int levelID);
@@ -35,6 +42,11 @@ const char *LevelRegistry_GetActiveMusicFinalPath(int levelID);
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID);
 int LevelRegistry_GetAdditionalCount(void);
 const struct LevelDef *LevelRegistry_GetAdditional(int index);
+
+/* Same as GetAdditional, but only returns additional battle arenas
+ * (no-replace, isBattle = 1). Used by the Battle Track Select. */
+int LevelRegistry_GetAdditionalBattleCount(void);
+const struct LevelDef *LevelRegistry_GetAdditionalBattle(int index);
 const struct LevelDef *LevelRegistry_GetAdditionalByLogicalID(int logicalLevelID);
 const char *LevelRegistry_GetAdditionalName(int levelID);
 void LevelRegistry_SetActive(const struct LevelDef *level);

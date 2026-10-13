@@ -18,6 +18,11 @@
 // a real level ID or with another custom's baseLevelID.
 #define LEVEL_REGISTRY_CUSTOM_BASE 1000
 
+// Parallel range for additional battle arenas. Disjoint from
+// LEVEL_REGISTRY_CUSTOM_BASE so an arena doesn't consume a track
+// high-score / ghost slot (LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS = 16).
+#define LEVEL_REGISTRY_CUSTOM_BATTLE_BASE 2000
+
 struct LevelJson
 {
 	const char *cursor;
@@ -50,6 +55,13 @@ static const struct RetailLevelName s_retailLevelNames[] = {
 	{"n_gin_labs", N_GIN_LABS},
 	{"oxide_station", OXIDE_STATION},
 	{"main_menu", MAIN_MENU_LEVEL},
+	{"nitro_court", NITRO_COURT},
+	{"rampage_ruins", RAMPAGE_RUINS},
+	{"parking_lot", PARKING_LOT},
+	{"skull_rock", SKULL_ROCK},
+	{"the_north_bowl", THE_NORTH_BOWL},
+	{"rocky_road", ROCKY_ROAD},
+	{"lab_basement", LAB_BASEMENT},
 };
 
 static const struct RetailLevelName s_characterEnumNames[] = {
@@ -445,6 +457,7 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 	char replacement[LEVEL_REGISTRY_ID_LENGTH] = "";
 	char base[LEVEL_REGISTRY_ID_LENGTH] = "";
 	char musicFile[LEVEL_REGISTRY_PATH_LENGTH] = "";
+	char type[16] = "";
 	int hasID = 0;
 	int hasName = 0;
 	int hasMusic = 0;
@@ -532,6 +545,14 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 				return 0;
 			}
 		}
+		else if (strcmp(key, "type") == 0)
+		{
+			if (!LevelJson_ReadString(&json, type, sizeof(type)))
+			{
+				fprintf(stderr, "[LevelRegistry] Parse fail: bad 'type' value\n");
+				return 0;
+			}
+		}
 		else if (!LevelJson_SkipValue(&json))
 		{
 			fprintf(stderr, "[LevelRegistry] Parse fail: bad value for key '%s'\n", key);
@@ -566,6 +587,28 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 	level->baseLevelID = LevelRegistry_FindRetailID(base);
 	if (level->baseLevelID < 0)
 		level->baseLevelID = level->replaceLevelID;
+
+	// isBattle: explicit via "type", or inferred from the retail arena ID range.
+	{
+		int inferredBattle = (level->baseLevelID >= NITRO_COURT &&
+		                      level->baseLevelID <= LAB_BASEMENT);
+
+		if (strcmp(type, "battle") == 0)
+			level->isBattle = 1;
+		else if (strcmp(type, "track") == 0)
+			level->isBattle = 0;
+		else
+			level->isBattle = inferredBattle;
+
+		if (level->isBattle &&
+		    (level->baseLevelID < NITRO_COURT || level->baseLevelID > LAB_BASEMENT))
+		{
+			fprintf(stderr, "[LevelRegistry] Parse fail: battle arena base must be one of the 7 retail arenas (got %d)\n",
+			        level->baseLevelID);
+			return 0;
+		}
+	}
+
 	if (snprintf(level->assetName, sizeof(level->assetName), "mods/levels/%s", folder) >= (int)sizeof(level->assetName))
 	{
 		fprintf(stderr, "[LevelRegistry] Parse fail: assetName too long\n");
@@ -607,8 +650,8 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 		return 0;
 	}
 
-	fprintf(stderr, "[LevelRegistry] MANIFEST OK: id='%s' name='%s' replace=%d base=%d\n",
-		level->id, level->name, level->replaceLevelID, level->baseLevelID);
+	fprintf(stderr, "[LevelRegistry] MANIFEST OK: id='%s' name='%s' replace=%d base=%d isBattle=%d\n",
+		level->id, level->name, level->replaceLevelID, level->baseLevelID, level->isBattle);
 	return 1;
 }
 
@@ -663,17 +706,28 @@ static SDL_EnumerationResult SDLCALL LevelRegistry_Enumerate(void *userdata, con
 		// Assign logicalLevelID. Replacements reuse the retail ID they
 		// replace; additional tracks (no "replace") get a virtual ID in
 		// a range disjoint from retail so GetRuntimeLevel can find them
-		// by ID lookup.
+		// by ID lookup. Battle arenas get a SEPARATE range (2000+) so
+		// they don't consume the 16 high score / ghost slots reserved
+		// for track additions (1000-1015).
 		if (level.replaceLevelID < 0)
 		{
 			int additionalCount = 0;
+			int battleCount = 0;
 			int addIndex;
 			for (addIndex = 0; addIndex < s_levelCount; addIndex++)
 			{
 				if (s_levels[addIndex].replaceLevelID < 0)
-					additionalCount++;
+				{
+					if (s_levels[addIndex].isBattle)
+						battleCount++;
+					else
+						additionalCount++;
+				}
 			}
-			level.logicalLevelID = LEVEL_REGISTRY_CUSTOM_BASE + additionalCount;
+			if (level.isBattle)
+				level.logicalLevelID = LEVEL_REGISTRY_CUSTOM_BATTLE_BASE + battleCount;
+			else
+				level.logicalLevelID = LEVEL_REGISTRY_CUSTOM_BASE + additionalCount;
 		}
 		else
 		{
@@ -734,7 +788,7 @@ int LevelRegistry_GetAdditionalCount(void)
 	LevelRegistry_Load();
 	for (index = 0; index < s_levelCount; index++)
 	{
-		if (s_levels[index].replaceLevelID < 0)
+		if ((s_levels[index].replaceLevelID < 0) && !s_levels[index].isBattle)
 			count++;
 	}
 	return count;
@@ -746,7 +800,34 @@ const struct LevelDef *LevelRegistry_GetAdditional(int requestedIndex)
 	LevelRegistry_Load();
 	for (index = 0; index < s_levelCount; index++)
 	{
-		if ((s_levels[index].replaceLevelID < 0) && (requestedIndex-- == 0))
+		if ((s_levels[index].replaceLevelID < 0) && !s_levels[index].isBattle &&
+		    (requestedIndex-- == 0))
+			return &s_levels[index];
+	}
+	return NULL;
+}
+
+int LevelRegistry_GetAdditionalBattleCount(void)
+{
+	int index;
+	int count = 0;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) && s_levels[index].isBattle)
+			count++;
+	}
+	return count;
+}
+
+const struct LevelDef *LevelRegistry_GetAdditionalBattle(int requestedIndex)
+{
+	int index;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) && s_levels[index].isBattle &&
+		    (requestedIndex-- == 0))
 			return &s_levels[index];
 	}
 	return NULL;
@@ -906,6 +987,8 @@ const char *LevelRegistry_GetAdditionalName(int levelID) { (void)levelID; return
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID) { (void)levelID; return 0; }
 int LevelRegistry_GetAdditionalCount(void) { return 0; }
 const struct LevelDef *LevelRegistry_GetAdditional(int index) { (void)index; return 0; }
+int LevelRegistry_GetAdditionalBattleCount(void) { return 0; }
+const struct LevelDef *LevelRegistry_GetAdditionalBattle(int index) { (void)index; return 0; }
 void LevelRegistry_SetActive(const struct LevelDef *level) { (void)level; }
 const struct LevelDef *LevelRegistry_GetActive(void) { return 0; }
 const int *LevelRegistry_GetRacers(int levelID, int *count) { (void)levelID; if (count != 0) *count = 0; return 0; }

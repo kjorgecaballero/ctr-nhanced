@@ -84,6 +84,14 @@ enum
 static struct MainMenu_LevelRow s_combinedArcadeTracks[MM_TRACK_SELECT_TOTAL_TRACK_MAX];
 static s16 s_combinedArcadeTrackCount = 0;
 
+// Battle arenas: same pattern as the arcade array. D230.battleTracks[7]
+// is copied first, then the additional custom arenas are appended.
+#define MM_TRACK_SELECT_CUSTOM_BATTLE_MAX 16
+#define MM_TRACK_SELECT_TOTAL_BATTLE_MAX (MM_TRACK_SELECT_BATTLE_TRACK_COUNT + MM_TRACK_SELECT_CUSTOM_BATTLE_MAX)
+
+static struct MainMenu_LevelRow s_combinedBattleTracks[MM_TRACK_SELECT_TOTAL_BATTLE_MAX];
+static s16 s_combinedBattleTrackCount = 0;
+
 static void MM_TrackSelect_PopulateCustomTracks(void)
 {
 	int n = LevelRegistry_GetAdditionalCount();
@@ -122,6 +130,45 @@ static void MM_TrackSelect_PopulateCustomTracks(void)
 	}
 
 	s_combinedArcadeTrackCount = (s16)(MM_TRACK_SELECT_ARCADE_TRACK_COUNT + n);
+}
+
+static void MM_TrackSelect_PopulateCustomBattleTracks(void)
+{
+	int n = LevelRegistry_GetAdditionalBattleCount();
+	int i;
+
+	if (n > MM_TRACK_SELECT_CUSTOM_BATTLE_MAX)
+		n = MM_TRACK_SELECT_CUSTOM_BATTLE_MAX;
+
+	// Copy all 7 retail battle rows first.
+	memcpy(s_combinedBattleTracks, D230.battleTracks, sizeof(D230.battleTracks));
+
+	for (i = 0; i < n; i++)
+	{
+		const struct LevelDef *def = LevelRegistry_GetAdditionalBattle(i);
+		struct MainMenu_LevelRow *row = &s_combinedBattleTracks[MM_TRACK_SELECT_BATTLE_TRACK_COUNT + i];
+
+		memset(row, 0, sizeof(*row));
+
+		// logicalLevelID: virtual ID assigned by the registry (2000+).
+		row->levID = (s16)def->logicalLevelID;
+
+		// Placeholder thumbnail: reuse Nitro Court's arena icon.
+		// Phase 2 may load a per-arena preview.png.
+		row->videoThumbnail = 0x45;
+
+		// No minimap.
+		row->mapTextureID = -1;
+
+		// Always unlocked: battle arenas don't gate on adventure bits.
+		row->unlock = MM_TRACK_UNLOCK_ALWAYS;
+
+		// No preview video.
+		row->previewVideoFileIndex = 0;
+		row->previewVideoFrameCount = 0;
+	}
+
+	s_combinedBattleTrackCount = (s16)(MM_TRACK_SELECT_BATTLE_TRACK_COUNT + n);
 }
 #endif // CTR_NATIVE
 
@@ -417,6 +464,7 @@ void MM_TrackSelect_Init(void)
 	// restarting the game. Must run before any index into the arcade
 	// array so the combined buffer is fresh.
 	MM_TrackSelect_PopulateCustomTracks();
+	MM_TrackSelect_PopulateCustomBattleTracks();
 
 	// Clear any stale active custom from a previous menu session so a
 	// retail track doesn't accidentally load with a leftover override.
@@ -442,8 +490,13 @@ void MM_TrackSelect_Init(void)
 	// Set menu and num of tracks based on game mode
 	if ((sdata->gGT->gameMode1 & BATTLE_MODE) != 0)
 	{
+#ifdef CTR_NATIVE
+		selectMenu = s_combinedBattleTracks;
+		numTracks = s_combinedBattleTrackCount;
+#else
 		selectMenu = D230.battleTracks;
 		numTracks = MM_TRACK_SELECT_BATTLE_TRACK_COUNT;
+#endif
 	}
 
 	// If you scroll past the max number of tracks, go back to the first track
@@ -581,8 +634,13 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 	// if you are in battle mode
 	if ((gGT->gameMode1 & BATTLE_MODE) != 0)
 	{
+#ifdef CTR_NATIVE
+		selectMenu = &s_combinedBattleTracks[0];
+		numTracks = s_combinedBattleTrackCount;
+#else
 		selectMenu = &D230.battleTracks[0];
 		numTracks = MM_TRACK_SELECT_BATTLE_TRACK_COUNT;
+#endif
 	}
 
 	s16 currTrack = menu->rowSelected;
