@@ -11,6 +11,8 @@ void NativeOptions_Close(void)  { s_opt_open = 0; }
 int  NativeOptions_IsOpen(void) { return s_opt_open; }
 
 void NativeOptions_MenuPtr(struct RectMenu *menu) {
+    if (!s_opt_open) return;
+
     u32 tap = sdata->AnyPlayerTap;
 
     if (tap != 0) {

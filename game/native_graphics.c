@@ -4,17 +4,25 @@
 
 extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
-extern void NativeRenderer_SetInternalScale(int scale);
-extern int  NativeRenderer_GetInternalScale(void);
+
 extern int  gNativeDitheringEnabled;
 
-static const char *const s_labels[6] = {
-    "DISPLAY MODE", "ASPECT RATIO", "RESOLUTION", "ANTI-ALIASING", "DITHERING", "CHARACTER DETAIL"
+/* 4 rows. Removed:
+ *   - ASPECT RATIO: worked but never persisted across sessions.
+ *   - ANTI-ALIASING: s_msaa was a local-only placeholder, never
+ *     reached the renderer (no MSAA in native_renderer.c).
+ *   - ULTRA (CHARACTER DETAIL): was an alias of HIGH (subpixel
+ *     not implemented yet), misleading.
+ * The remaining rows are all real and persisted via NativeSettings. */
+static const char *const s_labels[4] = {
+    "DISPLAY MODE", "RESOLUTION", "DITHERING", "CHARACTER DETAIL"
 };
-static const char *const s_aspects[4] = {"AUTO","4:3","16:9","21:9"};
-static const char *const s_detail_modes[4] = {"LOW","SMART","HIGH","ULTRA"};
+static const char *const s_detail_modes[3] = {"LOW","SMART","HIGH"};
 
-static int s_open = 0, s_row = 0, s_aspect = 0, s_res = 2, s_msaa = 1;
+#define NGFX_ROW_COUNT  4
+#define NGFX_DETAIL_MAX 2
+
+static int s_open = 0, s_row = 0, s_res = 2;
 
 void NativeGraphics_Open(void)  {
     s_open = 1;
@@ -27,11 +35,14 @@ int  NativeGraphics_IsOpen(void) { return s_open; }
 static const char *ng_val(int r, char *b, int n) {
     switch (r) {
     case 0: return Platform_IsFullscreen() ? "FULLSCREEN" : "WINDOWED";
-    case 1: return s_aspects[s_aspect];
-    case 2: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
-    case 3: if (s_msaa >= 4) return "4X"; if (s_msaa >= 2) return "2X"; return "OFF";
-    case 4: return gNativeDitheringEnabled ? "ON" : "OFF";
-    default: return s_detail_modes[NativeSettings_GetCharacterDetail()];
+    case 1: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
+    case 2: return gNativeDitheringEnabled ? "ON" : "OFF";
+    default: {
+        int d = NativeSettings_GetCharacterDetail();
+        if (d < 0) d = 0;
+        if (d > NGFX_DETAIL_MAX) d = NGFX_DETAIL_MAX;
+        return s_detail_modes[d];
+    }
     }
 }
 
@@ -40,25 +51,14 @@ static int ng_chg(int r, int d) {
     case 0: { int w = (d < 0) ? 1 : 0;
               if (w == Platform_IsFullscreen()) return 0;
               Platform_GraphicsSetFullscreen(w); return 1; }
-    case 1: {
-        int v = s_aspect + d; if (v < 0 || v > 3) return 0; s_aspect = v;
-        static const int AW[4] = {4, 4, 16, 21};
-        static const int AH[4] = {3, 3, 9, 9};
-        extern void NativeRenderer_SetPresentationAspect(int, int);
-        NativeRenderer_SetPresentationAspect(AW[v], AH[v]);
-        return 1;
-    }
-    case 2: if (d < 0) { if (s_res <= 1) return 0; s_res--; }
-            else { if (s_res >= 8) return 0; s_res++; }
+    case 1: if (d < 0) { if (s_res <= 1) return 0; s_res--; }
+            else      { if (s_res >= 8) return 0; s_res++; }
             NativeSettings_SetResolution(s_res);
             return 1;
-    case 3: { static const int lv[3] = {1,2,4}; int i = 0;
-              while (i < 2 && lv[i] < s_msaa) i++; i += d;
-              if (i < 0 || i > 2) return 0; s_msaa = lv[i]; return 1; }
-    case 4: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
+    case 2: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
     default: {
         int m = NativeSettings_GetCharacterDetail() + d;
-        if (m < 0 || m > 3) return 0;
+        if (m < 0 || m > NGFX_DETAIL_MAX) return 0;
         NativeSettings_SetCharacterDetail(m);
         return 1;
     }
@@ -69,8 +69,8 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     u32 tap = sdata->AnyPlayerTap;
 
     if (tap != 0) {
-        if (tap & BTN_UP) { s_row = (s_row + 5) % 6; OtherFX_Play(0,1); }
-        else if (tap & BTN_DOWN) { s_row = (s_row + 1) % 6; OtherFX_Play(0,1); }
+        if (tap & BTN_UP)        { s_row = (s_row + NGFX_ROW_COUNT - 1) % NGFX_ROW_COUNT; OtherFX_Play(0,1); }
+        else if (tap & BTN_DOWN) { s_row = (s_row + 1) % NGFX_ROW_COUNT; OtherFX_Play(0,1); }
         else if (tap & (BTN_LEFT | BTN_RIGHT)) {
             int ok = ng_chg(s_row, (tap & BTN_LEFT) ? -1 : 1);
             OtherFX_Play(ok ? 0 : 5, 1);
@@ -90,7 +90,7 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     int r;
 
     DecalFont_DrawLine("GRAPHICS", 256, 26, FONT_BIG, JUSTIFY_CENTER | ORANGE);
-    for (r = 0; r < 6; r++) {
+    for (r = 0; r < NGFX_ROW_COUNT; r++) {
         int y = 58 + r * 18;
         DecalFont_DrawLine((char *)s_labels[r], 76, y, FONT_SMALL, ORANGE);
         DecalFont_DrawLine((char *)ng_val(r, buf, sizeof(buf)), 436, y,
@@ -102,6 +102,6 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     Color c;
     ColorCode_SetPacked(&c, sdata->battleSetup_Color_UI_1);
     RECTMENU_DrawOuterRect_Edge(&sep, c, 0x20, ot);
-    RECT bg = {56, 20, 400, 145};
+    RECT bg = {56, 20, 400, 110};
     RECTMENU_DrawInnerRect(&bg, 4, ot);
 }
