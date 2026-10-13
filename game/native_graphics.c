@@ -4,23 +4,20 @@
 
 extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
-
 extern int  gNativeDitheringEnabled;
 
-/* 4 rows. Removed:
+/* 3 rows. Removed:
  *   - ASPECT RATIO: worked but never persisted across sessions.
- *   - ANTI-ALIASING: s_msaa was a local-only placeholder, never
- *     reached the renderer (no MSAA in native_renderer.c).
- *   - ULTRA (CHARACTER DETAIL): was an alias of HIGH (subpixel
- *     not implemented yet), misleading.
- * The remaining rows are all real and persisted via NativeSettings. */
-static const char *const s_labels[4] = {
-    "DISPLAY MODE", "RESOLUTION", "DITHERING", "CHARACTER DETAIL"
+ *   - ANTI-ALIASING: local-only menu placeholder, never reached
+ *     the renderer. No MSAA in native_renderer.c.
+ *   - CHARACTER DETAIL: LOW is a joke (box LOD), SMART is
+ *     indistinguishable from HIGH on modern hardware. Forced HIGH
+ *     via NativeSettings (see native_settings.c). */
+static const char *const s_labels[3] = {
+    "DISPLAY MODE", "RESOLUTION", "DITHERING"
 };
-static const char *const s_detail_modes[3] = {"LOW","SMART","HIGH"};
 
-#define NGFX_ROW_COUNT  4
-#define NGFX_DETAIL_MAX 2
+#define NGFX_ROW_COUNT  3
 
 static int s_open = 0, s_row = 0, s_res = 2;
 
@@ -36,13 +33,7 @@ static const char *ng_val(int r, char *b, int n) {
     switch (r) {
     case 0: return Platform_IsFullscreen() ? "FULLSCREEN" : "WINDOWED";
     case 1: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
-    case 2: return gNativeDitheringEnabled ? "ON" : "OFF";
-    default: {
-        int d = NativeSettings_GetCharacterDetail();
-        if (d < 0) d = 0;
-        if (d > NGFX_DETAIL_MAX) d = NGFX_DETAIL_MAX;
-        return s_detail_modes[d];
-    }
+    default: return gNativeDitheringEnabled ? "ON" : "OFF";
     }
 }
 
@@ -55,13 +46,7 @@ static int ng_chg(int r, int d) {
             else      { if (s_res >= 8) return 0; s_res++; }
             NativeSettings_SetResolution(s_res);
             return 1;
-    case 2: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
-    default: {
-        int m = NativeSettings_GetCharacterDetail() + d;
-        if (m < 0 || m > NGFX_DETAIL_MAX) return 0;
-        NativeSettings_SetCharacterDetail(m);
-        return 1;
-    }
+    default: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
     }
 }
 
@@ -102,6 +87,6 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     Color c;
     ColorCode_SetPacked(&c, sdata->battleSetup_Color_UI_1);
     RECTMENU_DrawOuterRect_Edge(&sep, c, 0x20, ot);
-    RECT bg = {56, 20, 400, 110};
+    RECT bg = {56, 20, 400, 145};
     RECTMENU_DrawInnerRect(&bg, 4, ot);
 }

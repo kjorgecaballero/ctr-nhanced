@@ -22,7 +22,13 @@ static int s_high_mp          = -1;
 int NativeSettings_GetDithering(void) { return s_dithering; }
 int NativeSettings_GetResolution(void) { return s_resolution; }
 int NativeSettings_GetBilinear(void)   { return s_bilinear; }
-int NativeSettings_GetCharacterDetail(void) { return s_character_detail; }
+int NativeSettings_GetCharacterDetail(void)
+{
+    /* Tester build: CHARACTER DETAIL is forced to HIGH (2).
+     * LOW renders the box LOD, SMART is indistinguishable from
+     * HIGH on modern hardware. See native_graphics.c. */
+    return 2;
+}
 int NativeSettings_GetBotRandomizer(void)   { return s_bot_randomizer; }
 
 int NativeSettings_GetHighMp(void)
