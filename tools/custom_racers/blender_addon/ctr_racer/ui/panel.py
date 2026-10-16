@@ -483,6 +483,7 @@ class NFR_PT_Racer(Panel):
         layout.separator()
         layout.label(text="Save Preset:", icon="FILE_TICK")
         layout.prop(st, "preset_name", text="")
+        layout.prop(st, "output_mode", text="")
 
         root_str = getattr(prefs, "kart_presets_root", "") or ""
         if not root_str:

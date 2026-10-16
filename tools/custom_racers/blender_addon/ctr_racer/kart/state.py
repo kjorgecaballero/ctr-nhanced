@@ -74,6 +74,19 @@ class NFR_KartState(bpy.types.PropertyGroup):
         description="Folder name to write the baked PNGs into",
         default="",
     )
+    output_mode: bpy.props.EnumProperty(
+        name="Output Mode",
+        description="How to save the baked pieces",
+        items=[
+            ("SENTINEL", "Sentinel (full RGB)",
+             "Save the baked piece as-is. The kart loader treats it as "
+             "a plain RGB texture, so no color limit applies."),
+            ("PALETTED", "Paletted (16 colors, legacy)",
+             "Quantize to 16 colors. Only needed for the original PS1 "
+             "paletted path."),
+        ],
+        default="SENTINEL",
+    )
     preset_filter: bpy.props.EnumProperty(
         name="Variant",
         description="Which preset variant to show in the browser",

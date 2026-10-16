@@ -2,7 +2,9 @@
 # MODULE: kart — baker
 # =========================================================================
 """Fase 2: bake the current material to a 112x107 image, cut it into
-9 pieces, quantize each to 16 colors, and write to the preset folder.
+9 pieces, and write to the preset folder. Each piece can be saved
+as a plain RGB PNG (Sentinel path) or quantized to 16 colors
+(legacy paletted path).
 
 Output layout:
     <kart_presets_root>/<variant_dir>/<preset_name>/kart_00.png
@@ -113,17 +115,38 @@ def _bake_to_image(context, material, width, height):
     return baked
 
 
-def _cut_quantize_save(baked_img, cutter, out_dir):
-    """Save `baked_img` to a temp PNG, cut it, quantize, write each
-    piece to `out_dir/<name>.png`. Returns the number of pieces.
+def _save_piece(piece, out_path, output_mode):
+    """Save one cropped piece.
+
+    SENTINEL: plain RGB, no quantization. The kart preset loader
+    decodes the PNG through Blender's standard image path, so no
+    palette limit applies and the full baked colors are preserved.
+
+    PALETTED: quantize to 16 colors with dither disabled. Matches the
+    behaviour of the original 16_color_reset.py. Only useful when the
+    output has to feed a legacy paletted loader.
+    """
+    if output_mode == "SENTINEL":
+        piece.save(out_path)
+        return
+
+    quantized = piece.convert(
+        "P",
+        palette=PIL_Image.ADAPTIVE,
+        colors=16,
+        dither=PIL_Image.NONE,
+    )
+    quantized.save(out_path)
+
+
+def _cut_quantize_save(baked_img, cutter, out_dir, output_mode="SENTINEL"):
+    """Save `baked_img` to a temp PNG, cut it, and write each piece
+    to `out_dir/<name>.png`. Returns the number of pieces.
 
     Coordinate convention: PIL and GIMP both use top-left origin, so
     the cutter coords are used as-is (no Y-flip).
 
-    Quantization: convert to RGB first (drop alpha) so PIL doesn't
-    reserve a palette slot for transparency, and use dither=NONE so
-    the palette stays strictly at 16 entries. Matches the behaviour
-    of the original 16_color_reset.py.
+    `output_mode` selects the piece format. See `_save_piece`.
     """
     if PIL_Image is None:
         raise RuntimeError("Pillow (PIL) is required for the kart baker")
@@ -138,20 +161,13 @@ def _cut_quantize_save(baked_img, cutter, out_dir):
         baked_img.file_format = 'PNG'
         baked_img.save()
 
-        # Force RGB (drop alpha channel entirely). The kart has no
-        # transparency, and keeping RGBA would make PIL reserve one
-        # of the 16 palette slots for the alpha marker.
+        # Drop alpha. The kart has no transparency, and the preset
+        # loader only needs the RGB channels.
         full = PIL_Image.open(tmp_path).convert("RGB")
 
         for out_name, (xmin, ymin, xmax, ymax) in cutter:
             piece = full.crop((xmin, ymin, xmax, ymax))
-            piece = piece.convert(
-                "P",
-                palette=PIL_Image.ADAPTIVE,
-                colors=16,
-                dither=PIL_Image.NONE,
-            )
-            piece.save(out_dir / f"{out_name}.png")
+            _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
 
         return len(cutter)
     finally:
@@ -170,8 +186,8 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
     bl_idname = "nfr.kart_bake_and_export"
     bl_label = "Bake & Export"
     bl_description = (
-        "Bake the current colors, cut into 9 pieces, quantize to 16 "
-        "colors, save to the preset folder"
+        "Bake the current colors, cut into 9 pieces, save to the "
+        "preset folder"
     )
 
     def execute(self, context):
@@ -219,10 +235,11 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
             self.report({'ERROR'}, f"Bake failed: {e}")
             return {'CANCELLED'}
 
-        # --- Cut + quantize + save ---------------------------------
+        # --- Cut + save --------------------------------------------
         out_dir = root / variant_dir / preset_name
         try:
-            n = _cut_quantize_save(baked, tpl["cutter"], out_dir)
+            n = _cut_quantize_save(baked, tpl["cutter"], out_dir,
+                                   state.output_mode)
         except Exception as e:
             self.report({'ERROR'}, f"Save failed: {e}")
             bpy.data.images.remove(baked)
