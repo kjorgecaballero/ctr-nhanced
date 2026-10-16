@@ -19,7 +19,7 @@ VRAM coordinates per slot (extracted from the engine's Icon data):
   slot 10 (roo):       px(942,144) clut(32,251)
   slot 11 (papu):      px(896,192) clut(32,252)
   slot 12 (joe):       px(907,192) clut(32,253)
-  slot 13-17:          synthetic (Sentinel only, no real VRAM)
+  slot 13-23:          synthetic (Sentinel only, no real VRAM)
 
 Usage:
     python build_icons.py
@@ -102,9 +102,9 @@ def pack_icon(img):
       0.1 <= a < 0.9    -> STP bit set (decoder outputs alpha 128)
       a >= 0.9          -> opaque (decoder outputs alpha 255)
 
-    Opacos y semi se cuantizan en DOS paletas separadas. Si se
-    mezclan en un mismo bucket, el negro del contorno puede terminar
-    con STP=1 y salir al 50% (contorno semitransparente).
+    Opaque and semi pixels are quantized into TWO separate palettes.
+    If they shared one bucket, the outline black could end up with
+    STP=1 and render at 50% (semi-transparent outline).
     """
     img = img.convert("RGBA").resize((ICON_W, ICON_H), Image.LANCZOS)
     px = img.load()
@@ -126,20 +126,53 @@ def pack_icon(img):
             else:
                 opaque_px.append((x, y, r, g, b))
 
-    # Presupuesto: 15 entradas (índice 0 es transparente).
-    total = len(opaque_px) + len(semi_px)
-    if total == 0 or len(semi_px) == 0:
+    # Budget: 15 entries (index 0 is reserved for transparency).
+    opaque_unique = len({(r, g, b) for (_, _, r, g, b) in opaque_px})
+    semi_unique   = len({(r, g, b) for (_, _, r, g, b) in semi_px})
+
+    if len(semi_px) == 0:
         n_opaque, n_semi = 15, 0
     elif len(opaque_px) == 0:
         n_opaque, n_semi = 0, 15
+    elif opaque_unique + semi_unique <= 15:
+        # Everything fits in the 16-color CLUT (index 0 reserved for
+        # transparency). Don't reserve budget for a semi bucket when
+        # only a handful of antialiased pixels exist — use the actual
+        # unique-color counts.
+        n_opaque = opaque_unique
+        n_semi   = semi_unique
     else:
-        ratio  = len(semi_px) / total
-        n_semi = max(3, min(8, round(15 * ratio)))
+        # Genuine overflow: quantize and split proportionally by
+        # unique-color count, not pixel count.
+        ratio    = semi_unique / (opaque_unique + semi_unique)
+        n_semi   = max(1, min(8, round(15 * ratio)))
         n_opaque = 15 - n_semi
 
     def quantize(px_list, n_colors):
         if not px_list or n_colors <= 0:
             return [], []
+
+        # Preserve exact colors when the input already fits in the budget.
+        # MEDIANCUT builds a palette from box medians, so two distinct
+        # colors can map to the same palette entry even when the input
+        # has <= n_colors unique values. Bypassing it preserves detail
+        # losslessly whenever possible.
+        unique = []
+        seen = set()
+        for (_, _, r, g, b) in px_list:
+            c = (r, g, b)
+            if c not in seen:
+                seen.add(c)
+                unique.append(c)
+
+        if len(unique) <= n_colors:
+            # Exact colors + pad with black to n_colors entries.
+            pal = unique + [(0, 0, 0)] * (n_colors - len(unique))
+            idx_map = {c: i for i, c in enumerate(unique)}
+            idxs = [idx_map[(r, g, b)] for (_, _, r, g, b) in px_list]
+            return pal, idxs
+
+        # Genuine quantization needed (more unique colors than budget).
         colors = [(r, g, b) for (_, _, r, g, b) in px_list]
         tmp = Image.new("RGB", (len(colors), 1))
         tmp.putdata(colors)
@@ -175,7 +208,7 @@ def pack_icon(img):
         palette_rgb.append((0, 0, 0))
         palette_semi.append(False)
 
-    # Pack 4bpp: nibble bajo = píxel izquierdo
+    # Pack 4bpp: low nibble = left pixel
     pix = bytearray()
     for y in range(ICON_H):
         for hw in range(ICON_W // 4):
@@ -186,7 +219,7 @@ def pack_icon(img):
             pix.append(i0 | (i1 << 4))
             pix.append(i2 | (i3 << 4))
 
-    # CLUT: índice 0 = transparente; 1..15 con STP si el bucket es semi.
+    # CLUT: index 0 = transparent; 1..15 with STP if the bucket is semi.
     clut = bytearray()
     clut += struct.pack("<H", 0x0000)
     for i in range(15):
