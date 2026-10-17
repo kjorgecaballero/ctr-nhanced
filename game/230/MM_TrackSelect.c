@@ -595,6 +595,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 				{
 					// allocate room at the end of RAM for ghosts
 					sdata->ptrGhostTapePlaying = MEMPACK_AllocHighMem(MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE /*, R230.s_loaded_ghost_data*/);
+					fprintf(stderr, "[GDBG-F] ptrGhostTapePlaying=%p size=0x%X\n", (void*)sdata->ptrGhostTapePlaying, MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE);
 
 					memset(sdata->ptrGhostTapePlaying, 0, MM_TRACK_SELECT_GHOST_TAPE_CLEAR_SIZE);
 

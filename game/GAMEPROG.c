@@ -291,11 +291,24 @@ void GAMEPROG_SyncGameAndCard(struct GameProgress *memcardProg, struct GameProgr
 }
 
 
+static void GAMEPROG_UnlockEverything(void)
+{
+	/* Tester build: unlock secret characters, secret tracks, and the
+	 * scrapbook (which gates the extended main menu with the OPTIONS
+	 * row). Set ONLY the known-safe bits.
+	 *
+	 * unlocks[0] bits 1-11: secret tracks + secret characters.
+	 * unlocks[1] bit  4   : GAME_UNLOCK_BIT_SCRAPBOOK (36 - 32). */
+	sdata->gameProgress.unlocks[0] |= 0x00000FFEu;
+	sdata->gameProgress.unlocks[1] |= 0x00000010u;
+}
+
 void GAMEPROG_NewGame_OnBoot()
 {
-	GAMEPROG_NewProfile_OutsideAdv(&sdata->gameProgress);
-	GAMEPROG_NewProfile_InsideAdv(&sdata->advProgress);
-	GAMEPROG_GetPtrHighScoreTrack();
+        GAMEPROG_NewProfile_OutsideAdv(&sdata->gameProgress);
+        GAMEPROG_NewProfile_InsideAdv(&sdata->advProgress);
+        GAMEPROG_UnlockEverything();
+        GAMEPROG_GetPtrHighScoreTrack();
 }
 
 

@@ -77,6 +77,7 @@ struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void);
 // Returns the virtual memcard ID for the active custom (set by Track
 // Select), or -1 if the active level is retail.
 int LevelRegistry_GetVirtualMemcardIDFromActive(void);
+int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID);
 
 // Maps a logicalLevelID (1000+) to its virtual memcard ID (25-31).
 // Retail IDs (< 1000) pass through unchanged. Out-of-range customs

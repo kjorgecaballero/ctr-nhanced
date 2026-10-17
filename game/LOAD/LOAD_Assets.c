@@ -162,6 +162,21 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 
 	if (NativeSettings_GetBotRandomizer() != 0)
 		srand((unsigned int)Platform_GetVBlankCount());
+
+	/* Defensive: LOAD_TenStages may pass a secondary bigfile (memcard
+	 * buffer, sub-bigfile) that doesn't contain the racer model HI
+	 * range. Using it makes BI_RACERMODELHI + id point outside the
+	 * entry table (numEntry=608 vs expected >BI_RACERMODELHI+16),
+	 * so every retail racer load is rejected. Swap to the main
+	 * bigfile when the passed one is too small. */
+	if (bigfile == NULL || (u32)bigfile->numEntry < (u32)(BI_RACERMODELHI + 16))
+	{
+		fprintf(stderr, "[LOAD] DriverMPK: bad bigfile=%p numEntry=%d, falling back to ptrBigfile1=%p numEntry=%d\n",
+		        (void *)bigfile, bigfile ? (int)bigfile->numEntry : -1,
+		        (void *)sdata->ptrBigfile1,
+		        sdata->ptrBigfile1 ? (int)sdata->ptrBigfile1->numEntry : -1);
+		bigfile = sdata->ptrBigfile1;
+	}
 #endif
 
 	// 3P/4P
@@ -182,9 +197,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 				void *customModel = NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
 				data.driverModelExtras[i].fileBase = customModel;
 			}
-			else
+			else if (data.characterIDs[i] < NATIVE_CUSTOM_ID_BASE)
 			{
-				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[i]), &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 			}
 		}
 
@@ -197,10 +212,10 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 					buf += LOAD_MODEL_FILE_HEADER_BYTES;
 				NativeCustomRacer_SetPlayerModelPtr(i, buf);
 			}
-			else
+			else if (data.characterIDs[i] < NATIVE_CUSTOM_ID_BASE)
 			{
 				void **rawSlot = NativeCustomRacer_GetP4RetailHiLodSlot();
-				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], rawSlot, LOAD_DriverMPK_SetPointer);
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[i]), rawSlot, LOAD_DriverMPK_SetPointer);
 			}
 		}
 
@@ -235,9 +250,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 				void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
 				data.driverModelExtras[0].fileBase = customModel;
 			}
-			else
+			else if (data.characterIDs[0] < NATIVE_CUSTOM_ID_BASE)
 			{
-				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[0]), &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 			}
 
 			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_2PARCADEPACK + LOAD_PURPLE_GEM_CUP_AI_SET_INDEX, NULL, callback);
@@ -292,9 +307,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
 			data.driverModelExtras[0].fileBase = customModel;
 		}
-		else
+		else if (data.characterIDs[0] < NATIVE_CUSTOM_ID_BASE)
 		{
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[0]), &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
 		lastFileIndexMPK = BI_1PARCADEPACK + GET_MPK_ID(data.characterIDs[0]);
@@ -308,12 +323,38 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 			void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
 			data.driverModelExtras[0].fileBase = customModel;
 		}
-		else
+		else if (data.characterIDs[0] < NATIVE_CUSTOM_ID_BASE)
 		{
-			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[0], &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
+			LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[0]), &data.driverModelExtras[0].fileBase, LOAD_DriverMPK_SetPointer);
 		}
 
-		lastFileIndexMPK = BI_TIMETRIALPACK + GET_MPK_ID(data.characterIDs[1]);
+#ifdef CTR_NATIVE
+        {
+            int ghostID = data.characterIDs[1];
+            if (ghostID < 0 || ghostID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            {
+                fprintf(stderr, "[SANITY] ghost characterID=%d invalid, forcing 0 (Crash)\n", ghostID);
+                ghostID = 0;
+                data.characterIDs[1] = 0;
+            }
+            lastFileIndexMPK = BI_TIMETRIALPACK + GET_MPK_ID(ghostID);
+        }
+#else
+#ifdef CTR_NATIVE
+        {
+            int ghostID = data.characterIDs[1];
+            if (ghostID < 0 || ghostID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+            {
+                fprintf(stderr, "[SANITY] ghost characterID=%d invalid, forcing 0 (Crash)\n", ghostID);
+                ghostID = 0;
+                data.characterIDs[1] = 0;
+            }
+            lastFileIndexMPK = BI_TIMETRIALPACK + GET_MPK_ID(ghostID);
+        }
+#else
+        lastFileIndexMPK = BI_TIMETRIALPACK + GET_MPK_ID(data.characterIDs[1]);
+#endif
+#endif
 	}
 
 	else
@@ -325,9 +366,9 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 				void *customModel = NativeCustomRacer_LoadModel(i, data.characterIDs[i]);
 				data.driverModelExtras[i].fileBase = customModel;
 			}
-			else
+			else if (data.characterIDs[i] < NATIVE_CUSTOM_ID_BASE)
 			{
-				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
+				LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[i]), &data.driverModelExtras[i].fileBase, LOAD_DriverMPK_SetPointer);
 			}
 		}
 
@@ -376,7 +417,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 					{
 						void **rawSlot = NativeCustomRacer_GetBotModelRawSlot(i);
 						if (rawSlot != NULL)
-							LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + data.characterIDs[i], rawSlot, LOAD_DriverMPK_SetPointer);
+							LOAD_AppendQueue(bigfile, LT_GETADDR, BI_RACERMODELHI + GET_MPK_ID(data.characterIDs[i]), rawSlot, LOAD_DriverMPK_SetPointer);
 					}
 				}
 
@@ -388,6 +429,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	}
 
 QueueLastPack:
+	fprintf(stderr, "[DBG] QLP: idx=%d BI_TT=%d c0=%d c1=%d c2=%d c3=%d c4=%d c5=%d GET(1)=%d numEntry=%d\n", lastFileIndexMPK, BI_TIMETRIALPACK, data.characterIDs[0], data.characterIDs[1], data.characterIDs[2], data.characterIDs[3], data.characterIDs[4], data.characterIDs[5], GET_MPK_ID(data.characterIDs[1]), bigfile ? (int)bigfile->numEntry : -1);
 	LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
 	return sdata->ptrMPK;
 }

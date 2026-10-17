@@ -341,6 +341,11 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 
 void MainInit_Drivers(struct GameTracker *gGT)
 {
+	{
+		static int s_dbgEntry = 0;
+		s_dbgEntry++;
+		fprintf(stderr, "[GDBG] MainInit_Drivers entry #%d levelID=%d\n", s_dbgEntry, (int)gGT->levelID);
+	}
 	u8 numPlyrCurrGame = gGT->numPlyrCurrGame;
 	u8 numDrivers;
 	int gameMode = gGT->gameMode1;

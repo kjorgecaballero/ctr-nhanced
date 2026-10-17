@@ -69,6 +69,12 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		return loadingStage;
 	}
 
+	fprintf(stderr, "[MEM] enter case %d free=%d ptrMPK=%p ptrLevelFile=%p ptrGhostTape=%p\n",
+	        loadingStage, MEMPACK_GetFreeBytes(),
+	        (void *)sdata->ptrMPK, (void *)sdata->ptrLevelFile,
+	        (void *)sdata->ptrGhostTapePlaying);
+	fflush(stderr);
+
 	levelID = gGT->levelID;
 
 	// Used in stage 0, 4, 5, 6
@@ -120,8 +126,38 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			MEMPACK_PopToState(sdata->bookmarkID);
 		}
 
+		/* Reset every global that stored a pointer into the previous
+		 * race's mempack. PopToState just freed that memory, so these
+		 * are now dangling. Without this, the first access in the new
+		 * race reads freed memory and crashes. This is the root cause
+		 * of crashes A, C, D, E. */
+		for (int _ri = 0; _ri < LOAD_DRIVER_MODEL_EXTRA_COUNT; _ri++)
+		{
+			data.driverModelExtras[_ri].fileBase = NULL;
+			data.driverModelExtras[_ri].model = NULL;
+		}
+		sdata->PLYROBJECTLIST = NULL;
+		sdata->ptrMPK = NULL;
+		sdata->ptrLevelFile = NULL;
+#ifdef CTR_NATIVE
+		/* Custom racer caches also hold mempack pointers. PopToState
+		 * above just freed that memory; invalidate so the next access
+		 * in the new race doesn't dereference freed memory. */
+		{
+			extern void NativeCustomRacer_ResetMenuCache(void);
+			extern void GhostReplay_ResetCache(void);
+			NativeCustomRacer_ResetMenuCache();
+			GhostReplay_ResetCache();
+		}
+#endif
+
 		gGT->level1 = 0;
 		gGT->level2 = 0;
+		gGT->visMem1 = 0;
+		gGT->visMem2 = 0;
+		gGT->mpkIcons = 0;
+
+		DecalGlobal_Clear(gGT);
 		gGT->numPlyrCurrGame = gGT->numPlyrNextGame;
 		strcpy(gGT->levelName, data.metaDataLEV[levelID].name_Debug);
 
@@ -338,6 +374,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		for (int i = 0; i < LOAD_DRIVER_MODEL_EXTRA_COUNT; i++)
 		{
 			data.driverModelExtras[i].fileBase = NULL;
+			data.driverModelExtras[i].model = NULL;
 		}
 
 #ifdef CTR_NATIVE
@@ -391,14 +428,19 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		DecalGlobal_Clear(gGT);
 
 		gGT->mpkIcons = 0;
-		if (sdata->ptrMPK != 0)
+		if (sdata->ptrMPK != 0 && (uintptr_t)sdata->ptrMPK >= 0x10000u)
 		{
 			gGT->mpkIcons = *(int *)sdata->ptrMPK;
 
-			if (gGT->mpkIcons != 0)
+			if (gGT->mpkIcons != 0 && (uintptr_t)gGT->mpkIcons >= 0x10000u)
 			{
 				DecalGlobal_Store(gGT, (struct LevTexLookup *)gGT->mpkIcons);
 			}
+
+			fprintf(stderr, "[ICON] case5 ptrMPK=%p first4=%08X mpkIcons=%p\n",
+			        (void *)sdata->ptrMPK,
+			        (unsigned)*(u32 *)sdata->ptrMPK,
+			        (void *)gGT->mpkIcons);
 		}
 
 		if (!boolPlayMusicDuringLoading)
@@ -574,7 +616,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			for (int i = 1; i < 4; i++)
 			{
 				if (vm->visLeafList[i] == 0 && leafBytes > 0)
+				{
 					vm->visLeafList[i] = MEMPACK_AllocMem(leafBytes);
+					if (vm->visLeafList[i] == NULL)
+						fprintf(stderr, "[LOAD] visMem visLeafList[%d] OOM %d\n", i, leafBytes);
+				}
 				if (vm->visFaceList[i] == 0 && faceBytes > 0)
 					vm->visFaceList[i] = MEMPACK_AllocMem(faceBytes);
 				if (vm->visOVertList[i] == 0 && oVertBytes > 0)
@@ -606,7 +652,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			gGT->ptrSparkle = (u32)DecalGlobal_FindInLEV(lev, rdata.s_sparkle);
 		}
 
-		if (gGT->mpkIcons != 0)
+		if (gGT->mpkIcons != 0 && (uintptr_t)gGT->mpkIcons >= 0x10000u)
 		{
 			u32 *mpkIconList = (u32 *)*(u32 *)(gGT->mpkIcons + 4);
 
@@ -808,7 +854,14 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 			if ((gGT->gameMode1 & TIME_TRIAL) != 0)
 			{
-				NativeCustomRacer_ApplySlot(gGT->numPlyrCurrGame, data.characterIDs[1]);
+				int g1 = data.characterIDs[1];
+				if (g1 < 0 || g1 >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+				{
+					fprintf(stderr, "[SANITY] case9 ghostID=%d invalid, forcing 0\n", g1);
+					g1 = 0;
+					data.characterIDs[1] = 0;
+				}
+				NativeCustomRacer_ApplySlot(gGT->numPlyrCurrGame, g1);
 			}
 
 			/* Bot custom slots: apply the texture for each bot that was
@@ -826,6 +879,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 	default:
 		return loadingStage;
 	}
+
+	fprintf(stderr, "[MEM] exit  case %d free=%d\n", loadingStage, MEMPACK_GetFreeBytes());
+	fflush(stderr);
 
 	loadingStage++;
 	return loadingStage;

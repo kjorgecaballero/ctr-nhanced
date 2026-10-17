@@ -339,6 +339,7 @@ void   NativeCustomRacer_FinalizeP4RetailHiLod(int headerBytes);
 void **NativeCustomRacer_GetBotModelRawSlot(int driverID);
 int  NativeCustomRacer_GetCustomPool(int *out, int maxOut);
 void NativeCustomRacer_ResetBotSlots(int numPlyr);
+void NativeCustomRacer_ResetMenuCache(void);
 int  NativeCustomRacer_FreeBotSlots(void);
 int  NativeCustomRacer_LoadBotModel(int driverID, int characterID);
 void NativeCustomRacer_ApplyBotSlots(void);

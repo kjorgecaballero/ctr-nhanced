@@ -129,6 +129,10 @@ int MEMCARD_HandleEvent(void)
 
 u8 MEMCARD_Load(int slotIdx, char *name, u8 *ptrMemcard, int memcardFileSize, u32 loadFlags)
 {
+	fprintf(stderr, "[GDBG-L] Load name=%s dst=%p size=%d recGh=%p recStart=%p\n",
+		name, (void*)ptrMemcard, memcardFileSize,
+		(void*)sdata->GhostRecording.ptrGhost,
+		(void*)sdata->GhostRecording.ptrStartOffset);
 	char nativeName[64];
 	int checksumResult;
 
@@ -162,7 +166,32 @@ u8 MEMCARD_Save(int slotIdx, char *name, char *icon, u8 *ptrMemcard, int memcard
 
 	sdata->crc16_checkpoint_byteIndex = 0;
 	sdata->crc16_checkpoint_status = 0;
+	if (memcardFileSize > 0x3000)
+	{
+		u8 *h14 = ptrMemcard + 0x14;
+		u8 *h28 = ptrMemcard + 0x28;
+		fprintf(stderr, "[GDBG-C] BEFORE name=%s ptr=%p size=%d eqGhost=%d h14=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X h28=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+			name, (void*)ptrMemcard, memcardFileSize,
+			(int)(ptrMemcard == (u8*)sdata->GhostRecording.ptrGhost),
+			h14[0], h14[1], h14[2], h14[3], h14[4], h14[5], h14[6], h14[7],
+			h14[8], h14[9], h14[10], h14[11], h14[12], h14[13], h14[14], h14[15],
+			h28[0], h28[1], h28[2], h28[3], h28[4], h28[5], h28[6], h28[7],
+			h28[8], h28[9], h28[10], h28[11], h28[12], h28[13], h28[14], h28[15]);
+	}
+
 	MEMCARD_ChecksumSave(ptrMemcard, memcardFileSize);
+
+	if (memcardFileSize > 0x3000)
+	{
+		u8 *h14 = ptrMemcard + 0x14;
+		u8 *h28 = ptrMemcard + 0x28;
+		fprintf(stderr, "[GDBG-C] AFTER  name=%s h14=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X h28=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+			name,
+			h14[0], h14[1], h14[2], h14[3], h14[4], h14[5], h14[6], h14[7],
+			h14[8], h14[9], h14[10], h14[11], h14[12], h14[13], h14[14], h14[15],
+			h28[0], h28[1], h28[2], h28[3], h28[4], h28[5], h28[6], h28[7],
+			h28[8], h28[9], h28[10], h28[11], h28[12], h28[13], h28[14], h28[15]);
+	}
 
 	u8 *cardIcon = MEMCARD_NativePrepareIcon(icon, memcardFileSize, saveFlags);
 	MEMCARD_StringSet(nativeName, slotIdx, name);

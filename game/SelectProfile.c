@@ -703,7 +703,7 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 #ifdef CTR_NATIVE
 	{
 		int saveLevelID = gGT->levelID;
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(gGT->levelID);
 		if (virtualID >= 0)
 			saveLevelID = virtualID;
 		RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], saveLevelID, time, gGT->prevNameEntered);
@@ -869,7 +869,7 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 #ifdef CTR_NATIVE
 		{
 			int compareID = sdata->gGT->currLEV;
-			int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+			int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(sdata->gGT->currLEV);
 			if (virtualID >= 0)
 				compareID = virtualID;
 			if ((profile != NULL) && (profile->trackID != compareID))
@@ -1003,7 +1003,7 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 #ifdef CTR_NATIVE
 	{
 		int compareID = sdata->gGT->currLEV;
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromActive();
+		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(sdata->gGT->currLEV);
 		if (virtualID >= 0)
 			compareID = virtualID;
 		if (sdata->ghostProfile_memcard[menu->rowSelected].trackID == compareID)

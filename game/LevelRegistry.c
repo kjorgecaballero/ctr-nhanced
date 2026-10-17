@@ -92,6 +92,8 @@ static const struct LevelDef *s_activeLevel;
 static struct HighScoreTrack s_customHighScoreTracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
 static int s_customHighScoresInit;
 
+static void LevelRegistry_Load(void);
+
 static void LevelRegistry_InitCustomHighScoreTrack(struct HighScoreTrack *track)
 {
 	int i;
@@ -155,7 +157,42 @@ int LevelRegistry_MapLogicalToVirtual(int logicalID)
 	return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
 }
 
-static void LevelRegistry_Load(void);
+/* Lookup by baseLevelID (which is what gGT->levelID holds for an
+ * additional custom track). Works even when s_activeLevel is NULL,
+ * which is the common case at ghost save/load time (the track select
+ * menu has already cleared the active pointer). Without this, the save
+ * path falls back to baseLevelID (3) which doesn't match the virtual
+ * memcard ID that the load path expects, so the saved ghost shows up
+ * as NOT AVAILABLE. */
+int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID)
+{
+	const struct LevelDef *active = s_activeLevel;
+	int index;
+	int slot;
+
+	if (active != NULL && active->baseLevelID == baseLevelID &&
+	    active->logicalLevelID >= LEVEL_REGISTRY_CUSTOM_BASE)
+	{
+		slot = active->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
+		if (slot >= 0 && slot < LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+			return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
+	}
+
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if ((s_levels[index].replaceLevelID < 0) &&
+		    (s_levels[index].baseLevelID == baseLevelID) &&
+		    (s_levels[index].logicalLevelID >= LEVEL_REGISTRY_CUSTOM_BASE))
+		{
+			slot = s_levels[index].logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
+			if (slot >= 0 && slot < LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+				return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
+		}
+	}
+
+	return -1;
+}
 
 const char *LevelRegistry_GetMusic(int levelID)
 {
@@ -1005,6 +1042,7 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void) { return 0; }
 int LevelRegistry_GetVirtualMemcardIDFromActive(void) { return -1; }
+int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID) { (void)baseLevelID; return -1; }
 int LevelRegistry_MapLogicalToVirtual(int logicalID) { return logicalID; }
 
 #endif
