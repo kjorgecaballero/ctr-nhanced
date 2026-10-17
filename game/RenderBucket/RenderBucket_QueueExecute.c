@@ -2148,7 +2148,8 @@ static struct RenderBucketEntry *RenderBucket_QueueDraw(struct Instance *inst, s
 	// so ULTRA bypasses the cull as designed.
         if (inst->thread != NULL &&
             (inst->thread->modelIndex == DYNAMIC_ROBOT_CAR ||
-             inst->thread->modelIndex == DYNAMIC_PLAYER) &&
+             inst->thread->modelIndex == DYNAMIC_PLAYER ||
+             inst->thread->modelIndex == DYNAMIC_GHOST) &&
             viewDepth > 0x1000)
         {
                 idpp->instFlags = queuedFlags;
