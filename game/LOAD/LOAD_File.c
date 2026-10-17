@@ -16,6 +16,35 @@ void LOAD_StringToUpper(char *path)
 #ifdef CTR_NATIVE
 #include <platform/native_cd.h>
 #include <LevelRegistry.h>
+
+#if defined(_MSC_VER)
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+
+static void LOAD_DumpBacktrace(void)
+{
+	void *frames[32];
+	USHORT n = CaptureStackBackTrace(0, 32, frames, NULL);
+	HANDLE proc = GetCurrentProcess();
+	SymInitialize(proc, NULL, TRUE);
+	for (USHORT i = 0; i < n; i++)
+	{
+		DWORD64 addr = (DWORD64)frames[i];
+		char buf[sizeof(SYMBOL_INFO) + 256];
+		SYMBOL_INFO *sym = (SYMBOL_INFO *)buf;
+		sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+		sym->MaxNameLen = 255;
+		DWORD64 disp = 0;
+		if (SymFromAddr(proc, addr, &disp, sym))
+			fprintf(stderr, "      [%02d] %s + 0x%llx\n", i, sym->Name, (unsigned long long)disp);
+		else
+			fprintf(stderr, "      [%02d] 0x%llx\n", i, (unsigned long long)addr);
+	}
+}
+#else
+#define LOAD_DumpBacktrace()
+#endif
 #endif
 
 int LOAD_InitCDvol(void)
@@ -355,12 +384,53 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 
 	// get size and offset of subfile
 	struct BigEntry *entry = BIG_GETENTRY(bigfile);
+
+#if defined(CTR_NATIVE)
+	/* Defensive: reject out-of-range subfileIndex. A stale or corrupted
+	 * bigfile header (observed after loading a level with a saved ghost,
+	 * second race) can produce a garbage entry[subfileIndex] whose .size
+	 * reads as 541 MB, causing a MEMPACK OOM at 516 MB. */
+	if (subfileIndex < 0 || (u32)subfileIndex >= (u32)bigfile->numEntry)
+	{
+		fprintf(stderr,
+		        "[LOAD] invalid subfileIndex=%d numEntry=%d bigfile=%p hasOverride=%d path=%s\n",
+		        subfileIndex, (int)bigfile->numEntry, (void *)bigfile,
+		        (int)hasOverride, overridePath ? overridePath : "(null)");
+		LOAD_DumpBacktrace();
+		if (hasOverride)
+		{
+			NativeAssets_FreeBytes(&overrideBytes);
+		}
+		*sizePtr = 0;
+		return NULL;
+	}
+#endif
+
 	int eSize =
 #if defined(CTR_NATIVE)
 		hasOverride ? (int)overrideBytes.size :
 #endif
 		entry[subfileIndex].size;
 	int eOffs = entry[subfileIndex].offset;
+
+#if defined(CTR_NATIVE)
+	/* Defensive: reject absurd sizes. Retail subfiles are < 4 MB; 16 MB
+	 * is generous headroom for custom LEV/VRM. Anything larger is
+	 * corruption from a stale bigfile header. */
+	if (eSize < 0 || eSize > (16 * 1024 * 1024))
+	{
+		fprintf(stderr,
+		        "[LOAD] invalid eSize=%d subfileIndex=%d offset=%d hasOverride=%d path=%s\n",
+		        eSize, subfileIndex, eOffs, (int)hasOverride,
+		        overridePath ? overridePath : "(null)");
+		if (hasOverride)
+		{
+			NativeAssets_FreeBytes(&overrideBytes);
+		}
+		*sizePtr = 0;
+		return NULL;
+	}
+#endif
 
 	*sizePtr = eSize;
 

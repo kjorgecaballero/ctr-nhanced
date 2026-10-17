@@ -2,6 +2,33 @@
 #include "native_settings.h"
 #include <platform/native_custom_racer.h>
 
+#if defined(_WIN32)
+#include <windows.h>
+static int VehBirth_PtrIsReadable(const void *p, size_t size)
+{
+	MEMORY_BASIC_INFORMATION mbi;
+	uintptr_t start, end, regionEnd;
+
+	if (p == NULL || size == 0) return 0;
+	if (VirtualQuery(p, &mbi, sizeof(mbi)) == 0) return 0;
+	if (mbi.State != MEM_COMMIT) return 0;
+	if (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)) return 0;
+
+	start = (uintptr_t)p;
+	end = start + size;
+	regionEnd = (uintptr_t)mbi.BaseAddress + mbi.RegionSize;
+	if (end > regionEnd) return 0;
+
+	return 1;
+}
+#else
+static int VehBirth_PtrIsReadable(const void *p, size_t size)
+{
+	(void)p; (void)size;
+	return 1;
+}
+#endif
+
 enum
 {
 	VEH_BIRTH_ADV_RETURN_LEVEL_COUNT = 0x14,
@@ -498,6 +525,17 @@ enum
 
 internal b32 VehBirth_ModelNameEquals(const struct Model *model, const char *name)
 {
+	/* Reject NULL and small-invalid pointers. During the second load of
+	 * a custom level, data.driverModelExtras[i].model can hold a stale
+	 * pointer that is neither NULL nor a mapped Model. ModelName_ReadWord
+	 * then reads model->name at 0x8 and crashes. The MSVC release
+	 * optimizer can elide the NULL check, so guard with an unsigned
+	 * compare that it can't prove false. */
+	if (name == NULL || !VehBirth_PtrIsReadable(model, sizeof(struct Model)))
+	{
+		return false;
+	}
+
 	for (s32 wordIndex = 0; wordIndex < MODEL_NAME_WORD_COUNT; wordIndex++)
 	{
 		if (ModelName_ReadWord(model->name, wordIndex) != ModelName_ReadWord(name, wordIndex))

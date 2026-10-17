@@ -98,6 +98,15 @@ static u16 DrawLevelOvr1P_ReadPackedHalf(const void *src)
 
 static void DrawLevelOvr1P_WritePackedWord(void *dst, u32 value)
 {
+#ifdef CTR_NATIVE
+	u8 *d = (u8 *)dst;
+	u8 *gs = (u8 *)sdata->GhostRecording.ptrGhost;
+	if (gs != NULL && d >= gs && d < gs + 0x3e00)
+	{
+		fprintf(stderr, "[GDBG-R] render writes into ghost buf dst=%p off=%d\n", dst, (int)(d - gs));
+		return;
+	}
+#endif
 	u8 *bytes = (u8 *)dst;
 
 	bytes[0] = (u8)value;
@@ -2375,6 +2384,18 @@ static int DrawLevelOvr1P_ShouldWriteRenderedClippedRecord(const struct DrawLeve
 
 static void DrawLevelOvr1P_CopyClipRecordVertex(struct DrawLevelOvr1PClipRecordVertex *dst, const struct DrawLevelOvr1PScratchVertex *src)
 {
+#ifdef CTR_NATIVE
+	{
+		u8 *gs = (u8 *)sdata->GhostRecording.ptrGhost;
+		if (gs != NULL && (u8 *)dst >= gs && (u8 *)dst < gs + 0x3e00)
+		{
+			static int n = 0;
+			if (n++ < 20)
+				fprintf(stderr, "[GDBG-CV] dst=%p off=%d\n", (void *)dst, (int)((u8 *)dst - gs));
+			return;
+		}
+	}
+#endif
 	CTR_COPY_VEC3(dst->pos, src->pos);
 	dst->flags = src->flags;
 	DrawLevelOvr1P_CopyColorWord(dst->color_hi, src->color_hi);
@@ -4719,6 +4740,11 @@ static int Ovr226_800a4dcc_WriteGround4x1RenderedClippedRecordAtOtEntry(struct P
 		return 1;
 	}
 
+	if (!DrawLevelOvr1P_HasClipRecordSpace(recordSize))
+	{
+		return 1;
+	}
+
 	struct DrawLevelOvr1PClipRecord *record = (struct DrawLevelOvr1PClipRecord *)cursor;
 	record->header = DrawLevelOvr1P_GetRenderedClipRecordHeader(block, count);
 	record->otEntry = (u32)(u32)otEntry;
@@ -6043,6 +6069,11 @@ static int Ovr226_800a6d6c_WriteGround4x2RenderedClippedRecordAtOtEntry(struct P
 		return 1;
 	}
 
+	if (!DrawLevelOvr1P_HasClipRecordSpace(recordSize))
+	{
+		return 1;
+	}
+
 	struct DrawLevelOvr1PClipRecord *record = (struct DrawLevelOvr1PClipRecord *)cursor;
 	record->header = DrawLevelOvr1P_GetRenderedClipRecordHeader(block, count);
 	record->otEntry = (u32)(u32)otEntry;
@@ -6505,6 +6536,11 @@ static int Ovr226_800a898c_WriteDynamicRenderedClippedRecordAtOtEntry(struct Pus
 		return 1;
 	}
 
+	if (!DrawLevelOvr1P_HasClipRecordSpace(recordSize))
+	{
+		return 1;
+	}
+
 	record = (struct DrawLevelOvr1PClipRecord *)cursor;
 	record->header = DrawLevelOvr1P_GetRenderedClipRecordHeader(block, count);
 	record->otEntry = (u32)(u32)otEntry;
@@ -6630,6 +6666,17 @@ static int Ovr226_800a861c_DynamicRenderedNearOrDirect(struct PushBuffer *pb, st
                                                        const struct TextureLayout *texture, int depth, u32 thresholdScratchOffset, u32 *inheritedOtEntry)
 {
 	u32 nearMask = DrawLevelOvr1P_GetProjectedNearMaskAtScratchOffset(projected, indices, thresholdScratchOffset);
+
+	{
+		static int s_maxDepth = 0, s_hits = 0;
+		if (depth > 2) {
+			s_hits++;
+			if (depth > s_maxDepth) {
+				s_maxDepth = depth;
+				fprintf(stderr, "[GDBG-DEPTH] new max depth=%d hits=%d projected=%p\n", depth, s_hits, (void*)projected);
+			}
+		}
+	}
 
 	if (nearMask == 0)
 	{
@@ -6929,6 +6976,11 @@ static int Ovr226_800aa5ac_WriteQuad4x4RenderedClippedRecordAtOtEntry(struct Pus
 	}
 
 	if (!DrawLevelOvr1P_ShouldWriteRenderedClippedRecord(projected, indices, count))
+	{
+		return 1;
+	}
+
+	if (!DrawLevelOvr1P_HasClipRecordSpace(recordSize))
 	{
 		return 1;
 	}

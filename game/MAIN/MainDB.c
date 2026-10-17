@@ -1,7 +1,15 @@
 #include <common.h>
+#include <LevelRegistry.h>
 
 int MainDB_GetClipSize(u32 levelID, int numPlyrCurrGame)
 {
+#ifdef CTR_NATIVE
+	if (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement((int)levelID) != NULL)
+	{
+		return 24000; /* 96 KB para pistas custom */
+	}
+#endif
+
 	switch (levelID)
 	{
 	case ADVENTURE_GARAGE:

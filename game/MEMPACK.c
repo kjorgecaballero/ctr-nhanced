@@ -1,5 +1,34 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE) && defined(_MSC_VER)
+#include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
+
+static void MEMPACK_DumpBacktrace(void)
+{
+	void *frames[32];
+	USHORT n = CaptureStackBackTrace(0, 32, frames, NULL);
+	HANDLE proc = GetCurrentProcess();
+	SymInitialize(proc, NULL, TRUE);
+	for (USHORT i = 0; i < n; i++)
+	{
+		DWORD64 addr = (DWORD64)frames[i];
+		char buf[sizeof(SYMBOL_INFO) + 256];
+		SYMBOL_INFO *sym = (SYMBOL_INFO *)buf;
+		sym->SizeOfStruct = sizeof(SYMBOL_INFO);
+		sym->MaxNameLen = 255;
+		DWORD64 disp = 0;
+		if (SymFromAddr(proc, addr, &disp, sym))
+			fprintf(stderr, "      [%02d] %s + 0x%llx\n", i, sym->Name, (unsigned long long)disp);
+		else
+			fprintf(stderr, "      [%02d] 0x%llx\n", i, (unsigned long long)addr);
+	}
+}
+#else
+#define MEMPACK_DumpBacktrace()
+#endif
+
 
 void MEMPACK_Init(int ramSize)
 {
@@ -86,6 +115,7 @@ void *MEMPACK_AllocMem(int allocSize)
 			allocSize, MEMPACK_GetFreeBytes(),
 			(void *)ptrMempack, ptrMempack->packSize,
 			ptrMempack->firstFreeByte, ptrMempack->lastFreeByte);
+		MEMPACK_DumpBacktrace();
 		return NULL;
 #else
 		CTR_ErrorScreen(0xFF, 0, 0);
@@ -112,6 +142,7 @@ void *MEMPACK_AllocHighMem(int allocSize)
         {
                 fprintf(stderr, "[MEMPACK] OOM (high) alloc=%d free=%d (returning NULL)\n",
                         allocSize, MEMPACK_GetFreeBytes());
+                MEMPACK_DumpBacktrace();
                 return NULL;
         }
 #else

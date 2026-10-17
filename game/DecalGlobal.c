@@ -40,7 +40,12 @@ void DecalGlobal_Store(struct GameTracker *gGT, struct LevTexLookup *LTL)
 	struct Icon *currIcon;
 	struct IconGroup **currGroup;
 
-	if (LTL == 0)
+	/* Same stale-pointer pattern as driverModelExtras[] and
+	 * ptrGhostTapePlaying: on the second custom load, lev->levTexLookup
+	 * can be NULL or garbage from the previous race's mempack. Use an
+	 * unsigned compare (VirtualQuery is overkill here, the value is
+	 * always small) so the MSVC release optimizer can't elide it. */
+	if ((uintptr_t)LTL < 0x10000u)
 	{
 		return;
 	}

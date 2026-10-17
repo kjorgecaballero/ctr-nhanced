@@ -2994,6 +2994,21 @@ void NativeCustomRacer_ResetBotSlots(int numPlyr)
     for (int i = 0; i < 8; i++) { s_botVramSlot[i] = -1; s_botCustomID[i] = 0; }
 }
 
+/* Invalida el cache de modelos/VRM del menu. Los punteros apuntan al
+ * mempack; MEMPACK_PopToState los deja dangling entre carreras. Sin
+ * esto, la primera visita al character-select tras una carrera lee
+ * memoria liberada y crashea en VRM_ApplyBuffer. */
+void NativeCustomRacer_ResetMenuCache(void)
+{
+    for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++) {
+        for (int p = 0; p < NATIVE_MENU_PLAYER_SLOTS; p++) {
+            s_menuModel[i][p]   = NULL;
+            s_menuVrm[i][p]     = NULL;
+            s_menuVrmSize[i][p] = 0;
+        }
+    }
+}
+
 int NativeCustomRacer_FreeBotSlots(void)
 {
     int n = 0;

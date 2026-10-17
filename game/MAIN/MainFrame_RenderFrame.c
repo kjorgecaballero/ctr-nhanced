@@ -1,4 +1,5 @@
 #include <common.h>
+#include <stdio.h>
 
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 #include <platform/native_perf.h>
@@ -1388,11 +1389,38 @@ void RenderVSYNC(struct GameTracker *gGT)
 		DrawSync(0);
 #endif
 
+#ifdef CTR_NATIVE
+		{
+			static int s_stallIters = 0;
+
+			if (ReadyToFlip(gGT))
+			{
+				s_stallIters = 0;
+				return;
+			}
+
+			s_stallIters++;
+			if (s_stallIters == 120 || (s_stallIters % 1800) == 0)
+			{
+				fprintf(stderr,
+				        "[STALL] it=%d vsyncTillFlip=%d drawOTag=%d ftVsyncCb=%d vblankCnt=%d gGT=%p sdata->gGT=%p\n",
+				        s_stallIters,
+				        (int)sdata->vsyncTillFlip,
+				        (int)gGT->bool_DrawOTag_InProgress,
+				        (int)gGT->frameTimer_VsyncCallback,
+				        Platform_GetVBlankCount(),
+				        (void *)gGT,
+				        (void *)sdata->gGT);
+				fflush(stderr);
+			}
+		}
+#else
 		if (ReadyToFlip(gGT))
 		{
 			// quit, end of stall
 			return;
 		}
+#endif
 
 #ifdef CTR_NATIVE
 		// NOTE(aalhendi): Retail waits on GPU/vblank hardware here. Native

@@ -585,6 +585,25 @@ internal void Native_WaitUntilVBlankTarget(void)
 	const u64 freq = SDL_GetPerformanceFrequency();
 	const u64 spinWindow = Native_CounterFromMicroseconds(freq, NATIVE_VSYNC_SPIN_US);
 
+	{
+		const u64 step = (freq * NATIVE_VBLANK_GPU_CYCLES) / NATIVE_GPU_CLOCK_HZ;
+		const u64 now0 = SDL_GetPerformanceCounter();
+		if (s_nextVBlankCounter > now0 + step + spinWindow)
+		{
+			static int warned = 0;
+			if (!warned++)
+				fprintf(stderr,
+				        "[VBLANK] corrupt target=0x%016llx now=0x%016llx rem=0x%016llx cnt=%d\n",
+				        (unsigned long long)s_nextVBlankCounter,
+				        (unsigned long long)now0,
+				        (unsigned long long)s_vblankRemainder,
+				        s_nativeVBlankCount);
+			s_nextVBlankCounter = now0;
+			s_vblankRemainder = 0;
+			Native_AdvanceVBlankTarget();
+		}
+	}
+
 	NativePerf_BeginScope(NATIVE_PERF_BUCKET_VSYNC_WAIT);
 	while (1)
 	{
