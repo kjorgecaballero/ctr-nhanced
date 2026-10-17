@@ -3590,6 +3590,14 @@ static int RenderBucket_DrawSplitPrimitiveNormalAtOTEntry(struct RenderBucketDra
 		p->u1 = (u8)v1->uv;
 		p->v1 = (u8)(v1->uv >> 8);
 		p->tpage = tex->tpage;
+		if (ctx->inst != NULL && ctx->inst->thread != NULL &&
+		    ctx->inst->thread->modelIndex == DYNAMIC_GHOST)
+		{
+		        /* Force ABR=1 (ADD) in the prim tpage. tex->tpage has
+		         * ABR=0 (the .ctr exporter never bakes ABR bits), so
+		         * GET_TPAGE_BLEND would otherwise yield BM_AVERAGE. */
+		        p->tpage = (p->tpage & ~0x0060u) | 0x0020u;
+		}
 		p->x2 = (s16)v2->sxy;
 		p->y2 = (s16)(v2->sxy >> 16);
 		p->u2 = (u8)v2->uv;
@@ -3737,6 +3745,14 @@ static int RenderBucket_DrawSplitPrimitiveDepthFadeAtRange(struct RenderBucketDr
 	p->u1 = (u8)v1->uv;
 	p->v1 = (u8)(v1->uv >> 8);
 	p->tpage = tex->tpage;
+	if (ctx->inst != NULL && ctx->inst->thread != NULL &&
+	    ctx->inst->thread->modelIndex == DYNAMIC_GHOST)
+	{
+	        /* Force ABR=1 (ADD) in the prim tpage. tex->tpage has
+	         * ABR=0 (the .ctr exporter never bakes ABR bits), so
+	         * GET_TPAGE_BLEND would otherwise yield BM_AVERAGE. */
+	        p->tpage = (p->tpage & ~0x0060u) | 0x0020u;
+	}
 	p->x2 = (s16)v2->sxy;
 	p->y2 = (s16)(v2->sxy >> 16);
 	p->u2 = (u8)v2->uv;

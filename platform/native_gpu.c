@@ -983,9 +983,23 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 			 * STP=1 texels with the prim's tpage blend mode. The 32-bit
 			 * shader decides which pass each texel belongs to via the
 			 * STP flag that NltExpand16 wrote into alpha. */
-			psxTexturedSemiTrans = semiTrans;
+			/* Custom Sentinel textures have all-opaque alpha (STP=0),
+			 * so the retail 2-pass discards the second pass and
+			 * ABR=ADD never fires. When ABR=1 (ghost additive
+			 * signal), force single-pass BM_ADD. Vertex RGB is
+			 * already modulated by alphaScale via DPCT (~62.5%),
+			 * so intensity stays retail-like. */
+			if (semiTrans && ((tpage >> 5) & 3) == 1)
+			{
+				psxTexturedSemiTrans = false;
+				blendMode = BM_ADD;
+			}
+			else
+			{
+				psxTexturedSemiTrans = semiTrans;
+				blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
+			}
 			psxTextureOutputSTP = false;
-			blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
 			psxKeepTextureAlpha = false;
 			overrideW = (int)(s_gpu.customTextureSizes[sentinelIdx] & 0xFFFF);
 			overrideH = (int)(s_gpu.customTextureSizes[sentinelIdx] >> 16);
