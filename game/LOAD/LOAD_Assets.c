@@ -1,4 +1,9 @@
 #include <common.h>
+#include "platform/native_debug.h"
+
+static int s_dbgLoadAssets = -1;
+static int LoadAssetsDbg(void) { return NativeDbg_Enabled(&s_dbgLoadAssets, "CTR_DBG_GHOST"); }
+
 #include <platform/native_custom_racer.h>
 #include "native_settings.h"
 #include <stdlib.h>
@@ -429,7 +434,8 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 	}
 
 QueueLastPack:
-	fprintf(stderr, "[DBG] QLP: idx=%d BI_TT=%d c0=%d c1=%d c2=%d c3=%d c4=%d c5=%d GET(1)=%d numEntry=%d\n", lastFileIndexMPK, BI_TIMETRIALPACK, data.characterIDs[0], data.characterIDs[1], data.characterIDs[2], data.characterIDs[3], data.characterIDs[4], data.characterIDs[5], GET_MPK_ID(data.characterIDs[1]), bigfile ? (int)bigfile->numEntry : -1);
+	if (LoadAssetsDbg())
+		fprintf(stderr, "[DBG] QLP: idx=%d BI_TT=%d c0=%d c1=%d c2=%d c3=%d c4=%d c5=%d GET(1)=%d numEntry=%d\n", lastFileIndexMPK, BI_TIMETRIALPACK, data.characterIDs[0], data.characterIDs[1], data.characterIDs[2], data.characterIDs[3], data.characterIDs[4], data.characterIDs[5], GET_MPK_ID(data.characterIDs[1]), bigfile ? (int)bigfile->numEntry : -1);
 	LOAD_AppendQueue(bigfile, LT_GETADDR, lastFileIndexMPK, NULL, callback);
 	return sdata->ptrMPK;
 }

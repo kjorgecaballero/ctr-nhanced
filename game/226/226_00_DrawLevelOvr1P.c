@@ -1,4 +1,9 @@
 #include <common.h>
+#include "platform/native_debug.h"
+
+static int s_dbgGhost226 = -1;
+static int Ghost226Dbg(void) { return NativeDbg_Enabled(&s_dbgGhost226, "CTR_DBG_GHOST"); }
+
 #if defined(CTR_NATIVE)
 #include <LevelRegistry.h>
 #endif
@@ -103,7 +108,8 @@ static void DrawLevelOvr1P_WritePackedWord(void *dst, u32 value)
 	u8 *gs = (u8 *)sdata->GhostRecording.ptrGhost;
 	if (gs != NULL && d >= gs && d < gs + 0x3e00)
 	{
-		fprintf(stderr, "[GDBG-R] render writes into ghost buf dst=%p off=%d\n", dst, (int)(d - gs));
+		if (Ghost226Dbg())
+			fprintf(stderr, "[GDBG-R] render writes into ghost buf dst=%p off=%d\n", dst, (int)(d - gs));
 		return;
 	}
 #endif
@@ -2389,9 +2395,12 @@ static void DrawLevelOvr1P_CopyClipRecordVertex(struct DrawLevelOvr1PClipRecordV
 		u8 *gs = (u8 *)sdata->GhostRecording.ptrGhost;
 		if (gs != NULL && (u8 *)dst >= gs && (u8 *)dst < gs + 0x3e00)
 		{
-			static int n = 0;
-			if (n++ < 20)
-				fprintf(stderr, "[GDBG-CV] dst=%p off=%d\n", (void *)dst, (int)((u8 *)dst - gs));
+			if (Ghost226Dbg())
+			{
+				static int n = 0;
+				if (n++ < 20)
+					fprintf(stderr, "[GDBG-CV] dst=%p off=%d\n", (void *)dst, (int)((u8 *)dst - gs));
+			}
 			return;
 		}
 	}
@@ -6673,7 +6682,8 @@ static int Ovr226_800a861c_DynamicRenderedNearOrDirect(struct PushBuffer *pb, st
 			s_hits++;
 			if (depth > s_maxDepth) {
 				s_maxDepth = depth;
-				fprintf(stderr, "[GDBG-DEPTH] new max depth=%d hits=%d projected=%p\n", depth, s_hits, (void*)projected);
+				if (Ghost226Dbg())
+					fprintf(stderr, "[GDBG-DEPTH] new max depth=%d hits=%d projected=%p\n", depth, s_hits, (void*)projected);
 			}
 		}
 	}

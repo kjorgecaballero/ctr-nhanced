@@ -1,4 +1,9 @@
 #include <common.h>
+#include "platform/native_debug.h"
+
+static int s_dbgGhostMc = -1;
+static int GhostMcDbg(void) { return NativeDbg_Enabled(&s_dbgGhostMc, "CTR_DBG_GHOST"); }
+
 #include <platform/native_memcard.h>
 
 static u8 s_memcardNativeInfoSeen[2];
@@ -129,10 +134,11 @@ int MEMCARD_HandleEvent(void)
 
 u8 MEMCARD_Load(int slotIdx, char *name, u8 *ptrMemcard, int memcardFileSize, u32 loadFlags)
 {
-	fprintf(stderr, "[GDBG-L] Load name=%s dst=%p size=%d recGh=%p recStart=%p\n",
-		name, (void*)ptrMemcard, memcardFileSize,
-		(void*)sdata->GhostRecording.ptrGhost,
-		(void*)sdata->GhostRecording.ptrStartOffset);
+	if (GhostMcDbg())
+		fprintf(stderr, "[GDBG-L] Load name=%s dst=%p size=%d recGh=%p recStart=%p\n",
+			name, (void*)ptrMemcard, memcardFileSize,
+			(void*)sdata->GhostRecording.ptrGhost,
+			(void*)sdata->GhostRecording.ptrStartOffset);
 	char nativeName[64];
 	int checksumResult;
 
@@ -166,7 +172,7 @@ u8 MEMCARD_Save(int slotIdx, char *name, char *icon, u8 *ptrMemcard, int memcard
 
 	sdata->crc16_checkpoint_byteIndex = 0;
 	sdata->crc16_checkpoint_status = 0;
-	if (memcardFileSize > 0x3000)
+	if (memcardFileSize > 0x3000 && GhostMcDbg())
 	{
 		u8 *h14 = ptrMemcard + 0x14;
 		u8 *h28 = ptrMemcard + 0x28;
@@ -181,7 +187,7 @@ u8 MEMCARD_Save(int slotIdx, char *name, char *icon, u8 *ptrMemcard, int memcard
 
 	MEMCARD_ChecksumSave(ptrMemcard, memcardFileSize);
 
-	if (memcardFileSize > 0x3000)
+	if (memcardFileSize > 0x3000 && GhostMcDbg())
 	{
 		u8 *h14 = ptrMemcard + 0x14;
 		u8 *h28 = ptrMemcard + 0x28;

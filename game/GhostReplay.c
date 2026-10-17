@@ -1,4 +1,9 @@
 #include <common.h>
+#include "platform/native_debug.h"
+
+static int s_dbgGhostReplay = -1;
+static int ReplayDbg(void) { return NativeDbg_Enabled(&s_dbgGhostReplay, "CTR_DBG_GHOST"); }
+
 #include <platform/native_custom_racer.h>
 #include <LevelRegistry.h>
 
@@ -500,7 +505,7 @@ void GhostReplay_ThTick(struct Thread *t)
 		tape->timeElapsedInRace += gGT->elapsedTimeMS;
 	}
 
-	if (d->ghostID == 0 && s_dbgF < 120)
+	if (ReplayDbg() && d->ghostID == 0 && s_dbgF < 120)
 	{
 		fprintf(stderr, "[GDBG-E] f=%d tl=%d ms=%d tir=%d t01=%d t32=%d pid=%d n=%d t=(%d,%d,%d)\n",
 			s_dbgF, (int)gGT->trafficLightsTimer, (int)gGT->elapsedTimeMS,
@@ -529,9 +534,11 @@ void GhostReplay_Init1(void)
 	char *recordBuffer = GHOSTHEADER_GETRECORDBUFFER(gh);
 	sdata->GhostRecording.ptrGhost = gh;
 	sdata->GhostRecording.ptrStartOffset = &recordBuffer[0];
-	fprintf(stderr, "[GDBG-G] Init1 gh=%p end=%p size=0x3e00\n", (void*)gh, (void*)((u8*)gh + 0x3e00));
+	if (ReplayDbg())
+		fprintf(stderr, "[GDBG-G] Init1 gh=%p end=%p size=0x3e00\n", (void*)gh, (void*)((u8*)gh + 0x3e00));
 	sdata->GhostRecording.ptrEndOffset = &recordBuffer[0x3DD4];
-fprintf(stderr, "[GDBG-T] Init1 gh=%p start=%p cur=%p end=%p start-gh=%d\n",
+if (ReplayDbg())
+	fprintf(stderr, "[GDBG-T] Init1 gh=%p start=%p cur=%p end=%p start-gh=%d\n",
         (void*)sdata->GhostRecording.ptrGhost,
         (void*)sdata->GhostRecording.ptrStartOffset,
         (void*)sdata->GhostRecording.ptrCurrOffset,
@@ -747,7 +754,7 @@ void GhostReplay_Init2(void)
 			continue;
 		}
 
-		if (ghostID == 0)
+		if (ghostID == 0 && ReplayDbg())
 		{
 			u8 *rb = (u8 *)tape->ptrStart;
 			fprintf(stderr, "[GDBG-D] tape=%p gh=%p ptrStart=%p size=%d ptrPlaying=%p rb=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
@@ -801,7 +808,7 @@ void GhostReplay_Init2(void)
 		char *name = (ghostID != 0) ? sdata->s_ghost1 : sdata->s_ghost0;
 
 		INSTANCE_Birth(inst, model, name, inst->thread, 7);
-		if (ghostID == 0)
+		if (ghostID == 0 && ReplayDbg())
 		{
 			fprintf(stderr, "[GDBG-I] size=%d char=%d start=%p len=%d first32=",
 				(int)tape->gh->size, (int)tape->gh->characterID,

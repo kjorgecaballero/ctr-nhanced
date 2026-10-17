@@ -13,6 +13,7 @@
 #include "platform/native_log.h"
 #include "platform/native_perf.h"
 #include "platform/native_renderer.h"
+#include "platform/native_debug.h"
 
 #include <assert.h>
 #include <string.h>
@@ -1870,10 +1871,14 @@ void NativeRenderer_ClearVRAM(int x, int y, int w, int h, u8 r, u8 g, u8 b)
 	}
 
 	NativeRenderer_MarkVRAMDirty(x, y, w, h);
-	if (x < 832 && x + w > 800 && y < 280 && y + h > 256)
 	{
-		fprintf(stderr, "[CLEAR-OVERLAP] f=%u rect=%d,%d,%d,%d r=%d g=%d b=%d\n",
-		        s_dbgFrame, x, y, w, h, r, g, b);
+		static int s_dbgClear = -1;
+		if (NativeDbg_Enabled(&s_dbgClear, "CTR_DBG_PACK") &&
+		    x < 832 && x + w > 800 && y < 280 && y + h > 256)
+		{
+			fprintf(stderr, "[CLEAR-OVERLAP] f=%u rect=%d,%d,%d,%d r=%d g=%d b=%d\n",
+			        s_dbgFrame, x, y, w, h, r, g, b);
+		}
 	}
 }
 
@@ -2411,9 +2416,13 @@ void NativeRenderer_CopyVRAM(u16 *src, int x, int y, int w, int h, int dst_x, in
 		src += stride;
 	}
 
-	if (dst_x < 832 && dst_x + w > 800 && dst_y < 280 && dst_y + h > 256)
-		fprintf(stderr, "[DIRTY-HIT] f=%u %s src=%d,%d dst=%d,%d,%d,%d\n",
-		        s_dbgFrame, isMove ? "Move" : "Load", x, y, dst_x, dst_y, w, h);
+	{
+		static int s_dbgDirtyHit = -1;
+		if (NativeDbg_Enabled(&s_dbgDirtyHit, "CTR_DBG_PACK") &&
+		    dst_x < 832 && dst_x + w > 800 && dst_y < 280 && dst_y + h > 256)
+			fprintf(stderr, "[DIRTY-HIT] f=%u %s src=%d,%d dst=%d,%d,%d,%d\n",
+			        s_dbgFrame, isMove ? "Move" : "Load", x, y, dst_x, dst_y, w, h);
+	}
 
 	// Any CPU write overlapping a scratch rect invalidates our claim on it.
 	// VRAM no longer holds our last pack for that region.
@@ -2504,10 +2513,12 @@ void NativeRenderer_UpdateVRAM(void)
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, s_vram.texture);
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, VRAM_WIDTH);
+	static int s_dbgUpload = -1;
+	int _dbgUploadOn = NativeDbg_Enabled(&s_dbgUpload, "CTR_DBG_PACK");
 	for (s32 i = 0; i < rectCount; i++)
 	{
 		const RECT16 r = s_vram.cpuDirtyRects[i];
-		if (r.x < 832 && r.x + r.w > 800 && r.y < 280 && r.y + r.h > 256)
+		if (_dbgUploadOn && r.x < 832 && r.x + r.w > 800 && r.y < 280 && r.y + r.h > 256)
 		{
 			fprintf(stderr, "[UPLOAD-OVERLAP] f=%u rect=%d,%d,%d,%d\n",
 			        s_dbgFrame, r.x, r.y, r.w, r.h);

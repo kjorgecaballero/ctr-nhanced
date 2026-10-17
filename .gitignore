@@ -77,3 +77,4 @@ memcards_backup_*
 run*.log
 *.dmp
 crash_dumps/
+memcards_final_test_*

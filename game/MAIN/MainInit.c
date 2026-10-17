@@ -2,6 +2,7 @@
 
 #ifdef CTR_NATIVE
 #include <LevelRegistry.h>
+#include "platform/native_debug.h"
 
 static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_info *mesh)
 {
@@ -28,6 +29,9 @@ static void MainInit_InitVisMemBspListNodes(struct VisMem *visMem, struct mesh_i
 	}
 }
 #endif
+
+static int s_dbgMainInit = -1;
+static int MainInitDbg(void) { return NativeDbg_Enabled(&s_dbgMainInit, "CTR_DBG_GHOST"); }
 
 void MainInit_VisMem(struct GameTracker *gGT)
 {
@@ -341,6 +345,7 @@ void MainInit_JitPoolsNew(struct GameTracker *gGT)
 
 void MainInit_Drivers(struct GameTracker *gGT)
 {
+	if (MainInitDbg())
 	{
 		static int s_dbgEntry = 0;
 		s_dbgEntry++;
