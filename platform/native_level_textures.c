@@ -478,6 +478,12 @@ static void NltPatchOne(struct TextureLayout *tl, int isLow)
     }
 }
 
+static int NltPointsIntoLevelHeader(const struct TextureLayout *tl, const struct Level *lev)
+{
+    return ((const unsigned char *)tl >= (const unsigned char *)lev) &&
+           ((const unsigned char *)tl < (const unsigned char *)lev + sizeof(struct Level));
+}
+
 void NativeLevelTextures_PatchLev(struct Level *lev)
 {
     NltInitEnv();
@@ -487,13 +493,22 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
     }
     s_seenCount = 0;
     s_dbgN = 0;
+    int skippedHeader = 0;
     struct mesh_info *mesh = lev->ptr_mesh_info;
     struct QuadBlock *qb = mesh->ptrQuadBlockArray;
     for (int i = 0; i < mesh->numQuadBlock; i++, qb++) {
-        for (int f = 0; f < 4; f++)
-            NltPatchOne(NltResolveTL((u32)qb->ptr_texture_mid[f]), 0);
-        NltPatchOne(NltResolveTL((u32)qb->ptr_texture_low), 1);
+        for (int f = 0; f < 4; f++) {
+            struct TextureLayout *tl = NltResolveTL((u32)qb->ptr_texture_mid[f]);
+            if (NltPointsIntoLevelHeader(tl, lev)) { skippedHeader++; continue; }
+            NltPatchOne(tl, 0);
+        }
+        {
+            struct TextureLayout *tl = NltResolveTL((u32)qb->ptr_texture_low);
+            if (NltPointsIntoLevelHeader(tl, lev)) { skippedHeader++; }
+            else NltPatchOne(tl, 1);
+        }
     }
+    fprintf(stderr, "[NLT] skipped %d texture ptrs that pointed into the Level header\n", skippedHeader);
     fprintf(stderr, "[NLT] PatchLev: %d QB, %d unique TL, %d decoded, %d pages\n",
             mesh->numQuadBlock, s_seenCount, s_ltCount, s_pgCount);
 

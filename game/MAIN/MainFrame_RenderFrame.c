@@ -923,6 +923,19 @@ static void RenderAllLevelGeometry_ComputeThresholds(struct GameTracker *gGT, st
 	}
 }
 
+static int WaterVisReady(struct Level *lev, struct VisMem *vm, int n)
+{
+	int i;
+	if (lev->numWaterVertices == 0 || lev->ptr_water == 0 || vm == 0)
+		return 0;
+	for (i = 0; i < n; i++)
+	{
+		if (vm->visOVertList[i] == 0)
+			return 0;
+	}
+	return 1;
+}
+
 static void RenderAllLevelGeometry_HighMp(struct GameTracker *gGT, struct Level *level1, struct mesh_info *ptr_mesh_info)
 {
 	int i;
@@ -947,8 +960,9 @@ static void RenderAllLevelGeometry_HighMp(struct GameTracker *gGT, struct Level 
 
 	if ((level1->configFlags & 4) == 0)
 	{
-		AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water,
-		               level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
+		if (WaterVisReady(level1, gGT->visMem1, 1))
+			AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water,
+			               level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
 	}
 	else
 	{
@@ -1056,7 +1070,7 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		if ((level1->configFlags & 4) == 0)
 		{
 			// assume OVert (no primitives generated here)
-			AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
+			if (WaterVisReady(level1, gGT->visMem1, 1)) AnimateWater1P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0]);
 		}
 
 		// if SCVert
@@ -1101,7 +1115,7 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		if ((level1->configFlags & 4) == 0)
 		{
 			// assume OVert (no primitives generated here)
-			AnimateWater2P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
+			if (WaterVisReady(level1, gGT->visMem1, 2)) AnimateWater2P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
 			               gGT->visMem1->visOVertList[1]);
 		}
 
@@ -1136,14 +1150,14 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		if (numPlyrCurrGame == 3)
 		{
 			// assume OVert (no primitives generated here)
-			AnimateWater3P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
+			if (WaterVisReady(level1, gGT->visMem1, 3)) AnimateWater3P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
 			               gGT->visMem1->visOVertList[1], gGT->visMem1->visOVertList[2]);
 		}
 
 		else // 4P mode
 		{
 			// assume OVert (no primitives generated here)
-			AnimateWater4P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
+			if (WaterVisReady(level1, gGT->visMem1, 4)) AnimateWater4P(gGT->timer, level1->numWaterVertices, level1->ptr_water, level1->ptr_tex_waterEnvMap, gGT->visMem1->visOVertList[0],
 			               gGT->visMem1->visOVertList[1], gGT->visMem1->visOVertList[2], gGT->visMem1->visOVertList[3]);
 		}
 	}

@@ -171,8 +171,7 @@ void UI_DrawRankedDrivers(void)
 				s16 *transitionTimer = &data.rankIconsTransitionTimer[driverIndex];
 
 				// placeholder
-				Point pos;
-				pos.x = UI_RANK_ICON_OFFSCREEN_X;
+				Point pos = {.x = UI_RANK_ICON_OFFSCREEN_X, .y = 0};
 
 				// icon not transitioning
 				if (*transitionTimer == 0)
