@@ -67,6 +67,8 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(
 // Used to keep custom track high scores / TT flags separate from the
 // retail track they share a baseLevelID with.
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void);
+void LevelRegistry_LoadCustomHighScores(void);
+void LevelRegistry_SaveCustomHighScores(void);
 
 // Virtual memcard level IDs: retail filename packs only 5 bits for
 // levelID (0-31). Customs get 25-31 (7 slots). The GhostHeader and

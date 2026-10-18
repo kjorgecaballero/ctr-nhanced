@@ -128,6 +128,13 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 		entry[0].name[0] = 0;
 		entry[0].characterID = data.characterIDs[(u8)player->driverID];
 		memmove(entry[0].name, gGT->prevNameEntered, 0x11);
+
+#ifdef CTR_NATIVE
+		{
+			extern void LevelRegistry_SaveCustomHighScores(void);
+			LevelRegistry_SaveCustomHighScores();
+		}
+#endif
 	}
 
 	int highScoreIndex = (s8)gGT->newHighScoreIndex;
@@ -148,6 +155,13 @@ void MainGameEnd_SoloRaceSaveHighScore(void)
 	entry->name[0] = 0;
 	entry->characterID = data.characterIDs[(u8)player->driverID];
 	memmove(entry->name, gGT->prevNameEntered, 0x11);
+
+#ifdef CTR_NATIVE
+	{
+		extern void LevelRegistry_SaveCustomHighScores(void);
+		LevelRegistry_SaveCustomHighScores();
+	}
+#endif
 }
 
 

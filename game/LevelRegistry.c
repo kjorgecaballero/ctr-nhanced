@@ -92,6 +92,20 @@ static const struct LevelDef *s_activeLevel;
 static struct HighScoreTrack s_customHighScoreTracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
 static int s_customHighScoresInit;
 
+#define LEVEL_REGISTRY_HIGHSCORES_PATH "assets/mods/custom_highscores.bin"
+#define LEVEL_REGISTRY_HIGHSCORES_MAGIC 0x48534843u /* "CHSH" */
+#define LEVEL_REGISTRY_HIGHSCORES_VERSION 1u
+
+struct LevelRegistryHighScoreFile
+{
+    u32 magic;
+    u32 version;
+    u32 slotCount;
+    u32 reserved;
+    struct HighScoreTrack tracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
+};
+CTR_STATIC_ASSERT(sizeof(struct LevelRegistryHighScoreFile) == 16 + LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS * 0x124);
+
 static void LevelRegistry_Load(void);
 
 static void LevelRegistry_InitCustomHighScoreTrack(struct HighScoreTrack *track)
@@ -103,6 +117,75 @@ static void LevelRegistry_InitCustomHighScoreTrack(struct HighScoreTrack *track)
 		track->scoreEntry[i].time = MEMCARD_HIGH_SCORE_DEFAULT_TIME;
 		track->scoreEntry[i].characterID = 0;
 	}
+}
+
+static void LevelRegistry_EnsureCustomHighScoresInit(void)
+{
+    int i;
+    if (s_customHighScoresInit)
+        return;
+    for (i = 0; i < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS; i++)
+        LevelRegistry_InitCustomHighScoreTrack(&s_customHighScoreTracks[i]);
+    s_customHighScoresInit = 1;
+}
+
+void LevelRegistry_LoadCustomHighScores(void)
+{
+    FILE *f;
+    struct LevelRegistryHighScoreFile file;
+    int n;
+
+    LevelRegistry_EnsureCustomHighScoresInit();
+
+    f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "rb");
+    if (f == NULL) return;
+
+    if (fread(&file, sizeof(file), 1, f) != 1)
+    {
+        fclose(f);
+        fprintf(stderr, "[LevelRegistry] custom_highscores.bin malformed, keeping defaults\n");
+        return;
+    }
+    fclose(f);
+
+    if (file.magic != LEVEL_REGISTRY_HIGHSCORES_MAGIC || file.version != LEVEL_REGISTRY_HIGHSCORES_VERSION)
+    {
+        fprintf(stderr, "[LevelRegistry] custom_highscores.bin bad magic/version, keeping defaults\n");
+        return;
+    }
+
+    n = (file.slotCount < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS) ? (int)file.slotCount : LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS;
+    memcpy(s_customHighScoreTracks, file.tracks, (size_t)n * sizeof(struct HighScoreTrack));
+    fprintf(stderr, "[LevelRegistry] loaded custom_highscores.bin (%d slots)\n", n);
+}
+
+void LevelRegistry_SaveCustomHighScores(void)
+{
+    FILE *f;
+    struct LevelRegistryHighScoreFile file;
+
+    if (!s_customHighScoresInit) return;
+
+    memset(&file, 0, sizeof(file));
+    file.magic = LEVEL_REGISTRY_HIGHSCORES_MAGIC;
+    file.version = LEVEL_REGISTRY_HIGHSCORES_VERSION;
+    file.slotCount = LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS;
+    memcpy(file.tracks, s_customHighScoreTracks, sizeof(s_customHighScoreTracks));
+
+    f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "wb");
+    if (f == NULL)
+    {
+        fprintf(stderr, "[LevelRegistry] could not open custom_highscores.bin for writing\n");
+        return;
+    }
+
+    if (fwrite(&file, sizeof(file), 1, f) != 1)
+    {
+        fclose(f);
+        fprintf(stderr, "[LevelRegistry] failed to write custom_highscores.bin\n");
+        return;
+    }
+    fclose(f);
 }
 
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void)
@@ -790,6 +873,9 @@ static void LevelRegistry_Load(void)
 	if (s_registryLoaded)
 		return;
 	s_registryLoaded = 1;
+
+	/* Custom level high scores: load the sidecar once per process. */
+	LevelRegistry_LoadCustomHighScores();
 
 	fprintf(stderr, "[LevelRegistry] === Loading manifests ===\n");
 
