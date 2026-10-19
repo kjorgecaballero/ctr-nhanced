@@ -10,6 +10,16 @@ extern int  NativeCustomRacer_AllocTexIdx(void);
 extern void NativeCustomRacer_FreeTexIdx(int idx);
 extern int LOAD_GetBigfileIndex(int levelID, int levelLOD, int subfileIndex);
 
+static u32 s_hideBits[65536 / 32];
+static int s_hideBitsLevelID = -1;
+static void NltMarkHidden(u32 id) { s_hideBits[(id >> 5) & 0x7ff] |= (1u << (id & 31)); }
+int NativeLevelTextures_IsBlockHidden(int blockID) {
+    if (sdata == NULL || sdata->gGT == NULL) return 0;
+    if (sdata->gGT->levelID != s_hideBitsLevelID) return 0;
+    u32 id = (u16)blockID;
+    return (s_hideBits[(id >> 5) & 0x7ff] >> (id & 31)) & 1;
+}
+
 #define NLT_MAX       64     /* TIMs (rects) per VRM */
 #define NLT_MAX_PAGES 256    /* pages (tpage, clut) per level */
 #define NLT_SENT      0x8000
@@ -484,6 +494,11 @@ static int NltPointsIntoLevelHeader(const struct TextureLayout *tl, const struct
            ((const unsigned char *)tl < (const unsigned char *)lev + sizeof(struct Level));
 }
 
+static int NltIsTriggerOnlyBlock(const struct QuadBlock *qb)
+{
+    return (qb->quadFlags & (0x0040 | 0x8000)) != 0;
+}
+
 void NativeLevelTextures_PatchLev(struct Level *lev)
 {
     NltInitEnv();
@@ -493,6 +508,8 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
     }
     s_seenCount = 0;
     s_dbgN = 0;
+    memset(s_hideBits, 0, sizeof(s_hideBits));
+    s_hideBitsLevelID = sdata->gGT->levelID;
     int skippedHeader = 0;
     struct mesh_info *mesh = lev->ptr_mesh_info;
     struct QuadBlock *qb = mesh->ptrQuadBlockArray;
@@ -505,7 +522,11 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
         {
             struct TextureLayout *tl = NltResolveTL((u32)qb->ptr_texture_low);
             if (NltPointsIntoLevelHeader(tl, lev)) { skippedHeader++; }
-            else NltPatchOne(tl, 1);
+            else if (tl != NULL) NltPatchOne(tl, 1);
+        }
+
+        if (NltIsTriggerOnlyBlock(qb)) {
+            NltMarkHidden((u16)qb->blockID);
         }
     }
     fprintf(stderr, "[NLT] skipped %d texture ptrs that pointed into the Level header\n", skippedHeader);

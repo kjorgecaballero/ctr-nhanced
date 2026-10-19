@@ -6,6 +6,10 @@ static int Ghost226Dbg(void) { return NativeDbg_Enabled(&s_dbgGhost226, "CTR_DBG
 
 #if defined(CTR_NATIVE)
 #include <LevelRegistry.h>
+extern int NativeLevelTextures_IsBlockHidden(int blockID);
+#define DL1P_BLOCK_HIDDEN(b) NativeLevelTextures_IsBlockHidden((b)->blockID)
+#else
+#define DL1P_BLOCK_HIDDEN(b) 0
 #endif
 
 struct DrawLevelOvr1PFaceSelector
@@ -8113,7 +8117,7 @@ static int Ovr226_800a0ef4_DrawFullDynamicBspList(struct VisMemBspListNode *slot
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit())
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
 			{
 				if (!Ovr226_800a0f78_EmitFullDynamicQuadBlock(pb, primMem, block, vertices))
 				{
@@ -8225,7 +8229,7 @@ static int DrawLevelOvr1P_DrawSplitGroundListABspList(struct VisMemBspListNode *
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit())
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
 			{
 				if (!DrawLevelOvr1P_EmitSplitGroundListAQuadBlock(pb, primMem, mesh, block))
 				{
@@ -8481,7 +8485,7 @@ static int DrawLevelOvr1P_DrawBspListQuadBlocks(struct VisMemBspListNode *slot, 
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit())
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
 			{
 				if (!DrawLevelOvr1P_EmitBspListQuadBlock(pb, primMem, mesh, block, role))
 				{
@@ -9161,7 +9165,7 @@ static int Ovr226_800a1e30_DrawWaterBspList(struct VisMemBspListNode *slot, stru
 				return 0;
 			}
 
-			if (Ovr226_800a1eb0_ConsumeWaterVisibilityBit())
+			if (Ovr226_800a1eb0_ConsumeWaterVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
 			{
 				if (!Ovr226_800a1ee0_EmitWaterListQuadBlock(pb, primMem, mesh, block))
 				{
