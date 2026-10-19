@@ -527,6 +527,10 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
 
         if (NltIsTriggerOnlyBlock(qb)) {
             NltMarkHidden((u16)qb->blockID);
+            if (sdata && sdata->gGT && sdata->gGT->levelID == 6) {
+                fprintf(stderr, "[HIDE] blockID=%u quadFlags=0x%04X\n",
+                        (unsigned)qb->blockID, (unsigned)qb->quadFlags);
+            }
         }
     }
     fprintf(stderr, "[NLT] skipped %d texture ptrs that pointed into the Level header\n", skippedHeader);

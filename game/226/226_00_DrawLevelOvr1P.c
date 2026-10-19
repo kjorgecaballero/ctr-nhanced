@@ -587,7 +587,7 @@ static struct TextureLayout *DrawLevelOvr1P_ResolveTexturePointerChecked(u32 tex
 		return NULL;
 	}
 
-	return DrawLevelOvr1P_IsPlausibleTextureLayout(texture) ? texture : NULL;
+return texture;
 #else
 	return DrawLevelOvr1P_ResolveTexturePointer(texturePtr);
 #endif
@@ -8073,6 +8073,16 @@ static void Ovr226_800a0f0c_SeedFullDynamicVisibilityScratch(const int *visFaceL
 
 static int Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit(void)
 {
+#ifdef CTR_NATIVE
+	extern int NativeLevelTextures_IsCustomLevelActive(void);
+	static int s_cachedLevelID = -1;
+	static int s_cachedIsCustom = 0;
+	int currentLevelID = (sdata != NULL && sdata->gGT != NULL) ? sdata->gGT->levelID : -1;
+	if (currentLevelID != s_cachedLevelID) {
+		s_cachedLevelID = currentLevelID;
+		s_cachedIsCustom = NativeLevelTextures_IsCustomLevelActive();
+	}
+#endif
 	s32 bitIndex = DrawLevelOvr1P_Scratch()->visibilityBitIndex;
 	u32 word = DrawLevelOvr1P_Scratch()->visibilityWord;
 	u32 shifted;
@@ -8090,6 +8100,9 @@ static int Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit(void)
 
 	shifted = word << bitIndex;
 	DrawLevelOvr1P_Scratch()->visibilityBitIndex = bitIndex - 1;
+#ifdef CTR_NATIVE
+	if (s_cachedIsCustom) return 1;
+#endif
 	return (s32)shifted < 0;
 }
 
