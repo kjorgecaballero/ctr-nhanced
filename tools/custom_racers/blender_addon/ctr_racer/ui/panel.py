@@ -35,16 +35,19 @@ class NFR_PT_Racer(Panel):
         layout = self.layout
         scene = context.scene
 
-        for row_items in (
-            (('SETTINGS', 'Settings'), ('SLOTS', 'Slots'),
-             ('MATERIALS', 'Materials')),
-            (('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')),
-            (('DANCE', 'Dance'), ('ITEMS', 'Items'), ('SFX', 'SFX')),
-            (('VOICES', 'Voices'),),
-        ):
+        row_items = [
+            [('SETTINGS', 'Settings'), ('SLOTS', 'Slots'), ('MATERIALS', 'Materials')],
+            [('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')],
+            [('DANCE', 'Dance'), ('ITEMS', 'Items'), ('SFX', 'SFX')],
+            [('VOICES', 'Voices')],
+            [('LEVELS', 'Levels')],
+        ]
+        
+        for row_data in row_items:
             row = layout.row(align=True)
             row.scale_y = 1.3
-            for tab_id, label in row_items:
+            for item in row_data:
+                tab_id, label = item[0], item[1]
                 row.prop_enum(scene, "nfr_ui_tab", tab_id, text=label)
 
         layout.separator()
@@ -68,6 +71,8 @@ class NFR_PT_Racer(Panel):
             self._draw_items(context, layout)
         elif context.scene.nfr_ui_tab == 'SFX':
             self._draw_sfx(context, layout)
+        elif tab == 'LEVELS':
+            self._draw_levels(context, layout)
         elif context.scene.nfr_ui_tab == 'VOICES':
             self._draw_voices(context, layout)
 
@@ -1020,14 +1025,60 @@ class NFR_PT_Racer(Panel):
                      text="Build Voice Banks", icon="PLAY")
 
 
-_classes = (NFR_PT_Racer,)
 
+    def _draw_levels(self, context, layout):
+        st = context.scene.nfr_levels
+        
+        box = layout.box()
+        box.label(text="Track Builder", icon="WORLD")
+        col = box.column(align=True)
+        col.prop(st, "lev_file", text=".LEV File")
+        col.prop(st, "vrm_file", text=".VRM File")
+        col.prop(st, "level_name", text="Name")
+        col.prop(st, "music_file", text="Music WAV")
+        
+        col.separator()
+        col.prop(st, "action_type", text="Mode")
+        col.prop(st, "replace_target", text="Base / Target Track")
+        
+        layout.separator()
+        row = layout.row()
+        row.scale_y = 1.5
+        row.operator("nfr.levels_build", icon="PLAY", text="Build Track")
+        
+        box = layout.box()
+        box.label(text="Manage", icon="FILE_FOLDER")
+        row = box.row(align=True)
+        row.operator("nfr.levels_list", icon="FILE_REFRESH")
+        row.operator("nfr.levels_delete", icon="TRASH")
+        
+        # LISTA COLAPSABLE
+        row = layout.row()
+        icon = 'TRIA_DOWN' if st.show_tracks else 'TRIA_RIGHT'
+        row.prop(st, "show_tracks", text="Installed Tracks", icon=icon, emboss=False)
+        
+        if st.show_tracks:
+            box = layout.box()
+            if st.list_output:
+                col = box.column(align=True)
+                for line in st.list_output.split("\n"):
+                    col.label(text=line)
+            else:
+                box.label(text="Click 'List Tracks' to refresh.", icon="INFO")
+                
+        if st.last_status:
+            layout.separator()
+            icon = "ERROR" if "FAILED" in st.last_status else "CHECKMARK"
+            layout.label(text=f"Status: {st.last_status}", icon=icon)
+
+_CLASSES = (
+    NFR_PT_Racer,
+)
 
 def register():
-    for c in _classes:
+    for c in _CLASSES:
         bpy.utils.register_class(c)
 
-
 def unregister():
-    for c in reversed(_classes):
+    for c in reversed(_CLASSES):
         bpy.utils.unregister_class(c)

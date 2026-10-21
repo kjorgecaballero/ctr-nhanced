@@ -16,7 +16,7 @@ bl_info = {
     "category": "Import-Export",
 }
 
-from . import prefs, core, render, slots, export, kart, anim, dance, items, sfx, voices, ui
+from . import prefs, core, render, slots, export, kart, anim, dance, items, sfx, voices, levels, ui
 from .core.icons import _teardown_previews
 
 
@@ -32,12 +32,14 @@ def register():
     items.register()      # custom mask model + beam export (Scene.nfr_mask)
     sfx.register()       # custom kart SFX export (Scene.nfr_sfx)
     voices.register()    # custom voiceline WAV export (Scene.nfr_voices)
+    levels.register()
     ui.register()        # panel
 
 
 def unregister():
     _teardown_previews()
     ui.unregister()
+    levels.unregister()
     voices.unregister()
     sfx.unregister()
     items.unregister()

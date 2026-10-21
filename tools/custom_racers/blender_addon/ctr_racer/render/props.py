@@ -64,6 +64,7 @@ def register():
             ('ITEMS',     "Items",     "Custom item models + icons (mask, missile, bomb)"),
             ('SFX',       "SFX",       "Custom kart SFX (boost, weapons, etc.)"),
             ('VOICES',    "Voices",    "Custom voiceline WAV export"),
+            ('LEVELS', 'Levels', 'Custom level editor'),
         ],
         default='SETTINGS',
     )
