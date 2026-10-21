@@ -92,6 +92,21 @@ static int MainInit_GetPrimMemSize(struct GameTracker *gGT)
 	int overrideSize = LevelRegistry_GetPrimMemSize(gGT->levelID);
 	if (overrideSize != 0)
 	{
+		/* Phase 3: the measured needPrimBytes (from LevelRegistry_ValidateAndMeasure)
+		 * wins over the manifest if bigger. */
+		const struct LevelDef *def = LevelRegistry_GetActive();
+		if (def == NULL)
+			def = LevelRegistry_GetReplacement(gGT->levelID);
+		if ((def != NULL) && (def->needPrimBytes > overrideSize))
+			overrideSize = def->needPrimBytes;
+
+		/* Customs with force_hi_lod: each viewport emits the full 1P
+		 * geometry to the same primMem cursor. Scale by viewport count. */
+		if (0 && (def != NULL) && (gGT->numPlyrCurrGame > 1))
+		{
+			int scaled = def->needPrimBytes * gGT->numPlyrCurrGame;
+			if (scaled > overrideSize) overrideSize = scaled;
+		}
 		fprintf(stderr, "[LevelRegistry] primMemSize=%d for levelID=%d numPlyr=%d\n",
 		        overrideSize, gGT->levelID, gGT->numPlyrCurrGame);
 		return overrideSize;

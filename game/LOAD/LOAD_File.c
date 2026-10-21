@@ -461,6 +461,15 @@ void *LOAD_ReadFile_ex(struct BigHeader *bigfile, u32 loadType, int subfileIndex
 		ptrDst = (void *)MEMPACK_AllocMem(sectorSize); // "FILE"
 		if (ptrDst == NULL)
 		{
+#if defined(CTR_NATIVE)
+			if (hasOverride)
+			{
+				NativeAssets_FreeBytes(&overrideBytes);
+				fprintf(stderr, "[LOAD] override alloc failed, freed buffer: %s (%u bytes)\n",
+					overridePath ? overridePath : "(null)",
+					(unsigned)overrideBytes.size);
+			}
+#endif
 			return NULL;
 		}
 	}

@@ -2121,9 +2121,70 @@ internal int ProcessPsyXPrims(P_TAG *polyTag)
 
 // Processes primitive
 // returns processed primitive primLength in longs
+/* PS1 GPU rule: a polygon with a horizontal extent > 1023 or vertical
+ * > 511 is not drawn. A GTE-clamped vertex (±0x3ff) produces such a
+ * polygon and would otherwise span the screen as a wedge. */
+static int NativeGpu_TriangleTooBig(const VERTTYPE *p0, const VERTTYPE *p1, const VERTTYPE *p2)
+{
+	int minX = p0[0], maxX = p0[0], minY = p0[1], maxY = p0[1];
+	if (p1[0] < minX) minX = p1[0]; if (p1[0] > maxX) maxX = p1[0];
+	if (p2[0] < minX) minX = p2[0]; if (p2[0] > maxX) maxX = p2[0];
+	if (p1[1] < minY) minY = p1[1]; if (p1[1] > maxY) maxY = p1[1];
+	if (p2[1] < minY) minY = p2[1]; if (p2[1] > maxY) maxY = p2[1];
+	return ((maxX - minX) > 1023) || ((maxY - minY) > 511);
+}
+
+static int NativeGpu_PolyTooBig(const P_TAG *polyTag)
+{
+	const u8 code = polyTag->code;
+	if ((code & 0xe0) != 0x20) return 0;
+	switch (code)
+	{
+	case 0x20: { const POLY_F3  *p = (const POLY_F3  *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2); }
+	case 0x24: { const POLY_FT3 *p = (const POLY_FT3 *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2); }
+	case 0x30: { const POLY_G3  *p = (const POLY_G3  *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2); }
+	case 0x34: { const POLY_GT3 *p = (const POLY_GT3 *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2); }
+	case 0x28: { const POLY_F4  *p = (const POLY_F4  *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2) || NativeGpu_TriangleTooBig(&p->x1, &p->x2, &p->x3); }
+	case 0x2C: { const POLY_FT4 *p = (const POLY_FT4 *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2) || NativeGpu_TriangleTooBig(&p->x1, &p->x2, &p->x3); }
+	case 0x38: { const POLY_G4  *p = (const POLY_G4  *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2) || NativeGpu_TriangleTooBig(&p->x1, &p->x2, &p->x3); }
+	case 0x3C: { const POLY_GT4 *p = (const POLY_GT4 *)polyTag; return NativeGpu_TriangleTooBig(&p->x0, &p->x1, &p->x2) || NativeGpu_TriangleTooBig(&p->x1, &p->x2, &p->x3); }
+	default: return 0;
+	}
+}
+
 int ParsePrimitive(P_TAG *polyTag)
 {
 	const int primType = polyTag->code & 0xF0;
+
+	/* PS1 size rule: drop polygons wider than 1023 or taller than 511. */
+	if (NativeGpu_PolyTooBig(polyTag)) return polyTag->len;
+
+	/* Early batch cut (like Reload): GPUDrawSplit uses u16 for startVertex
+	 * and numVerts, so the buffer cannot hold more than 65,536 vertices.
+	 * When that limit or the split table is near, draw the current batch
+	 * and reset. The drawing state (activeDrawEnv, blend, texture) is
+	 * global, so the next AddSplit starts a new split with the same state.
+	 * 18 = the most a single primitive writes (ProcessFlatLines, LINE_F4). */
+	{
+		const int vertexLimit = (int)MAX_VERTEX_BUFFER_SIZE - 18;
+		if ((s_gpu.vertexIndex > vertexLimit) || (s_gpu.splitIndex + 2 >= (int)MAX_DRAW_SPLITS))
+		{
+			static int s_batchCuts = 0;
+			if (s_batchCuts++ < 8)
+			{
+				fprintf(stderr, "[GPU] batch cut #%d at vertexIndex=%d splitIndex=%d\n",
+					s_batchCuts, s_gpu.vertexIndex, s_gpu.splitIndex);
+			}
+			/* The current split doesn't know its own vertex count yet (it is
+			 * only fixed when the next split opens). Set it before drawing. */
+			if (s_gpu.splitIndex > 0)
+			{
+				GPUDrawSplit *lastSplit = &s_gpu.splits[s_gpu.splitIndex];
+				lastSplit->numVerts = (u16)(s_gpu.vertexIndex - lastSplit->startVertex);
+			}
+			DrawAllSplits();   /* draws, then ClearSplits() and vertexIndex = 0 */
+		}
+	}
 
 	int primLength = 0;
 	bool handledZeroLength = false;

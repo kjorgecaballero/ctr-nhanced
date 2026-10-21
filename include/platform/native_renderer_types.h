@@ -23,7 +23,7 @@
 // Custom levels in 3P/4P can exceed the retail vertex budget (4 viewports
 // × HI LOD geometry). 512K vertices × ~24 bytes × 2 VBOs ≈ 24 MB, still
 // well under any modern GPU/CPU memory budget.
-#define MAX_VERTEX_BUFFER_SIZE (1u << 19)
+#define MAX_VERTEX_BUFFER_SIZE (1u << 16)   /* splits are u16: cannot exceed 65536 */
 
 typedef struct
 {

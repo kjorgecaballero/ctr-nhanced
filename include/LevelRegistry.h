@@ -27,6 +27,14 @@ struct LevelDef
 	 * they don't consume the 16 high-score / ghost slots reserved for
 	 * track additions. */
 	int isBattle;
+
+	/* Phase 2+3: measured at manifest parse time by
+	 * LevelRegistry_ValidateAndMeasure(). Zero if the LEV was not
+	 * readable or validation was skipped. */
+	int needPrimBytes;   /* per-buffer primitive memory (draw + sky + slack) */
+	int needClipBytes;   /* total clip buffer bytes (all players) */
+	int needTotalBytes;  /* rough total mempack needed for this track */
+	int skyPrimBytes;    /* top-4 sky segments * 28 (size of POLY_G3) */
 };
 
 const char *LevelRegistry_GetMusic(int levelID);

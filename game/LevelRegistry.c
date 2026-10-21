@@ -775,6 +775,187 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 	return 1;
 }
 
+/* Phase 2 + 3: read the LEV once, validate the header, compute per-track
+ * memory needs and store them in LevelDef. Returns 1 if the LEV is
+ * structurally valid and measured, 0 if it must be rejected.
+ *
+ * This is not Rld_CheckLev: it catches the gross cases (truncated file,
+ * ptrmap outside the body, absurd quad count, pointer past EOF) so a
+ * corrupt custom can't crash the load. Deeper validation (spawn table,
+ * checkpoints, restart points) is a follow-up. */
+static u32 LevelRegistry_ToFileOffset(u32 val, u32 bodyBase)
+{
+	if (val == 0)
+		return 0xFFFFFFFFu;
+	if (val >= 0x80000000u)
+		return bodyBase + (val & 0x7FFFFFFFu);
+	return bodyBase + val;
+}
+
+static int LevelRegistry_ValidateAndMeasure(struct LevelDef *level)
+{
+	char path[LEVEL_REGISTRY_PATH_LENGTH];
+	struct NativeAssetsByteBuffer lev;
+	const u8 *buf;
+	u32 bodySize, ptrMapOffset, ptrMapBytes, ptrMapEntries, ptrMapStart;
+	u32 meshInfoOff, meshInfoPtr, numQuadBlock, qbArrayOff, qbArrayPtr;
+	u32 i;
+	int len;
+
+	if (level == NULL)
+		return 0;
+
+	len = snprintf(path, sizeof(path), "%s/1p/data.lev", level->assetName);
+	if ((len <= 0) || ((size_t)len >= sizeof(path)))
+		return 0;
+
+	if (!NativeAssets_ReadBytes(path, NATIVE_ASSET_READ_DATA_FILE, &lev))
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': cannot read %s\n",
+			level->id, path);
+		return 0;
+	}
+
+	buf = lev.data;
+	bodySize = (u32)lev.size - 4u;
+
+	if (lev.size < 4 + 0x1F4 + 4)
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': file too small (%d bytes)\n",
+			level->id, lev.size);
+		goto fail;
+	}
+
+	ptrMapOffset = *(const u32 *)(const void *)buf;
+	if (ptrMapOffset >= bodySize)
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptrMapOffset=%u >= bodySize=%u\n",
+			level->id, ptrMapOffset, bodySize);
+		goto fail;
+	}
+
+	ptrMapBytes = *(const u32 *)(const void *)(buf + 4 + ptrMapOffset);
+	if ((ptrMapBytes == 0) || ((ptrMapBytes & 3u) != 0))
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptrMapBytes=%u not multiple of 4\n",
+			level->id, ptrMapBytes);
+		goto fail;
+	}
+
+	ptrMapEntries = ptrMapBytes >> 2;
+	ptrMapStart = 4 + ptrMapOffset + 4;
+	if (ptrMapStart + ptrMapBytes > (u32)lev.size)
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptrMap truncated\n",
+			level->id);
+		goto fail;
+	}
+
+	for (i = 0; i < ptrMapEntries; i++)
+	{
+		u32 off = *(const u32 *)(const void *)(buf + ptrMapStart + i * 4);
+		if (off >= ptrMapOffset)
+		{
+			fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptrMap[%u]=%u out of body\n",
+				level->id, i, off);
+			goto fail;
+		}
+	}
+
+	/* ptr_mesh_info at body offset 0x0. Raw file -> offset, patched -> PS1 ptr. */
+	meshInfoPtr = *(const u32 *)(const void *)(buf + 4 + 0x0);
+	meshInfoOff = LevelRegistry_ToFileOffset(meshInfoPtr, 4);
+	if ((meshInfoOff == 0xFFFFFFFFu) || (meshInfoOff + 0x20 > (u32)lev.size))
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptr_mesh_info=%08x out of file\n",
+			level->id, meshInfoPtr);
+		goto fail;
+	}
+
+	numQuadBlock = *(const u32 *)(const void *)(buf + meshInfoOff + 0x0);
+	qbArrayPtr   = *(const u32 *)(const void *)(buf + meshInfoOff + 0xC);
+	qbArrayOff   = LevelRegistry_ToFileOffset(qbArrayPtr, 4);
+
+	if ((numQuadBlock == 0) || (numQuadBlock > 0x10000u))
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': numQuadBlock=%u out of [1, 0x10000]\n",
+			level->id, numQuadBlock);
+		goto fail;
+	}
+	if ((qbArrayOff == 0xFFFFFFFFu) || (qbArrayOff + numQuadBlock * 0x5C > (u32)lev.size))
+	{
+		fprintf(stderr, "[LevelRegistry] VALIDATE FAIL '%s': ptrQuadBlockArray=%08x past EOF\n",
+			level->id, qbArrayPtr);
+		goto fail;
+	}
+
+	/* Reload-style sky budget: read Skybox.numFaces[8], sort
+	 * descending, sum the 4 largest, multiply by sizeof(POLY_G3)=28.
+	 * That is exactly how many bytes the 4 drawn segments need. */
+	level->skyPrimBytes = 0;
+	{
+		u32 skyPtr = *(const u32 *)(const void *)(buf + 4 + 0x4);
+		u32 skyOff = LevelRegistry_ToFileOffset(skyPtr, 4);
+		if ((skyOff != 0xFFFFFFFFu) && (skyOff + 0x18 <= (u32)lev.size))
+		{
+			u32 nf[8]; u32 top[4]; int i, j;
+			for (i = 0; i < 8; i++)
+				nf[i] = *(const u16 *)(const void *)(buf + skyOff + 0x08 + (u32)i * 2u);
+			for (i = 0; i < 4; i++) top[i] = 0;
+			for (i = 0; i < 8; i++)
+			{
+				for (j = 3; j >= 0; j--)
+				{
+					if (nf[i] > top[j])
+					{
+						int k;
+						for (k = 0; k < j; k++) top[k] = top[k + 1];
+						top[j] = nf[i];
+						break;
+					}
+				}
+			}
+			level->skyPrimBytes = (int)((top[0] + top[1] + top[2] + top[3]) * 28u);
+			fprintf(stderr, "[LevelRegistry] SKY '%s': faces=%u,%u,%u,%u,%u,%u,%u,%u top4=%u,%u,%u,%u bytes=%d\n",
+				level->id, nf[0], nf[1], nf[2], nf[3], nf[4], nf[5], nf[6], nf[7],
+				top[0], top[1], top[2], top[3], level->skyPrimBytes);
+		}
+	}
+
+	/* Phase 3: measure. Approximations from rldpack build on Matsuri:
+	 *   draw 1,474,512 / 7089 quads = ~208 B/quad
+	 *   sky    382,592 / 7089 quads = ~54  B/quad (track specific)
+	 * Use 288 B/quad which covers draw + sky with ~10% slack. Honor the
+	 * manifest prim_mem if it already asks for more. */
+	level->needPrimBytes = (int)numQuadBlock * 288;
+	if (level->primMemSize > level->needPrimBytes)
+		level->needPrimBytes = level->primMemSize;
+
+	/* Clip buffer: same 60 words per quad as MainDB_GetClipSize. */
+	level->needClipBytes = (int)numQuadBlock * 60 * 4;
+
+	/* Rough total: 2 primMem + 2 OT + 2 swapchain + clip + LEV + rough
+	 * VRM + MPK block + slack. Used only for the 'will it fit?' log. */
+	level->needTotalBytes =
+		level->needPrimBytes * 2 +
+		(int)lev.size * 2 +
+		level->needClipBytes +
+		0x60000;
+
+	fprintf(stderr,
+		"[LevelRegistry] MEASURED '%s': quads=%u needPrim=%d needClip=%d needTotal=%d\n",
+		level->id, numQuadBlock, level->needPrimBytes,
+		level->needClipBytes, level->needTotalBytes);
+
+	NativeAssets_FreeBytes(&lev);
+	return 1;
+
+fail:
+	NativeAssets_FreeBytes(&lev);
+	return 0;
+}
+
+
 static SDL_EnumerationResult SDLCALL LevelRegistry_Enumerate(void *userdata, const char *dirname, const char *fname)
 {
 	char manifestPath[LEVEL_REGISTRY_PATH_LENGTH];
@@ -812,6 +993,16 @@ static SDL_EnumerationResult SDLCALL LevelRegistry_Enumerate(void *userdata, con
 
 	if (LevelRegistry_ParseManifest(fname, manifest.data, manifest.size, &level))
 	{
+		/* Phase 2+3: validate the LEV and measure memory. Reject on failure
+		 * using the same path as a duplicate (free manifest, continue). */
+		if (!LevelRegistry_ValidateAndMeasure(&level))
+		{
+			fprintf(stderr, "[LevelRegistry] Rejecting '%s' (validation failed)\n",
+				level.id);
+			NativeAssets_FreeBytes(&manifest);
+			return SDL_ENUM_CONTINUE;
+		}
+
 		for (index = 0; index < s_levelCount; index++)
 		{
 			if (((level.replaceLevelID >= 0) &&
@@ -1059,7 +1250,7 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 	// EXPERIMENT: allow custom override in splitscreen. The 1P VRM is
 	// loaded regardless of numPlyrCurrGame; we rely on the emulated VRAM
 	// to not enforce the retail slot boundary. If this crashes or renders
-	// wrong, revert and implement multi-LOD (Fase 3) instead.
+	// wrong, revert and implement multi-LOD (Phase 3) instead.
 	// (Nothing here for now -- removed the early return.)
 
 	if (levelID == MAIN_MENU_LEVEL)

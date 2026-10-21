@@ -8106,6 +8106,68 @@ static int Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit(void)
 	return (s32)shifted < 0;
 }
 
+/* Phase 6: skip quadblocks whose five texture pointers (four mid + one
+ * low) are all zeroed. Ported from Reload. Without this, the WALL FIX
+ * (27803eb14) lets these quadblocks through with NULL textures and
+ * the draw path renders them as solid-coloured polygons (the giant
+ * brown shape in Matsuri). The killplanes and invisible walls that
+ * the editor exports with all-zero textures are caught here. */
+static int DrawLevelOvr1P_IsBlankTextureLayout(const struct TextureLayout *texture)
+{
+	const u8 *at = (const u8 *)texture;
+	u32 i;
+
+	if (texture == NULL)
+	{
+		return 0;
+	}
+
+	for (i = 0; i < sizeof(*texture); i++)
+	{
+		if (at[i] != 0)
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static int DrawLevelOvr1P_IsBlankTexturePointer(u32 texturePtr)
+{
+	return DrawLevelOvr1P_IsBlankTextureLayout(DrawLevelOvr1P_ResolveTexturePointerChecked(texturePtr));
+}
+
+static int DrawLevelOvr1P_QuadBlockHasNoTexture(const struct QuadBlock *block)
+{
+	int faceIndex;
+
+	if (block == NULL)
+	{
+		return 0;
+	}
+
+	for (faceIndex = 0; faceIndex < 4; faceIndex++)
+	{
+		if (!DrawLevelOvr1P_IsBlankTexturePointer((u32)block->ptr_texture_mid[faceIndex]))
+		{
+			return 0;
+		}
+	}
+
+	return DrawLevelOvr1P_IsBlankTexturePointer((u32)block->ptr_texture_low);
+}
+
+static int DrawLevelOvr1P_IsInvisibleQuadBlock(const struct QuadBlock *block)
+{
+	if (!DrawLevelOvr1P_QuadBlockHasNoTexture(block))
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
 static int Ovr226_800a0ef4_DrawFullDynamicBspList(struct VisMemBspListNode *slot, struct PushBuffer *pb, struct mesh_info *mesh, struct PrimMem *primMem,
                                                   const int *visFaceList)
 {
@@ -8130,7 +8192,7 @@ static int Ovr226_800a0ef4_DrawFullDynamicBspList(struct VisMemBspListNode *slot
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block) && !DrawLevelOvr1P_IsInvisibleQuadBlock(block))
 			{
 				if (!Ovr226_800a0f78_EmitFullDynamicQuadBlock(pb, primMem, block, vertices))
 				{
@@ -8242,7 +8304,7 @@ static int DrawLevelOvr1P_DrawSplitGroundListABspList(struct VisMemBspListNode *
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block) && !DrawLevelOvr1P_IsInvisibleQuadBlock(block))
 			{
 				if (!DrawLevelOvr1P_EmitSplitGroundListAQuadBlock(pb, primMem, mesh, block))
 				{
@@ -8498,7 +8560,7 @@ static int DrawLevelOvr1P_DrawBspListQuadBlocks(struct VisMemBspListNode *slot, 
 				return 0;
 			}
 
-			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block))
+			if (Ovr226_800a0f34_ConsumeFullDynamicVisibilityBit() && !DL1P_BLOCK_HIDDEN(block) && !DrawLevelOvr1P_IsInvisibleQuadBlock(block))
 			{
 				if (!DrawLevelOvr1P_EmitBspListQuadBlock(pb, primMem, mesh, block, role))
 				{

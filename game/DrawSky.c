@@ -5,6 +5,10 @@ struct DrawSkyContext
 	const struct ShortVertex *verts;
 	u32 *ot;
 	u32 screenBounds;
+#if defined(CTR_NATIVE)
+	const u32 *primEnd;
+	int dropped;
+#endif
 };
 
 struct DrawSkyScratch
@@ -103,8 +107,17 @@ static u32 *DrawSky_Piece(struct Skybox *skybox, struct DrawSkyContext *ctx, int
 		sxy1 = MFC2(13);
 		sxy2 = MFC2(14);
 
+
 		if (DrawSky_IsVisible(gteFlag, sxy0, sxy1, sxy2, ctx->screenBounds))
 		{
+#if defined(CTR_NATIVE)
+			/* Reload-style bound: drop faces that don't fit the sky share. */
+			if ((const u32 *)(prim + (sizeof(POLY_G3) / sizeof(u32))) > ctx->primEnd)
+			{
+				ctx->dropped++;
+				continue;
+			}
+#endif
 			DrawSky_EmitPrimitive(&prim, ot);
 		}
 	}
@@ -146,6 +159,21 @@ void DrawSky_Full(void *skybox, struct PushBuffer *pb, struct PrimMem *primMem)
 		ctx.verts = sky->ptrVertex;
 		ctx.ot = &pb->ptrOT[0x3ff];
 		ctx.screenBounds = DrawSky_ReadWord(pb, 0x20);
+#if defined(CTR_NATIVE)
+		{
+			extern const struct LevelDef *LevelRegistry_GetActive(void);
+			u32 skyBudget = primMem->capacityBytes / 4u;
+			const struct LevelDef *def = LevelRegistry_GetActive();
+			if ((def != NULL) && (def->skyPrimBytes > 0))
+				skyBudget = (u32)def->skyPrimBytes;
+			ctx.primEnd = (const u32 *)(const void *)((const char *)primMem->start + primMem->capacityBytes);
+			{
+				const u32 *share = (const u32 *)(const void *)((const char *)prim + skyBudget);
+				if (share < ctx.primEnd) ctx.primEnd = share;
+			}
+			ctx.dropped = 0;
+		}
+#endif
 
 		faceIndex = (int)(baseFaceOffset >> 2);
 		countIndex = (int)(baseCountOffset >> 1);
@@ -168,6 +196,13 @@ void DrawSky_Full(void *skybox, struct PushBuffer *pb, struct PrimMem *primMem)
 		faceIndex = (int)(baseFaceOffset >> 2);
 		countIndex = (int)(baseCountOffset >> 1);
 		prim = DrawSky_Piece(sky, &ctx, faceIndex, countIndex, prim);
+#if defined(CTR_NATIVE)
+		if (ctx.dropped != 0)
+		{
+			static int s_log = 0;
+			if (!s_log) { s_log = 1; fprintf(stderr, "[CTR Sky] dropped %d face(s) - sky budget exceeded\n", ctx.dropped); }
+		}
+#endif
 	}
 
 	primMem->cursor = prim;
