@@ -26,7 +26,7 @@ from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
 
 
-_VARIANT_DIRS = ("kart", "gold", "silver")
+_VARIANT_DIRS = ("kart/default", "kart/gold", "kart/silver", "hi_kart/default", "hi_kart/gold", "hi_kart/silver", "velo_chopper/default")
 _EXTENSIONS = (".png", ".jpg", ".jpeg", ".tga", ".bmp")
 
 
@@ -123,7 +123,7 @@ class NFR_OT_KartApplyPreset(bpy.types.Operator):
             return {'CANCELLED'}
 
         preset_files = {}
-        for png in preset_path.glob("kart_*.png"):
+        for png in preset_path.glob("*.png"):
             preset_files[png.stem.lower()] = png
 
         if not preset_files:

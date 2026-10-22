@@ -8,12 +8,11 @@ from pathlib import Path
 from ..core.helpers import _redraw_view3d
 from .templates import KART_TEMPLATES
 
-
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "kart_template"
 
 
-def _load_png(png_name):
-    return bpy.data.images.load(str(_ASSETS_DIR / png_name), check_existing=True)
+def _load_png(png_name, subdir):
+    return bpy.data.images.load(str(_ASSETS_DIR / subdir / png_name), check_existing=False)
 
 
 def _wipe_previous_kart(material_prefix):
@@ -52,19 +51,16 @@ def _build_graph(material, images_by_slot):
     for n in list(nodes):
         nodes.remove(n)
 
-    slot_order = ["atlas", "pipes", "extra1", "extra2"]
-    mix_fac = {"atlas": 0.0, "pipes": 0.0, "extra1": 0.3, "extra2": 0.3}
+    rgb_nodes = {}
+    mix_shaders = []
 
-    tex_nodes, rgb_nodes, overlay_nodes, mix_nodes = {}, {}, {}, {}
-
-    for i, slot in enumerate(slot_order):
+    for i, (slot, img) in enumerate(images_by_slot.items()):
         y = 200 - 200 * i
 
         tex = nodes.new('ShaderNodeTexImage')
         tex.location = (-800, y)
-        tex.image = images_by_slot[slot]
+        tex.image = img
         tex.interpolation = 'Closest'
-        tex_nodes[slot] = tex
 
         rgb = nodes.new('ShaderNodeRGB')
         rgb.location = (-400, y)
@@ -77,34 +73,27 @@ def _build_graph(material, images_by_slot):
         ov.inputs[0].default_value = 1.0
         links.new(tex.outputs['Color'], ov.inputs[1])
         links.new(rgb.outputs['Color'], ov.inputs[2])
-        overlay_nodes[slot] = ov
 
         mix = nodes.new('ShaderNodeMixShader')
         mix.location = (0, y)
-        mix.inputs[0].default_value = mix_fac[slot]
+        mix.inputs[0].default_value = 0.0 if i < 2 else 0.3
         links.new(ov.outputs['Color'], mix.inputs[1])
-        mix_nodes[slot] = mix
+        mix_shaders.append(mix)
 
-    add1 = nodes.new('ShaderNodeAddShader')
-    add1.location = (400, 200)
-    links.new(mix_nodes["atlas"].outputs['Shader'], add1.inputs[0])
-    links.new(mix_nodes["pipes"].outputs['Shader'], add1.inputs[1])
-
-    add3 = nodes.new('ShaderNodeAddShader')
-    add3.location = (400, -200)
-    links.new(mix_nodes["extra1"].outputs['Shader'], add3.inputs[0])
-    links.new(mix_nodes["extra2"].outputs['Shader'], add3.inputs[1])
-
-    add2 = nodes.new('ShaderNodeAddShader')
-    add2.location = (800, 0)
-    links.new(add1.outputs['Shader'], add2.inputs[0])
-    links.new(add3.outputs['Shader'], add2.inputs[1])
+    # Unir todos los mix shaders
+    current_shader = mix_shaders[0].outputs['Shader']
+    for i, mix in enumerate(mix_shaders[1:], start=1):
+        add_node = nodes.new('ShaderNodeAddShader')
+        add_node.location = (400, 200 - 200 * i)
+        links.new(current_shader, add_node.inputs[0])
+        links.new(mix.outputs['Shader'], add_node.inputs[1])
+        current_shader = add_node.outputs['Shader']
 
     out = nodes.new('ShaderNodeOutputMaterial')
-    out.location = (1000, 0)
-    links.new(add2.outputs['Shader'], out.inputs[0])
+    out.location = (800, 0)
+    links.new(current_shader, out.inputs[0])
 
-    return [(slot, rgb_nodes[slot]) for slot in slot_order]
+    return [(slot, rgb_nodes[slot]) for slot in images_by_slot.keys()]
 
 
 class NFR_OT_KartImportTemplate(bpy.types.Operator):
@@ -121,52 +110,58 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
             self.report({'ERROR'}, f"Unknown template: {state.template_option}")
             return {'CANCELLED'}
 
-        fbx_path = _ASSETS_DIR / tpl["fbx_name"]
+        asset_dir = tpl.get("asset_dir", "")
+        mode = state.template_mode
+        
+        # Forzar DEFAULT en modo USER para evitar errores de variante
+        variant = state.variant if mode == "EDIT" else "DEFAULT"
+        
+        tex_map = tpl["variant_textures"].get(variant)
+        if not tex_map:
+            tex_map = list(tpl["variant_textures"].values())[0]
+
+        fbx_name = tpl["fbx_name"] if mode == "EDIT" else tpl["fbx_name"].replace(".fbx", "_user.fbx")
+        fbx_path = _ASSETS_DIR / asset_dir / fbx_name
+        
         if not fbx_path.is_file():
             self.report({'ERROR'}, f"FBX not found: {fbx_path}")
             return {'CANCELLED'}
 
-        variant = state.variant
-        tex_map = tpl["variant_textures"].get(variant)
-        if tex_map is None:
-            self.report({'ERROR'}, f"Unknown variant: {variant}")
-            return {'CANCELLED'}
-
         prev_colors = {z.display_name: tuple(z.color) for z in state.zones}
-
         _wipe_previous_kart(tpl["material_prefix"])
         bpy.ops.import_scene.fbx(filepath=str(fbx_path))
 
+        if mode == "USER":
+            # The FBX already has embedded textures. Solo marcamos como importado y salimos.
+            state.is_imported = True
+            state.material_name = ""
+            _redraw_view3d(context)
+            self.report({'INFO'}, f"User Template '{tpl['display_name']}' imported (Textures Embedded)")
+            return {'FINISHED'}
+
+        # Modo EDIT
         material = _find_template_material(tpl["material_prefix"])
         if material is None:
-            self.report({'ERROR'},
-                        f"No material with prefix '{tpl['material_prefix']}' "
-                        f"found after import")
+            self.report({'ERROR'}, "No material found after import")
             return {'CANCELLED'}
 
         material.use_nodes = True
-        images_by_slot = {slot: _load_png(png) for slot, png in tex_map.items()}
+        images_by_slot = {slot: _load_png(png, asset_dir) for slot, png in tex_map.items()}
         rgb_nodes_in_order = _build_graph(material, images_by_slot)
 
         state.zones.clear()
-        for (zone_name, slot_name), (slot, rgb_node) in zip(
-                tpl["zones"], rgb_nodes_in_order):
-            assert slot_name == slot, (
-                f"zone/slot order mismatch: {zone_name}/{slot_name} vs {slot}"
-            )
+        for (zone_name, slot_name), (slot, rgb_node) in zip(tpl["zones"], rgb_nodes_in_order):
             z = state.zones.add()
             z.display_name = zone_name
             z.node_name    = rgb_node.name
-            z.color        = prev_colors.get(zone_name, (1.0, 1.0, 1.0))
-            c = z.color
-            rgb_node.outputs[0].default_value = (c[0], c[1], c[2], 1.0)
+            z.color        = (1.0, 1.0, 1.0)
+            rgb_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
 
         state.material_name = material.name
         state.is_imported   = True
 
         _redraw_view3d(context)
-        self.report({'INFO'},
-                    f"Template '{tpl['display_name']}' imported ({variant})")
+        self.report({'INFO'}, f"Template '{tpl['display_name']}' imported ({variant})")
         return {'FINISHED'}
 
 

@@ -1,69 +1,94 @@
-# =========================================================================
-# MODULE: kart — templates
-# =========================================================================
 """Static definitions of the bundled kart templates."""
 
 KART_TEMPLATES = {
     "KART": {
         "display_name":    "Kart",
         "fbx_name":        "kart_template.fbx",
+        "asset_dir":       "kart",
         "material_prefix": "template",
         "variant_textures": {
-            "DEFAULT": {
-                "atlas":  "template01.png",
-                "pipes":  "template02.png",
-                "extra1": "template06.png",
-                "extra2": "template07.png",
-            },
-            "GOLD_PIPES": {
-                "atlas":  "template05.png",
-                "pipes":  "template03.png",
-                "extra1": "template06.png",
-                "extra2": "template07.png",
-            },
-            "SILVER_PIPES": {
-                "atlas":  "template05.png",
-                "pipes":  "template04.png",
-                "extra1": "template06.png",
-                "extra2": "template07.png",
-            },
+            "DEFAULT": {"atlas": "template01.png", "pipes": "template02.png", "extra1": "template06.png", "extra2": "template07.png"},
+            "GOLD_PIPES": {"atlas": "template05.png", "pipes": "template03.png", "extra1": "template06.png", "extra2": "template07.png"},
+            "SILVER_PIPES": {"atlas": "template05.png", "pipes": "template04.png", "extra1": "template06.png", "extra2": "template07.png"},
         },
-        "zones": [
-            ("Body",    "atlas"),
-            ("Pipes",   "pipes"),
-            ("Extra 1", "extra1"),
-            ("Extra 2", "extra2"),
-        ],
-        # Fase 2 -- bake + cut + save.
-        # bake_size = (width, height). All Kart template PNGs are 112x107.
+        "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2")],
         "bake_size": (112, 107),
-        # Cut coords in GIMP convention (xmin, ymin, xmax, ymax) with
-        # bottom-left origin. The baker flips Y against bake_size[1]
-        # before cropping. Order matches the original
-        # kart_clean_textures.py cutter:
-        #   front, back, bridge, floor, red, exhaust, motortop, side, exhaust_pipe
         "cutter": [
-            ("kart_00", (3,   3,  35,  19)),   # front
-            ("kart_01", (38,  3,  70,  19)),   # back
-            ("kart_02", (82,  3,  98,  19)),   # bridge
-            ("kart_03", (12, 41,  28,  49)),   # floor
-            ("kart_04", (46, 43,  62,  47)),   # red
-            ("kart_05", (82, 38,  98,  54)),   # exhaust
-            ("kart_06", (7,  71,  39,  87)),   # motortop
-            ("kart_07", (64, 71,  96,  87)),   # side
-            ("kart_08", (46, 89,  62, 105)),   # exhaust_pipe
+            ("kart_00", (3, 3, 35, 19)), ("kart_01", (38, 3, 70, 19)), ("kart_02", (82, 3, 98, 19)),
+            ("kart_03", (12, 41, 28, 49)), ("kart_04", (46, 43, 62, 47)), ("kart_05", (82, 38, 98, 54)),
+            ("kart_06", (7, 71, 39, 87)), ("kart_07", (64, 71, 96, 87)), ("kart_08", (46, 89, 62, 105)),
         ],
-        # variant -> subfolder name inside kart_presets_root.
-        "variant_dirs": {
-            "DEFAULT":      "kart",
-            "GOLD_PIPES":   "gold",
-            "SILVER_PIPES": "silver",
-        },
-        "variant_enum": [
-            ("DEFAULT",      "Default",      "Default pipes"),
-            ("GOLD_PIPES",   "Gold Pipes",   "Gold pipes"),
-            ("SILVER_PIPES", "Silver Pipes", "Silver pipes"),
-        ],
+        "variant_dirs": {"DEFAULT": "kart/default", "GOLD_PIPES": "kart/gold", "SILVER_PIPES": "kart/silver"},
+        "variant_enum": [("DEFAULT", "Default", "Default pipes"), ("GOLD_PIPES", "Gold Pipes", "Gold pipes"), ("SILVER_PIPES", "Silver Pipes", "Silver pipes")],
     },
-    # KART_HI, VELO_CHOPPER -> Fase 4.
+    "KART_HI": {
+        "display_name":    "Hi-Kart",
+        "fbx_name":        "hi_kart_template.fbx",
+        "asset_dir":       "hi_kart",
+        "material_prefix": "hi_kart_template",
+        "variant_textures": {
+            "DEFAULT": {"atlas": "template08.png", "pipes": "template09.png", "extra1": "template010.png"},
+            "GOLD_PIPES": {"atlas": "template08.png", "pipes": "template09.png", "extra1": "template011.png"},
+            "SILVER_PIPES": {"atlas": "template08.png", "pipes": "template09.png", "extra1": "template012.png"},
+        },
+        "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra", "extra1")],
+        "bake_size": (448, 192),
+        "cutter": [
+            ("kart_top", (301, 43, 365, 111)),
+            ("kart_front_side", (112, 87, 176, 119)),
+            ("kart_front_bottom", (318, 10, 350, 14)),
+            ("kart_front_02", (227, 40, 259, 44)),
+            ("kart_front", (208, 10, 272, 14)),
+            ("kart_floor", (34, 88, 66, 120)),
+            ("kart_back_bottom", (118, 10, 166, 58)),
+            ("kart_back_02", (28, 10, 76, 58)),
+            ("exhaust_pipe_02", (395, 119, 443, 167)),
+            ("exhaust_pipe_01", (405, 5, 437, 37)),
+            ("exhaust_pipe_00", (405, 61, 437, 93)),
+            ("metal_01", (95, 157, 127, 161)),
+            ("metal_02", (157, 157, 189, 161)),
+            ("metal_04", (211, 157, 275, 161)),
+            ("top", (32, 149, 64, 167)),
+            ("tube", (209, 75, 273, 91)),
+            ("tube_02", (226, 115, 258, 119)),
+        ],
+        "variant_dirs": {"DEFAULT": "hi_kart/default", "GOLD_PIPES": "hi_kart/gold", "SILVER_PIPES": "hi_kart/silver"},
+        "variant_enum": [("DEFAULT", "Default", "Default pipes"), ("GOLD_PIPES", "Gold Pipes", "Gold pipes"), ("SILVER_PIPES", "Silver Pipes", "Silver pipes")],
+    },
+    "VELO_CHOPPER": {
+        "display_name":    "Velo Chopper",
+        "fbx_name":        "velo_chopper_template.fbx",
+        "asset_dir":       "velo_chopper",
+        "material_prefix": "velo_chopper_template",
+        "variant_textures": {
+            "DEFAULT": {"atlas": "template013.png", "pipes": "template014.png", "extra1": "template015.png", "extra2": "template016.png", "extra3": "template017.png", "extra4": "template018.png"},
+        },
+        "zones": [("Atlas", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2"), ("Extra 3", "extra3"), ("Extra 4", "extra4")],
+        "bake_size": (195, 128),
+        "cutter": [
+            ("back_00", (8, 4, 28, 19)),
+            ("back_01", (67, 59, 79, 69)),
+            ("chair_01", (11, 71, 18, 95)),
+            ("exhaust_pipe01", (36, 59, 52, 82)),
+            ("floor_01", (158, 42, 178, 53)),
+            ("front_1", (39, 4, 68, 19)),
+            ("front_2", (27, 31, 59, 43)),
+            ("front_3", (108, 3, 124, 29)),
+            ("front_4", (134, 3, 149, 30)),
+            ("front_05", (127, 98, 135, 128)),
+            ("front_06", (78, 4, 101, 19)),
+            ("front_7", (2, 32, 25, 57)),
+            ("motortop_01", (165, 82, 173, 94)),
+            ("motortop_02", (129, 68, 133, 82)),
+            ("pipe_03", (68, 84, 79, 96)),
+            ("shadow_01", (43, 104, 47, 108)),
+            ("side_1", (159, 3, 176, 17)),
+            ("side_02", (3, 3, 35, 19)),
+            ("steeringwheel", (116, 45, 142, 52)),
+            ("up_yellow", (96, 84, 102, 97)),
+            ("left_right", (77, 36, 91, 44)),
+        ],
+        "variant_dirs": {"DEFAULT": "velo_chopper/default"},
+        "variant_enum": [("DEFAULT", "Default", "Default")],
+    },
 }

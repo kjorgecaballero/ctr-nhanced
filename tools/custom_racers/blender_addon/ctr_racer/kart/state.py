@@ -18,6 +18,7 @@ kills the popup's internal state. Workaround: click Reset Colors to
 unstick.
 """
 import bpy
+from .templates import KART_TEMPLATES
 
 
 def _zone_color_update(self, context):
@@ -57,8 +58,13 @@ class NFR_KartZone(bpy.types.PropertyGroup):
 class NFR_KartState(bpy.types.PropertyGroup):
     template_option: bpy.props.EnumProperty(
         name="Template",
-        items=[('KART', "Kart", "Standard CTR kart")],
+        items=[(k, v["display_name"], "") for k, v in KART_TEMPLATES.items()],
         default='KART',
+    )
+    template_mode: bpy.props.EnumProperty(
+        name="Mode",
+        items=[('EDIT', "Edit (Paint)", ""), ('USER', "User (View)", "")],
+        default='EDIT'
     )
     variant: bpy.props.EnumProperty(
         name="Variant",
@@ -87,16 +93,23 @@ class NFR_KartState(bpy.types.PropertyGroup):
         ],
         default="SENTINEL",
     )
-    preset_filter: bpy.props.EnumProperty(
-        name="Variant",
-        description="Which preset variant to show in the browser",
+    template_filter: bpy.props.EnumProperty(
+        name="Template",
         items=[
-            ('KART',   "Kart",   "Standard kart presets"),
-            ('GOLD',   "Gold",   "Gold pipe presets"),
-            ('SILVER', "Silver", "Silver pipe presets"),
+            ('KART',   "Kart",   "Standard Kart"),
+            ('HI_KART', "Hi-Kart", "High-Poly Kart"),
+            ('VELO_CHOPPER', "Velo Chopper", "Velo Chopper"),
         ],
         default='KART',
-        update=_preset_filter_update,
+    )
+    variant_filter: bpy.props.EnumProperty(
+        name="Variant",
+        items=[
+            ('DEFAULT', "Default", "Default variant"),
+            ('GOLD', "Gold", "Gold variant"),
+            ('SILVER', "Silver", "Silver variant"),
+        ],
+        default='DEFAULT',
     )
     preset_page: bpy.props.IntProperty(
         name="Page",

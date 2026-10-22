@@ -139,14 +139,10 @@ def _save_piece(piece, out_path, output_mode):
     quantized.save(out_path)
 
 
-def _cut_quantize_save(baked_img, cutter, out_dir, output_mode="SENTINEL"):
-    """Save `baked_img` to a temp PNG, cut it, and write each piece
-    to `out_dir/<name>.png`. Returns the number of pieces.
-
-    Coordinate convention: PIL and GIMP both use top-left origin, so
-    the cutter coords are used as-is (no Y-flip).
-
-    `output_mode` selects the piece format. See `_save_piece`.
+def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
+    """
+    Save `baked_img` to a temp PNG, calculate UV bounds for each material,
+    cut the image dynamically, and write each piece to `out_dir/<name>.png`.
     """
     if PIL_Image is None:
         raise RuntimeError("Pillow (PIL) is required for the kart baker")
@@ -161,22 +157,69 @@ def _cut_quantize_save(baked_img, cutter, out_dir, output_mode="SENTINEL"):
         baked_img.file_format = 'PNG'
         baked_img.save()
 
-        # Drop alpha. The kart has no transparency, and the preset
-        # loader only needs the RGB channels.
         full = PIL_Image.open(tmp_path).convert("RGB")
+        width, height = full.size
 
-        for out_name, (xmin, ymin, xmax, ymax) in cutter:
-            piece = full.crop((xmin, ymin, xmax, ymax))
-            _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
+        # Obtener la capa de UVs
+        uv_layer = obj.data.uv_layers.active.data
+        if not uv_layer:
+            raise RuntimeError("No active UV map found on the mesh")
 
-        return len(cutter)
+        # Mapeo de nombres (ej. "kart_top" -> "hi_kart_00")
+        # Asumimos que las zonas en templates.py tienen el nombre del material
+        # pero aquí simplemente iteramos los materials del objeto.
+        
+        applied = 0
+        for mat_slot in obj.material_slots:
+            mat = mat_slot.material
+            if not mat: continue
+            
+            # Buscar los límites de esta textura en la malla
+            min_x, min_y, max_x, max_y = 1.0, 1.0, 0.0, 0.0
+            found_faces = False
+            
+            for poly in obj.data.polygons:
+                if poly.material_index == mat_slot.index:
+                    found_faces = True
+                    for loop_idx in poly.loop_indices:
+                        u, v = uv_layer[loop_idx].uv
+                        min_x = min(min_x, u)
+                        min_y = min(min_y, v)
+                        max_x = max(max_x, u)
+                        max_y = max(max_y, v)
+            
+            if not found_faces:
+                continue
+                
+            # Convertir UV a coordenadas de píxeles para PIL (Y invertida)
+            px_min_x = int(min_x * width)
+            px_max_x = int(max_x * width)
+            px_min_y = int((1.0 - max_y) * height)
+            px_max_y = int((1.0 - min_y) * height)
+            
+            # Ajustar límites al tamaño de la imagen (por errores de redondeo)
+            px_min_x = max(0, min(px_min_x, width - 1))
+            px_max_x = max(1, min(px_max_x, width))
+            px_min_y = max(0, min(px_min_y, height - 1))
+            px_max_y = max(1, min(px_max_y, height))
+            
+            # Recortar y guardar
+            if px_max_x > px_min_x and px_max_y > px_min_y:
+                piece = full.crop((px_min_x, px_min_y, px_max_x, px_max_y))
+                
+                # El nombre final del archivo se toma del nombre del material
+                out_name = mat.name.split('.')[0]
+                if out_name.endswith('png'): out_name = out_name[:-4]
+                
+                _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
+                applied += 1
+
+        return applied
     finally:
         try:
             os.remove(tmp_path)
         except OSError:
             pass
-
-
 def _safe_dirname(name):
     keep = "-_. ()"
     return "".join(c if (c.isalnum() or c in keep) else "_" for c in name).strip()
