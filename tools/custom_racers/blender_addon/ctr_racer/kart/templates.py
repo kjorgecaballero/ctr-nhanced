@@ -13,7 +13,7 @@ KART_TEMPLATES = {
         },
         "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2")],
         "bake_size": (112, 107),
-                "cutter": [
+        "cutter": [
             ("kart_00", (3, 3, 35, 19)), ("kart_01", (38, 3, 70, 19)), ("kart_02", (82, 3, 98, 19)),
             ("kart_03", (12, 41, 28, 49)), ("kart_04", (46, 43, 62, 47)), ("kart_05", (82, 38, 98, 54)),
             ("kart_06", (7, 71, 39, 87)), ("kart_07", (64, 71, 96, 87)), ("kart_08", (46, 89, 62, 105)),
@@ -33,7 +33,7 @@ KART_TEMPLATES = {
         },
         "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra", "extra1")],
         "bake_size": (474, 192),
-                "cutter": [
+        "cutter": [
             ("hi_kart_00", (301, 47, 365, 111)), ("hi_kart_01", (112, 87, 176, 119)), ("hi_kart_02", (318, 10, 350, 14)),
             ("hi_kart_03", (227, 40, 259, 44)), ("hi_kart_04", (208, 10, 272, 14)), ("hi_kart_05", (34, 88, 66, 120)),
             ("hi_kart_06", (118, 10, 166, 58)), ("hi_kart_07", (28, 10, 76, 58)), ("hi_kart_08", (395, 119, 443, 167)),
@@ -54,14 +54,16 @@ KART_TEMPLATES = {
         },
         "zones": [("Atlas", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2"), ("Extra 3", "extra3"), ("Extra 4", "extra4")],
         "bake_size": (195, 128),
-                "cutter": [
+        "cutter": [
             ("chopper_00", (8, 4, 28, 19)), ("chopper_01", (67, 59, 79, 69)), ("chopper_02", (11, 71, 18, 95)),
             ("chopper_03", (36, 59, 52, 82)), ("chopper_04", (158, 42, 178, 53)), ("chopper_05", (39, 4, 68, 19)),
             ("chopper_06", (27, 31, 59, 43)), ("chopper_07", (108, 3, 124, 29)), ("chopper_08", (134, 3, 149, 30)),
             ("chopper_09", (127, 98, 135, 128)), ("chopper_10", (78, 4, 101, 19)), ("chopper_11", (2, 32, 25, 57)),
             ("chopper_12", (165, 82, 173, 94)), ("chopper_13", (129, 68, 133, 82)), ("chopper_14", (68, 84, 79, 96)),
-            ("chopper_15", (43, 104, 47, 108)), ("chopper_16", (159, 3, 176, 17)), ("chopper_17", (3, 3, 35, 19)),
-            ("chopper_18", (116, 45, 142, 52)), ("chopper_19", (96, 84, 102, 97)), ("chopper_20", (77, 36, 91, 44)),
+            ("chopper_15", (43, 104, 47, 108)), ("chopper_16", (159, 3, 176, 17)),
+            ("chopper_17", (116, 45, 142, 52)),
+            ("chopper_19", (96, 84, 102, 97)),
+            ("chopper_20", (77, 36, 91, 44)),
         ],
         "variant_dirs": {"DEFAULT": "velo_chopper/default"},
         "variant_enum": [("DEFAULT", "Default", "Default")],

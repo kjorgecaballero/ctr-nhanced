@@ -30,6 +30,11 @@ from .templates import KART_TEMPLATES
 _VARIANT_DIRS = tuple(set(v for tpl in KART_TEMPLATES.values() for v in tpl.get("variant_dirs", {}).values()))
 _EXTENSIONS = (".png", ".jpg", ".jpeg", ".tga", ".bmp")
 
+ALIASES = {
+    "chopper_03": ["exhaust_pipe", "exhaust_pipe.png"],
+    "chopper_09": ["front5", "front5.png"]
+}
+
 
 def _stem(name):
     """Normalize a datablock name to its canonical stem.
@@ -197,6 +202,12 @@ class NFR_OT_KartApplyPreset(bpy.types.Operator):
         for stem in sorted(preset_files):
             preset_png = preset_files[stem]
             target = targets.get(stem)
+            
+            if target is None and stem in ALIASES:
+                for alias in ALIASES[stem]:
+                    target = targets.get(alias)
+                    if target: break
+                    
             if target is None:
                 missing.append(stem)
                 continue

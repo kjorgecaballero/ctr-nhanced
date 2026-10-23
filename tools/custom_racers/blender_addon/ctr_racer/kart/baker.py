@@ -100,85 +100,25 @@ def _save_piece(piece, out_path, output_mode):
 def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
     if PIL_Image is None:
         raise RuntimeError("Pillow (PIL) is required for the kart baker")
-
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png", prefix="nfr_kart_bake_")
     os.close(tmp_fd)
     try:
         baked_img.filepath_raw = tmp_path
         baked_img.file_format = 'PNG'
         baked_img.save()
-
         full = PIL_Image.open(tmp_path).convert("RGB")
-        width, height = full.size
-
-        if not obj.data.uv_layers.active:
-            raise RuntimeError("No active UV map found on the mesh")
-        uv_layer = obj.data.uv_layers.active.data
-
-        applied = 0
         cutter = tpl.get("cutter", [])
-        
-        for slot_idx, mat_slot in enumerate(obj.material_slots):
-            if slot_idx >= len(cutter):
-                break  # <--- STOP THE LOOP TO AVOID EXPORTING seat_02 OR WHEELS
-            mat = mat_slot.material
-            if not mat: continue
-            
-            min_x, min_y, max_x, max_y = 1.0, 1.0, 0.0, 0.0
-            found_faces = False
-            
-            for poly in obj.data.polygons:
-                if poly.material_index == slot_idx:
-                    found_faces = True
-                    for loop_idx in poly.loop_indices:
-                        u, v = uv_layer[loop_idx].uv
-                        min_x = min(min_x, u)
-                        min_y = min(min_y, v)
-                        max_x = max(max_x, u)
-                        max_y = max(max_y, v)
-            
-            if not found_faces:
-                continue
-                
-            # Convert UV coordinates to image pixels (PIL uses top-left origin)
-            px_min_x = int(min_x * width)
-            px_max_x = int(max_x * width)
-            px_min_y = int((1.0 - max_y) * height)
-            px_max_y = int((1.0 - min_y) * height)
-            
-            # If UVs span the whole image (UV failure), use cutter as fallback
-            if px_max_x - px_min_x >= width - 1 and px_max_y - px_min_y >= height - 1:
-                print(f"UVs for {mat.name} span the whole image. Using cutter fallback.")
-                if slot_idx < len(cutter):
-                    _, (px_min_x, px_min_y, px_max_x, px_max_y) = cutter[slot_idx]
-            
-            px_min_x = max(0, min(px_min_x, width - 1))
-            px_max_x = max(1, min(px_max_x, width))
-            px_min_y = max(0, min(px_min_y, height - 1))
-            px_max_y = max(1, min(px_max_y, height))
-            
-            if px_max_x > px_min_x and px_max_y > px_min_y:
-                piece = full.crop((px_min_x, px_min_y, px_max_x, px_max_y))
-                
-                # Use cutter name (standardized) or material name
-                if slot_idx < len(cutter):
-                    out_name = cutter[slot_idx][0]
-                else:
-                    out_name = mat.name.split('.')[0]
-                    if out_name.endswith('png'): out_name = out_name[:-4]
-                
-                _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
-                applied += 1
-
-        return applied
+        if not cutter:
+            raise RuntimeError("No cutter coordinates found in template.")
+        for out_name, (xmin, ymin, xmax, ymax) in cutter:
+            piece = full.crop((xmin, ymin, xmax, ymax))
+            _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
+        return len(cutter)
     finally:
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+        try: os.remove(tmp_path)
+        except OSError: pass
 
 
 def _safe_dirname(name):
