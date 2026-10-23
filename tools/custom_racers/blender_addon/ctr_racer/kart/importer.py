@@ -11,6 +11,15 @@ from .templates import KART_TEMPLATES
 _ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets" / "kart_template"
 
 
+
+def _force_closest_interpolation(obj):
+    if not obj or obj.type != 'MESH': return
+    for slot in obj.material_slots:
+        if slot.material and slot.material.use_nodes:
+            for node in slot.material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    node.interpolation = 'Closest'
+
 def _load_png(png_name, subdir):
     return bpy.data.images.load(str(_ASSETS_DIR / subdir / png_name), check_existing=False)
 
@@ -120,6 +129,7 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
                 
             _wipe_previous_kart(tpl["material_prefix"])
             bpy.ops.import_scene.fbx(filepath=str(fbx_path))
+            _force_closest_interpolation(context.active_object)
             
             obj = context.active_object
             if not obj:
@@ -154,7 +164,12 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
         # NORMAL LOGIC (Kart, Hi-Kart, Velo)
         # =====================================================================
         mode = state.template_mode
-        variant = state.variant if (mode == "EDIT" and not tpl.get("is_vertex_color")) else "DEFAULT"
+        if mode == "EDIT" and not tpl.get("is_vertex_color"):
+            variant = state.variant
+            if variant not in tpl["variant_textures"]:
+                variant = "DEFAULT"
+        else:
+            variant = "DEFAULT"
         tex_map = tpl["variant_textures"].get(variant, {})
         if not tex_map and tpl["variant_textures"]: tex_map = list(tpl["variant_textures"].values())[0]
 
@@ -165,6 +180,8 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
         prev_colors = {z.display_name: tuple(z.color) for z in state.zones}
         _wipe_previous_kart(tpl["material_prefix"])
         bpy.ops.import_scene.fbx(filepath=str(fbx_path))
+        for o in context.selected_objects:
+            _force_closest_interpolation(o)
 
         if mode == "USER":
             state.is_imported = True

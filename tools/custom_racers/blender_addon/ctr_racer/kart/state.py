@@ -99,6 +99,19 @@ def _hover_hsv_update(self, context):
         if area.type == 'VIEW_3D':
             area.tag_redraw()
 
+def _template_filter_update(self, context):
+    self.preset_page = 1
+    tpl = KART_TEMPLATES.get(self.template_filter)
+    if tpl:
+        var_key = self.variant_filter
+        if var_key == 'GOLD': var_key = 'GOLD_PIPES'
+        elif var_key == 'SILVER': var_key = 'SILVER_PIPES'
+        elif var_key == 'DEFAULT': var_key = 'DEFAULT'
+        
+        # Si la plantilla elegida no soporta la variante actual, forzar DEFAULT
+        if var_key not in tpl.get("variant_dirs", {}):
+            self.variant_filter = 'DEFAULT'
+
 def _preset_filter_update(self, context):
     self.preset_page = 1
 
@@ -157,6 +170,7 @@ class NFR_KartState(bpy.types.PropertyGroup):
         name="Template",
         items=[(k, v["display_name"], "") for k, v in KART_TEMPLATES.items()],
         default='KART',
+        update=_template_filter_update,
     )
     variant_filter: bpy.props.EnumProperty(
         name="Variant",

@@ -85,6 +85,7 @@ def _find_target_images(obj):
             continue
         for node in mat.node_tree.nodes:
             if node.type == "TEX_IMAGE" and node.image is not None:
+                node.interpolation = 'Closest'  # Force Closest on apply
                 stem = _stem(node.image.name)
                 if stem not in targets:
                     targets[stem] = node.image

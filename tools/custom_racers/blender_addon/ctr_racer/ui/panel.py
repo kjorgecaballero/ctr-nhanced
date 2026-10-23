@@ -461,7 +461,7 @@ class NFR_PT_Racer(Panel):
         col = box.column(align=True)
         col.prop(st, "template_mode", text="Mode")
         col.prop(st, "template_option", text="Template")
-        if st.template_mode == 'EDIT' and st.template_option != 'HOVERCRAFT':
+        if st.template_mode == 'EDIT' and st.template_option in ('KART', 'KART_HI'):
             col.prop(st, "variant", text="Variant")
 
         col.separator()
@@ -533,7 +533,7 @@ class NFR_PT_Racer(Panel):
         box = layout.box()
         box.label(text="Filter Presets:", icon="FILTER")
         box.prop(st, "template_filter", text="Template")
-        if st.template_filter != 'HOVERCRAFT':
+        if st.template_filter in ('KART', 'KART_HI'):
             box.prop(st, "variant_filter", text="Variant")
         layout.separator()
 
