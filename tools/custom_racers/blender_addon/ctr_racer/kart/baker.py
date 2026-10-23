@@ -1,27 +1,6 @@
 # =========================================================================
 # MODULE: kart — baker
 # =========================================================================
-"""Fase 2: bake the current material to a 112x107 image, cut it into
-9 pieces, and write to the preset folder. Each piece can be saved
-as a plain RGB PNG (Sentinel path) or quantized to 16 colors
-(legacy paletted path).
-
-Output layout:
-    <kart_presets_root>/<variant_dir>/<preset_name>/kart_00.png
-                                                  /kart_01.png
-                                                  ...
-                                                  /kart_08.png
-
-The node graph is untouched: a temporary Image Texture node is added
-only for the duration of the bake and removed afterwards.
-
-Coordinate convention:
-    The cutter coords in templates.py are in GIMP convention
-    (top-left origin), which is the same as PIL's crop system. No
-    Y-flip is applied. Blender's image.pixels uses bottom-left origin,
-    but we never touch that API here -- we save the bake to a PNG and
-    let PIL do the crop.
-"""
 import os
 import tempfile
 from pathlib import Path
@@ -42,7 +21,6 @@ _BAKE_TMP_NAME = "__nfr_kart_bake_tmp__"
 
 
 def _find_kart_object(material):
-    """Return the mesh object that owns `material`."""
     for obj in bpy.context.scene.objects:
         if obj.type != 'MESH':
             continue
@@ -53,19 +31,11 @@ def _find_kart_object(material):
 
 
 def _bake_to_image(context, material, width, height):
-    """Bake the material into a temp image datablock and return it.
-
-    Adds a target Image Texture node, sets it active, runs the bake
-    with the same settings as the original kart_editor.py, then
-    removes the node. The image datablock survives.
-    """
-    # Drop a stale temp image if one is left over.
     old = bpy.data.images.get(_BAKE_TMP_NAME)
     if old is not None:
         bpy.data.images.remove(old)
 
-    baked = bpy.data.images.new(_BAKE_TMP_NAME, width=width, height=height,
-                                alpha=True)
+    baked = bpy.data.images.new(_BAKE_TMP_NAME, width=width, height=height, alpha=True)
 
     nodes = material.node_tree.nodes
     target_node = nodes.new('ShaderNodeTexImage')
@@ -87,7 +57,6 @@ def _bake_to_image(context, material, width, height):
     prev_active   = context.view_layer.objects.active
 
     try:
-        # Object mode is required by bpy.ops.object.bake.
         if context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -104,7 +73,6 @@ def _bake_to_image(context, material, width, height):
 
         bpy.ops.object.bake(type='COMBINED')
     finally:
-        # Restore.
         scene.render.engine  = prev_engine
         scene.cycles.device  = prev_device
         scene.cycles.samples = prev_samples
@@ -116,16 +84,6 @@ def _bake_to_image(context, material, width, height):
 
 
 def _save_piece(piece, out_path, output_mode):
-    """Save one cropped piece.
-
-    SENTINEL: plain RGB, no quantization. The kart preset loader
-    decodes the PNG through Blender's standard image path, so no
-    palette limit applies and the full baked colors are preserved.
-
-    PALETTED: quantize to 16 colors with dither disabled. Matches the
-    behaviour of the original 16_color_reset.py. Only useful when the
-    output has to feed a legacy paletted loader.
-    """
     if output_mode == "SENTINEL":
         piece.save(out_path)
         return
@@ -140,10 +98,6 @@ def _save_piece(piece, out_path, output_mode):
 
 
 def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
-    """
-    Save `baked_img` to a temp PNG, calculate UV bounds for each material,
-    cut the image dynamically, and write each piece to `out_dir/<name>.png`.
-    """
     if PIL_Image is None:
         raise RuntimeError("Pillow (PIL) is required for the kart baker")
 
@@ -160,26 +114,24 @@ def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
         full = PIL_Image.open(tmp_path).convert("RGB")
         width, height = full.size
 
-        # Obtener la capa de UVs
-        uv_layer = obj.data.uv_layers.active.data
-        if not uv_layer:
+        if not obj.data.uv_layers.active:
             raise RuntimeError("No active UV map found on the mesh")
+        uv_layer = obj.data.uv_layers.active.data
 
-        # Mapeo de nombres (ej. "kart_top" -> "hi_kart_00")
-        # Asumimos que las zonas en templates.py tienen el nombre del material
-        # pero aquí simplemente iteramos los materials del objeto.
-        
         applied = 0
-        for mat_slot in obj.material_slots:
+        cutter = tpl.get("cutter", [])
+        
+        for slot_idx, mat_slot in enumerate(obj.material_slots):
+            if slot_idx >= len(cutter):
+                break  # <--- STOP THE LOOP TO AVOID EXPORTING seat_02 OR WHEELS
             mat = mat_slot.material
             if not mat: continue
             
-            # Buscar los límites de esta textura en la malla
             min_x, min_y, max_x, max_y = 1.0, 1.0, 0.0, 0.0
             found_faces = False
             
             for poly in obj.data.polygons:
-                if poly.material_index == mat_slot.index:
+                if poly.material_index == slot_idx:
                     found_faces = True
                     for loop_idx in poly.loop_indices:
                         u, v = uv_layer[loop_idx].uv
@@ -191,25 +143,32 @@ def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
             if not found_faces:
                 continue
                 
-            # Convertir UV a coordenadas de píxeles para PIL (Y invertida)
+            # Convert UV coordinates to image pixels (PIL uses top-left origin)
             px_min_x = int(min_x * width)
             px_max_x = int(max_x * width)
             px_min_y = int((1.0 - max_y) * height)
             px_max_y = int((1.0 - min_y) * height)
             
-            # Ajustar límites al tamaño de la imagen (por errores de redondeo)
+            # If UVs span the whole image (UV failure), use cutter as fallback
+            if px_max_x - px_min_x >= width - 1 and px_max_y - px_min_y >= height - 1:
+                print(f"UVs for {mat.name} span the whole image. Using cutter fallback.")
+                if slot_idx < len(cutter):
+                    _, (px_min_x, px_min_y, px_max_x, px_max_y) = cutter[slot_idx]
+            
             px_min_x = max(0, min(px_min_x, width - 1))
             px_max_x = max(1, min(px_max_x, width))
             px_min_y = max(0, min(px_min_y, height - 1))
             px_max_y = max(1, min(px_max_y, height))
             
-            # Recortar y guardar
             if px_max_x > px_min_x and px_max_y > px_min_y:
                 piece = full.crop((px_min_x, px_min_y, px_max_x, px_max_y))
                 
-                # El nombre final del archivo se toma del nombre del material
-                out_name = mat.name.split('.')[0]
-                if out_name.endswith('png'): out_name = out_name[:-4]
+                # Use cutter name (standardized) or material name
+                if slot_idx < len(cutter):
+                    out_name = cutter[slot_idx][0]
+                else:
+                    out_name = mat.name.split('.')[0]
+                    if out_name.endswith('png'): out_name = out_name[:-4]
                 
                 _save_piece(piece, out_dir / f"{out_name}.png", output_mode)
                 applied += 1
@@ -220,6 +179,8 @@ def _cut_quantize_save(baked_img, tpl, obj, out_dir, output_mode="SENTINEL"):
             os.remove(tmp_path)
         except OSError:
             pass
+
+
 def _safe_dirname(name):
     keep = "-_. ()"
     return "".join(c if (c.isalnum() or c in keep) else "_" for c in name).strip()
@@ -228,10 +189,7 @@ def _safe_dirname(name):
 class NFR_OT_KartBakeAndExport(bpy.types.Operator):
     bl_idname = "nfr.kart_bake_and_export"
     bl_label = "Bake & Export"
-    bl_description = (
-        "Bake the current colors, cut into 9 pieces, save to the "
-        "preset folder"
-    )
+    bl_description = "Bake the current colors, cut into pieces, save to the preset folder"
 
     def execute(self, context):
         state = context.scene.kart_state
@@ -248,8 +206,7 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
 
         root_str = getattr(prefs, "kart_presets_root", "") or ""
         if not root_str:
-            self.report({'ERROR'},
-                        "Set 'Kart presets folder' in addon preferences")
+            self.report({'ERROR'}, "Set 'Kart presets folder' in addon preferences")
             return {'CANCELLED'}
         root = Path(root_str)
         if not root.is_dir():
@@ -261,7 +218,34 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
             self.report({'ERROR'}, f"Unknown template: {state.template_option}")
             return {'CANCELLED'}
 
-        variant_dir = tpl["variant_dirs"].get(state.variant)
+        # --- 1. HOVERCRAFT ---
+        if tpl.get("is_vertex_color"):
+            import json
+            from PIL import Image as PIL_Image
+            
+            variant_dir = tpl.get("variant_dirs", {}).get("DEFAULT", "hovercraft/default")
+            out_dir = root / variant_dir / preset_name
+            out_dir.mkdir(parents=True, exist_ok=True)
+            
+            json_data = {
+                "hue": state.hover_hue,
+                "saturation": state.hover_saturation,
+                "value": state.hover_value
+            }
+            with open(out_dir / "preset.json", "w", encoding="utf-8") as fh:
+                json.dump(json_data, fh, indent=2)
+                
+            if PIL_Image:
+                import colorsys
+                r, g, b = colorsys.hsv_to_rgb(state.hover_hue, state.hover_saturation, state.hover_value)
+                rgb = (int(r*255), int(g*255), int(b*255))
+                PIL_Image.new("RGB", (32, 32), rgb).save(out_dir / "preview.png")
+                
+            self.report({'INFO'}, f"Preset saved to {out_dir}")
+            return {'FINISHED'}
+
+        # --- 2. KARTS NORMALES ---
+        variant_dir = tpl.get("variant_dirs", {}).get(state.variant)
         if variant_dir is None:
             self.report({'ERROR'}, f"Unknown variant: {state.variant}")
             return {'CANCELLED'}
@@ -270,26 +254,29 @@ class NFR_OT_KartBakeAndExport(bpy.types.Operator):
         if mat is None or not mat.use_nodes:
             self.report({'ERROR'}, "Material lost -- reimport template")
             return {'CANCELLED'}
+            
+        kart_obj = _find_kart_object(mat)
+        if not kart_obj:
+            self.report({'ERROR'}, "Kart object not found for baking")
+            return {'CANCELLED'}
 
-        # --- Bake --------------------------------------------------
+        # --- Bake ---
         try:
             baked = _bake_to_image(context, mat, *tpl["bake_size"])
         except Exception as e:
             self.report({'ERROR'}, f"Bake failed: {e}")
             return {'CANCELLED'}
 
-        # --- Cut + save --------------------------------------------
+        # --- Cut + save ---
         out_dir = root / variant_dir / preset_name
         try:
-            n = _cut_quantize_save(baked, tpl["cutter"], out_dir,
-                                   state.output_mode)
+            n = _cut_quantize_save(baked, tpl, kart_obj, out_dir, state.output_mode)
         except Exception as e:
             self.report({'ERROR'}, f"Save failed: {e}")
             bpy.data.images.remove(baked)
             return {'CANCELLED'}
 
         bpy.data.images.remove(baked)
-
         _redraw_view3d(context)
         self.report({'INFO'}, f"Wrote {n} PNGs to {out_dir}")
         return {'FINISHED'}

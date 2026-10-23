@@ -80,7 +80,7 @@ def _build_graph(material, images_by_slot):
         links.new(ov.outputs['Color'], mix.inputs[1])
         mix_shaders.append(mix)
 
-    # Unir todos los mix shaders
+    # Merge all mix shaders
     current_shader = mix_shaders[0].outputs['Shader']
     for i, mix in enumerate(mix_shaders[1:], start=1):
         add_node = nodes.new('ShaderNodeAddShader')
@@ -104,64 +104,85 @@ class NFR_OT_KartImportTemplate(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         state = scene.kart_state
-
         tpl = KART_TEMPLATES.get(state.template_option)
-        if tpl is None:
-            self.report({'ERROR'}, f"Unknown template: {state.template_option}")
-            return {'CANCELLED'}
+        if tpl is None: return {'CANCELLED'}
 
         asset_dir = tpl.get("asset_dir", "")
+        
+        # =====================================================================
+        # HOVERCRAFT (Same FBX for both modes)
+        # =====================================================================
+        if tpl.get("is_vertex_color"):
+            fbx_path = _ASSETS_DIR / asset_dir / tpl["fbx_name"]
+            if not fbx_path.is_file():
+                self.report({'ERROR'}, f"FBX not found: {fbx_path}")
+                return {'CANCELLED'}
+                
+            _wipe_previous_kart(tpl["material_prefix"])
+            bpy.ops.import_scene.fbx(filepath=str(fbx_path))
+            
+            obj = context.active_object
+            if not obj:
+                for o in context.selected_objects:
+                    if o.type == 'MESH': obj = o; break
+                    
+            if obj and obj.type == 'MESH':
+                if not obj.data.color_attributes:
+                    obj.data.color_attributes.new(name="Color", type='BYTE_COLOR', domain='CORNER')
+                obj.data.color_attributes.active_color = obj.data.color_attributes[0]
+                
+                target_mat_name = "969_208_18_248_4_16"
+                slot_idx = -1
+                for i, slot in enumerate(obj.material_slots):
+                    if slot.material and target_mat_name in slot.material.name:
+                        slot_idx = i; break
+                        
+                if slot_idx != -1:
+                    mat = obj.material_slots[slot_idx].material
+                    if mat and mat.use_nodes:
+                        nodes = mat.node_tree.nodes
+                        links = mat.node_tree.links
+                        
+                        # No nodes. Pure Vertex Colors.
+
+                state.is_imported = True
+                state.material_name = obj.material_slots[0].material.name if obj.material_slots else ""
+                _redraw_view3d(context)
+            return {'FINISHED'}
+
+        # =====================================================================
+        # NORMAL LOGIC (Kart, Hi-Kart, Velo)
+        # =====================================================================
         mode = state.template_mode
-        
-        # Forzar DEFAULT en modo USER para evitar errores de variante
-        variant = state.variant if mode == "EDIT" else "DEFAULT"
-        
-        tex_map = tpl["variant_textures"].get(variant)
-        if not tex_map:
-            tex_map = list(tpl["variant_textures"].values())[0]
+        variant = state.variant if (mode == "EDIT" and not tpl.get("is_vertex_color")) else "DEFAULT"
+        tex_map = tpl["variant_textures"].get(variant, {})
+        if not tex_map and tpl["variant_textures"]: tex_map = list(tpl["variant_textures"].values())[0]
 
         fbx_name = tpl["fbx_name"] if mode == "EDIT" else tpl["fbx_name"].replace(".fbx", "_user.fbx")
         fbx_path = _ASSETS_DIR / asset_dir / fbx_name
-        
-        if not fbx_path.is_file():
-            self.report({'ERROR'}, f"FBX not found: {fbx_path}")
-            return {'CANCELLED'}
+        if not fbx_path.is_file(): return {'CANCELLED'}
 
         prev_colors = {z.display_name: tuple(z.color) for z in state.zones}
         _wipe_previous_kart(tpl["material_prefix"])
         bpy.ops.import_scene.fbx(filepath=str(fbx_path))
 
         if mode == "USER":
-            # The FBX already has embedded textures. Solo marcamos como importado y salimos.
             state.is_imported = True
-            state.material_name = ""
             _redraw_view3d(context)
-            self.report({'INFO'}, f"User Template '{tpl['display_name']}' imported (Textures Embedded)")
             return {'FINISHED'}
 
-        # Modo EDIT
         material = _find_template_material(tpl["material_prefix"])
-        if material is None:
-            self.report({'ERROR'}, "No material found after import")
-            return {'CANCELLED'}
-
-        material.use_nodes = True
-        images_by_slot = {slot: _load_png(png, asset_dir) for slot, png in tex_map.items()}
-        rgb_nodes_in_order = _build_graph(material, images_by_slot)
-
-        state.zones.clear()
-        for (zone_name, slot_name), (slot, rgb_node) in zip(tpl["zones"], rgb_nodes_in_order):
-            z = state.zones.add()
-            z.display_name = zone_name
-            z.node_name    = rgb_node.name
-            z.color        = (1.0, 1.0, 1.0)
-            rgb_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
-
-        state.material_name = material.name
-        state.is_imported   = True
-
-        _redraw_view3d(context)
-        self.report({'INFO'}, f"Template '{tpl['display_name']}' imported ({variant})")
+        if material:
+            material.use_nodes = True
+            images_by_slot = {slot: _load_png(png, asset_dir) for slot, png in tex_map.items()}
+            rgb_nodes_in_order = _build_graph(material, images_by_slot)
+            state.zones.clear()
+            for (zone_name, slot_name), (slot, rgb_node) in zip(tpl["zones"], rgb_nodes_in_order):
+                z = state.zones.add(); z.display_name = zone_name; z.node_name = rgb_node.name
+                z.color = (1.0, 1.0, 1.0); rgb_node.outputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+            state.material_name = material.name
+            state.is_imported = True
+            _redraw_view3d(context)
         return {'FINISHED'}
 
 

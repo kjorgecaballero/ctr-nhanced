@@ -3,9 +3,9 @@
 # =========================================================================
 """Kart template editor.
 
-Fase 1: import + color pickers.
-Fase 2: bake + cut + quantize + save to preset folder.
-Fase 3: preset browser + apply to racer.
+Phase 1: import + color pickers.
+Phase 2: bake + cut + quantize + save to preset folder.
+Phase 3: preset browser + apply to racer.
 """
 from . import state, importer, baker, presets
 

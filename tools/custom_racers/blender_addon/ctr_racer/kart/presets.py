@@ -24,9 +24,10 @@ import bpy
 
 from ..prefs import _get_prefs
 from ..core.helpers import _redraw_view3d
+from .templates import KART_TEMPLATES
 
 
-_VARIANT_DIRS = ("kart/default", "kart/gold", "kart/silver", "hi_kart/default", "hi_kart/gold", "hi_kart/silver", "velo_chopper/default")
+_VARIANT_DIRS = tuple(set(v for tpl in KART_TEMPLATES.values() for v in tpl.get("variant_dirs", {}).values()))
 _EXTENSIONS = (".png", ".jpg", ".jpeg", ".tga", ".bmp")
 
 
@@ -87,13 +88,14 @@ def _find_target_images(obj):
 
 def _replace_image_pixels(target_img, preset_path):
     """Replace the pixel buffer of `target_img` with the preset PNG.
-    Sizes must match; original file on disk is not touched."""
+    If sizes mismatch slightly, auto-scale the image to fit."""
     src = bpy.data.images.load(str(preset_path), check_existing=False)
     try:
         if tuple(src.size) != tuple(target_img.size):
-            raise ValueError(
-                f"size mismatch: target={tuple(target_img.size)} "
-                f"vs preset={tuple(src.size)}")
+            # Auto-scale the image to fit (avoids size mismatch)
+            print(f"Auto-resizing {preset_path.name} from {tuple(src.size)} to {tuple(target_img.size)}")
+            src.scale(target_img.size[0], target_img.size[1])
+            
         target_img.pixels = list(src.pixels)
         target_img.update()
     finally:
@@ -122,12 +124,65 @@ class NFR_OT_KartApplyPreset(bpy.types.Operator):
             self.report({'ERROR'}, f"Preset not found: {preset_path}")
             return {'CANCELLED'}
 
+        # First, check if it is a Hovercraft preset (JSON)
+        json_path = preset_path / "preset.json"
+        if json_path.is_file():
+            try:
+                import json
+                import colorsys
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                
+                h = data.get("hue", 0.5)
+                s = data.get("saturation", 1.0)
+                v = data.get("value", 1.0)
+                
+                context.scene.kart_state.hover_hue = h
+                context.scene.kart_state.hover_saturation = s
+                context.scene.kart_state.hover_value = v
+
+                if not obj.data.color_attributes.active_color:
+                    obj.data.color_attributes.new(name="Color", type='BYTE_COLOR', domain='CORNER')
+                color_layer = obj.data.color_attributes.active_color
+                
+                if "orig_vcols" not in obj:
+                    obj["orig_vcols"] = [list(c.color) for c in color_layer.data]
+                orig_colors = obj["orig_vcols"]
+
+                target_mat_prefix = "969_208_18_248_4_16"
+                target_slot_idx = -1
+                for i, slot in enumerate(obj.material_slots):
+                    if slot.material and target_mat_prefix in slot.material.name:
+                        target_slot_idx = i; break
+                if target_slot_idx == -1: target_slot_idx = 0
+
+                for poly in obj.data.polygons:
+                    if poly.material_index == target_slot_idx:
+                        for loop_idx in poly.loop_indices:
+                            if loop_idx < len(orig_colors):
+                                r, g, b = orig_colors[loop_idx][:3]
+                                ch, cs, cv = colorsys.rgb_to_hsv(r, g, b)
+                                nh = (ch + (h - 0.5)) % 1.0
+                                ns = min(1.0, max(0.0, cs * s))
+                                nv = min(1.0, max(0.0, cv * v))
+                                nr, ng, nb = colorsys.hsv_to_rgb(nh, ns, nv)
+                                color_layer.data[loop_idx].color = (nr, ng, nb, 1.0)
+                
+                obj.data.update()
+                _redraw_view3d(context)
+                self.report({'INFO'}, "Hovercraft HSV applied from JSON")
+                return {'FINISHED'}
+            except Exception as e:
+                self.report({'ERROR'}, f"Failed to read preset.json: {e}")
+                return {'CANCELLED'}
+
+        # If not JSON, continue with PNG textures logic
         preset_files = {}
         for png in preset_path.glob("*.png"):
             preset_files[png.stem.lower()] = png
 
         if not preset_files:
-            self.report({'ERROR'}, "Preset has no kart_NN.png files")
+            self.report({'ERROR'}, "Preset has no files")
             return {'CANCELLED'}
 
         targets = _find_target_images(obj)

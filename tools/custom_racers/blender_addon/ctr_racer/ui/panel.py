@@ -461,7 +461,7 @@ class NFR_PT_Racer(Panel):
         col = box.column(align=True)
         col.prop(st, "template_mode", text="Mode")
         col.prop(st, "template_option", text="Template")
-        if st.template_mode == 'EDIT':
+        if st.template_mode == 'EDIT' and st.template_option != 'HOVERCRAFT':
             col.prop(st, "variant", text="Variant")
 
         col.separator()
@@ -474,10 +474,19 @@ class NFR_PT_Racer(Panel):
         # El resto es solo para modo EDIT
         if st.is_imported:
             layout.separator()
-            layout.label(text="Color Zones", icon="COLOR")
-            col = layout.column(align=True)
-            for z in st.zones:
-                col.prop(z, "color", text=z.display_name)
+            # Si es Hovercraft, mostramos el Color Picker
+            if st.template_option == 'HOVERCRAFT':
+                layout.label(text="Hovercraft Color (HSV)", icon="COLOR")
+                col = layout.column(align=True)
+                col.prop(st, "hover_hue", slider=True)
+                col.prop(st, "hover_saturation", slider=True)
+                col.prop(st, "hover_value", slider=True)
+            else:
+                # Si son las otras plantillas, mostramos sus zonas
+                layout.label(text="Color Zones", icon="COLOR")
+                col = layout.column(align=True)
+                for z in st.zones:
+                    col.prop(z, "color", text=z.display_name)
 
             layout.separator()
             layout.operator("nfr.kart_reset_colors", icon="LOOP_BACK")
@@ -524,7 +533,8 @@ class NFR_PT_Racer(Panel):
         box = layout.box()
         box.label(text="Filter Presets:", icon="FILTER")
         box.prop(st, "template_filter", text="Template")
-        box.prop(st, "variant_filter", text="Variant")
+        if st.template_filter != 'HOVERCRAFT':
+            box.prop(st, "variant_filter", text="Variant")
         layout.separator()
 
         # LÓGICA DINÁMICA (Lee directamente de templates.py)
