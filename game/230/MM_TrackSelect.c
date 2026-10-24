@@ -1,5 +1,6 @@
 #include <common.h>
 #include "platform/native_debug.h"
+#include <stdlib.h>
 
 static int s_dbgTrackSel = -1;
 static int TrackSelDbg(void) { return NativeDbg_Enabled(&s_dbgTrackSel, "CTR_DBG_GHOST"); }
@@ -83,27 +84,37 @@ enum
 // would silently alias a battle row. We materialize a dedicated
 // buffer here instead, so any consumer (MenuProc, Video_Draw, the
 // hidden-rows scan, ...) can index [0 .. 18+N-1] safely.
-#define MM_TRACK_SELECT_CUSTOM_TRACK_MAX 16
-#define MM_TRACK_SELECT_TOTAL_TRACK_MAX (MM_TRACK_SELECT_ARCADE_TRACK_COUNT + MM_TRACK_SELECT_CUSTOM_TRACK_MAX)
-
-static struct MainMenu_LevelRow s_combinedArcadeTracks[MM_TRACK_SELECT_TOTAL_TRACK_MAX];
+static struct MainMenu_LevelRow *s_combinedArcadeTracks = NULL;
+static int s_combinedArcadeTracksCapacity = 0;
 static s16 s_combinedArcadeTrackCount = 0;
 
 // Battle arenas: same pattern as the arcade array. D230.battleTracks[7]
 // is copied first, then the additional custom arenas are appended.
-#define MM_TRACK_SELECT_CUSTOM_BATTLE_MAX 16
-#define MM_TRACK_SELECT_TOTAL_BATTLE_MAX (MM_TRACK_SELECT_BATTLE_TRACK_COUNT + MM_TRACK_SELECT_CUSTOM_BATTLE_MAX)
-
-static struct MainMenu_LevelRow s_combinedBattleTracks[MM_TRACK_SELECT_TOTAL_BATTLE_MAX];
+static struct MainMenu_LevelRow *s_combinedBattleTracks = NULL;
+static int s_combinedBattleTracksCapacity = 0;
 static s16 s_combinedBattleTrackCount = 0;
 
 static void MM_TrackSelect_PopulateCustomTracks(void)
 {
 	int n = LevelRegistry_GetAdditionalCount();
+	int needed = MM_TRACK_SELECT_ARCADE_TRACK_COUNT + n;
 	int i;
 
-	if (n > MM_TRACK_SELECT_CUSTOM_TRACK_MAX)
-		n = MM_TRACK_SELECT_CUSTOM_TRACK_MAX;
+	if (needed > s_combinedArcadeTracksCapacity)
+	{
+		struct MainMenu_LevelRow *newBuf = (struct MainMenu_LevelRow *)
+		    realloc(s_combinedArcadeTracks, (size_t)needed * sizeof(struct MainMenu_LevelRow));
+		if (newBuf == NULL)
+		{
+			fprintf(stderr, "[TrackSelect] ERROR: realloc %d arcade rows failed, customs disabled\n", needed);
+			n = 0;
+		}
+		else
+		{
+			s_combinedArcadeTracks = newBuf;
+			s_combinedArcadeTracksCapacity = needed;
+		}
+	}
 
 	// Copy all 18 retail rows first.
 	memcpy(s_combinedArcadeTracks, D230.arcadeTracks, sizeof(D230.arcadeTracks));
@@ -140,10 +151,24 @@ static void MM_TrackSelect_PopulateCustomTracks(void)
 static void MM_TrackSelect_PopulateCustomBattleTracks(void)
 {
 	int n = LevelRegistry_GetAdditionalBattleCount();
+	int needed = MM_TRACK_SELECT_BATTLE_TRACK_COUNT + n;
 	int i;
 
-	if (n > MM_TRACK_SELECT_CUSTOM_BATTLE_MAX)
-		n = MM_TRACK_SELECT_CUSTOM_BATTLE_MAX;
+	if (needed > s_combinedBattleTracksCapacity)
+	{
+		struct MainMenu_LevelRow *newBuf = (struct MainMenu_LevelRow *)
+		    realloc(s_combinedBattleTracks, (size_t)needed * sizeof(struct MainMenu_LevelRow));
+		if (newBuf == NULL)
+		{
+			fprintf(stderr, "[TrackSelect] ERROR: realloc %d battle rows failed, customs disabled\n", needed);
+			n = 0;
+		}
+		else
+		{
+			s_combinedBattleTracks = newBuf;
+			s_combinedBattleTracksCapacity = needed;
+		}
+	}
 
 	// Copy all 7 retail battle rows first.
 	memcpy(s_combinedBattleTracks, D230.battleTracks, sizeof(D230.battleTracks));
