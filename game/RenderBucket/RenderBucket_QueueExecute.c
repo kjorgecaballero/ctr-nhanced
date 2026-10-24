@@ -1185,7 +1185,7 @@ static void RenderBucket_AdjustViewPositionForMvp(struct Instance *inst, VECTOR 
 	// to match the full-scale model matrix; DRAW_HUGE shifts that translation
 	// back down.
 #ifdef CTR_NATIVE
-	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
+	if (inst->model != NULL &&
 	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED || inst->model->id == PU_EXPLOSIVE_CRATE) &&
 	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
 	    inst->thread != NULL && (inst->thread->funcThTick == (void *)RB_GenericMine_ThTick || inst->thread->funcThTick == (void *)RB_Potion_ThTick_InAir))
@@ -1436,7 +1436,7 @@ static void RenderBucket_BuildM3x3(struct Instance *inst, struct ModelHeader *mh
 	RenderBucket_GteScaleMatrixColumns(&m0, &m1, &m2, &m3, &m4);
 
 #ifdef CTR_NATIVE
-	if (sdata->gGT->numPlyrCurrGame > 2 && inst->model != NULL &&
+	if (inst->model != NULL &&
 	    (inst->model->id == STATIC_CRATE_TNT || inst->model->id == STATIC_BEAKER_GREEN || inst->model->id == STATIC_BEAKER_RED || inst->model->id == PU_EXPLOSIVE_CRATE) &&
 	    (LevelRegistry_GetActive() != NULL || LevelRegistry_GetReplacement(sdata->gGT->levelID) != NULL) &&
 	    inst->thread != NULL && (inst->thread->funcThTick == (void *)RB_GenericMine_ThTick || inst->thread->funcThTick == (void *)RB_Potion_ThTick_InAir))
