@@ -2,6 +2,8 @@
 #include <platform/native_custom_racer.h>
 #ifdef CTR_NATIVE
 #include <LevelRegistry.h>
+#include <platform/native_renderer.h>
+extern void NativeLevelTextures_Reset(void);
 #endif
 
 void (*mainMenuInit[])() = {MM_JumpTo_Title_FirstTime, MM_JumpTo_Characters, MM_JumpTo_TrackSelect, MM_JumpTo_BattleSetup, CS_Garage_Init, MM_JumpTo_Scrapbook};
@@ -40,20 +42,7 @@ static int LOAD_IsCustomLevel(int levelID)
 	const struct LevelDef *active = LevelRegistry_GetActive();
 	if (active != NULL && active->baseLevelID == levelID)
 		return 1;
-
-	// Fallback for replace-based customs that bypass SetActive
-	// (3P/4P VS Track Select does not call SetActive). Without this,
-	// levelLOD stays at numPlyrCurrGame in 3P/4P, the collision
-	// search falls through to LOW LOD (which custom LEVs do not
-	// ship), and every kart gets snapped to a phantom ground plane.
-	//
-	// Skip MAIN_MENU_LEVEL: during the first boot load, NativeAssets
-	// is not yet initialised and LevelRegistry_GetReplacement would
-	// trigger a premature LevelRegistry_Load.
-	if (levelID == MAIN_MENU_LEVEL)
-		return 0;
-
-	return LevelRegistry_GetReplacement(levelID) != NULL;
+	return 0;
 }
 #endif
 
@@ -231,6 +220,20 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 
 #ifdef CTR_NATIVE
+		// [CUP-FIX] If we are loading a level without an active custom
+		// track, make sure s_activeLevel is NULL so we don't use the
+		// Sentinel path and render holes in retail tracks.
+		const struct LevelDef *active = LevelRegistry_GetActive();
+		if (active != NULL && active->baseLevelID == levelID) {
+			// Es un track custom, lo dejamos.
+		} else {
+			LevelRegistry_SetActive(NULL);
+			/* Drop every trace of a previous custom level (GL pages, hide bits,
+			 * virtual VRAM). Needed because a custom track with base=crash_cove
+			 * shares levelID with retail Crash Cove. */
+			NativeLevelTextures_Reset();
+		}
+
 		if (LOAD_IsCustomLevel(levelID))
 		{
 			// Custom levels are only exported for 1P LOD. Forcing LOD_1P
@@ -553,8 +556,14 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 
 		if (NativeLevelTextures_IsCustomLevelActive())
 		{
+			/* Sentinel pages for the level geometry... */
 			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, sdata->levelLOD, LVI_VRAM);
 		}
+		/* ...and ALWAYS upload the VRM to real VRAM too. Model instances
+		 * (crates, animated models, enemies) are not patched to sentinel
+		 * and sample real VRAM. The old holes in retail Crash Cove were
+		 * caused by stale hide bits, not by this upload (fixed in
+		 * NativeLevelTextures_Reset), and retail loads overwrite it. */
 		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
 
 		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);

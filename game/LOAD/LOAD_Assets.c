@@ -277,17 +277,51 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 
 			if (NativeSettings_GetBotRandomizer() != 0)
 			{
+				static u8 s_cupBotIDs[LOAD_CHARACTER_ID_COUNT];
+				static int s_cupBotSaved = 0;
+				int isCup = (gGT->gameMode2 & CUP_ANY_KIND) != 0;
+				int isFirstRace = (gGT->cup.trackIndex == 0);
+
+				if (!isCup) {
+					s_cupBotSaved = 0;
+				}
+
 				u32 packMask = 0;
 				for (i = 1; i < LOAD_CHARACTER_ID_COUNT; i++)
 					packMask |= 1u << data.characterIDs[i];
 
-				int reserve = NativeCustomRacer_HasSlot(data.characterIDs[0]) ? 1 : 2;
-				int hiBudget = LOAD_QUEUE_SLOT_COUNT - (int)sdata->queueLength - reserve;
-				if (hiBudget < 0) hiBudget = 0;
+				if (isCup && !isFirstRace && s_cupBotSaved) {
+					// Races 2, 3, 4: Restore the bots from race 1
+					for (i = 1; i < LOAD_CHARACTER_ID_COUNT; i++) {
+						int cid = s_cupBotIDs[i];
+						if (cid >= NATIVE_CUSTOM_ID_BASE) {
+							// Try to load the custom model. If it fails, fallback to retail!
+							if (!NativeCustomRacer_LoadBotModel(i, cid)) {
+								data.characterIDs[i] = (u8)i; // Fallback a un ID retail válido
+							} else {
+								data.characterIDs[i] = (u8)cid;
+							}
+						} else {
+							data.characterIDs[i] = (u8)cid;
+						}
+					}
+				} else {
+					// Race 1 or single race: Generate new bots
+					int reserve = NativeCustomRacer_HasSlot(data.characterIDs[0]) ? 1 : 2;
+					int hiBudget = LOAD_QUEUE_SLOT_COUNT - (int)sdata->queueLength - reserve;
+					if (hiBudget < 0) hiBudget = 0;
 
-				LOAD_PickBots(1, LOAD_CHARACTER_ID_COUNT - 1, 1,
-				              NativeSettings_GetBotRandomizer() == 2,
-				              packMask, hiBudget);
+					LOAD_PickBots(1, LOAD_CHARACTER_ID_COUNT - 1, 1,
+					              NativeSettings_GetBotRandomizer() == 2,
+					              packMask, hiBudget);
+
+					if (isCup) {
+						for (i = 1; i < LOAD_CHARACTER_ID_COUNT; i++) {
+							s_cupBotIDs[i] = (u8)data.characterIDs[i];
+						}
+						s_cupBotSaved = 1;
+					}
+				}
 
 				for (i = 1; i < LOAD_CHARACTER_ID_COUNT; i++)
 				{

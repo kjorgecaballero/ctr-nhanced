@@ -10,11 +10,18 @@ extern int  NativeCustomRacer_AllocTexIdx(void);
 extern void NativeCustomRacer_FreeTexIdx(int idx);
 extern int LOAD_GetBigfileIndex(int levelID, int levelLOD, int subfileIndex);
 
+/* Forward declaration: used by IsBlockHidden / LookupPage / PatchTL before
+ * its definition further down. */
+int NativeLevelTextures_IsCustomLevelActive(void);
+
 static u32 s_hideBits[65536 / 32];
 static int s_hideBitsLevelID = -1;
 static void NltMarkHidden(u32 id) { s_hideBits[(id >> 5) & 0x7ff] |= (1u << (id & 31)); }
 int NativeLevelTextures_IsBlockHidden(int blockID) {
     if (sdata == NULL || sdata->gGT == NULL) return 0;
+    /* Stale hide bits from a previous custom level must never affect a
+     * retail level that shares the same levelID (e.g. base = crash_cove). */
+    if (!NativeLevelTextures_IsCustomLevelActive()) return 0;
     if (sdata->gGT->levelID != s_hideBitsLevelID) return 0;
     u32 id = (u16)blockID;
     return (s_hideBits[(id >> 5) & 0x7ff] >> (id & 31)) & 1;
@@ -47,6 +54,10 @@ int NativeLevelTextures_IsBlockHidden(int blockID) {
  * A layout is only patched if its page (and its CLUT, if indexed) falls
  * within the VRM rects; otherwise it stays on real VRAM as before.
  *
+ * All state here is only valid while a custom level is active. It is
+ * released by NativeLevelTextures_Reset(), which LOAD_TenStages calls
+ * whenever a non-custom level is loaded.
+ *
  * NLT_DUMP=1 dumps nlt_timN.tga (raw VRM read as RGB555, for inspection
  * only) and nlt_page_<tpage>_<clutX>_<clutY>.tga (final pages).
  * NLT_MAP has no effect anymore.
@@ -60,6 +71,11 @@ static int s_ltCount = 0;
 struct NltPage { u16 tpage, clut, idx; };
 static struct NltPage s_pg[NLT_MAX_PAGES];
 static int s_pgCount = 0;
+
+/* TextureLayouts already patched for the current level. Declared here (not
+ * next to NltPatchOne) so NativeLevelTextures_Reset can clear it. */
+static struct TextureLayout *s_seen[4096];
+static int s_seenCount = 0;
 
 /* Raw VRAM copy as left by the VRM (1024x512 halfwords). */
 static u16 s_vv[1024 * 512];
@@ -136,9 +152,6 @@ static void NltExpand16(u16 px, u8 *dst)
     dst[0] = (u8)(((px >>  0) & 0x1F) << 3);
     dst[1] = (u8)(((px >>  5) & 0x1F) << 3);
     dst[2] = (u8)(((px >> 10) & 0x1F) << 3);
-    /* Binary STP flag in alpha: 0 = STP=1 (blend in pass 2), 255 = STP=0
-     * (opaque in pass 1). The 32-bit shader reads this to reproduce the
-     * same 2-pass blend retail does for VRAM textures. */
     /* 3-way alpha:
      *   0   = fully transparent texel (never drawn, used by 0x0000)
      *   128 = STP=1 (pass 2, blended)
@@ -214,6 +227,21 @@ static void NltFreeDecoded(void)
         NativeCustomRacer_FreeTexIdx((int)s_pg[i].idx);
     }
     s_pgCount = 0;
+}
+
+/* Drops ALL custom-level state (GL textures, virtual VRAM, hide bits, patch
+ * bookkeeping). Called by LOAD_TenStages when a non-custom level is loaded,
+ * so nothing from a previous custom track leaks into retail tracks that
+ * share the same levelID (e.g. a custom track with base = crash_cove).
+ * Safe to call repeatedly: when nothing is allocated it only clears memory. */
+void NativeLevelTextures_Reset(void)
+{
+    NltFreeDecoded();
+    memset(s_vv, 0, sizeof(s_vv));
+    memset(s_hideBits, 0, sizeof(s_hideBits));
+    s_hideBitsLevelID = -1;
+    s_seenCount = 0;
+    s_dbgN = 0;
 }
 
 int NativeLevelTextures_DecodeVRM(const u8 *buf, int size)
@@ -338,8 +366,7 @@ int NativeLevelTextures_IsCustomLevelActive(void)
     int levelID = sdata->gGT->levelID;
     const struct LevelDef *active = LevelRegistry_GetActive();
     if (active != NULL && active->baseLevelID == levelID) return 1;
-    if (levelID == MAIN_MENU_LEVEL) return 0;
-    return LevelRegistry_GetReplacement(levelID) != NULL;
+    return 0;
 }
 
 static struct TextureLayout *NltResolveTL(u32 p)
@@ -443,9 +470,6 @@ static int NltGetPage(u16 tpage, u16 clut)
     return idx;
 }
 
-static struct TextureLayout *s_seen[4096];
-static int s_seenCount = 0;
-
 /* 1 if 'idx' is the index of a page built for the current level. */
 static int NltIsPageIdx(u16 idx)
 {
@@ -479,12 +503,6 @@ static void NltPatchOne(struct TextureLayout *tl, int isLow)
      * row. Everything else stays on real VRAM as before. */
     int inVrm = NltTouches(tpX, tpY, wHW, 256) && (mode >= 2 || NltCovered(cx, cy));
 
-    /* [DREAMY-BLEED] Dreamy Heights references a texture at X=0 that is
-     * not present in the VRM. Force it to use a blank page so it renders
-     * invisible instead of reading the framebuffer (rainbow). */
-    if (!inVrm && tpage == 0x0080 && clut == 0x0002) {
-        inVrm = 1; // Force NltGetPage to build a blank page
-    }
 
     int pg = inVrm ? NltGetPage(tpage, clut) : -1;
     if (pg >= 0) {
@@ -505,6 +523,65 @@ static int NltPointsIntoLevelHeader(const struct TextureLayout *tl, const struct
 static int NltIsTriggerOnlyBlock(const struct QuadBlock *qb)
 {
     return (qb->quadFlags & (0x0040 | 0x8000)) != 0;
+}
+
+/* Animated textures.
+ * CTR_CycleTex_LEV / CTR_CycleTex_Model swap AnimTex->ptrActiveTex between
+ * the frames of ptrarray[] every tick. The QuadBlock walk in PatchLev only
+ * resolves ptrActiveTex once, so only the frame that was active at load time
+ * got a sentinel clut. Every other frame kept its raw VRAM clut and sampled
+ * real VRAM, which no longer holds the custom VRM (=> rainbow noise).
+ * Walk every frame of every AnimTex and patch it like a normal layout.
+ * Traversal mirrors CTR_CycleTex_LEV (list ends when the first word equals
+ * the address of the first AnimTex). */
+static int NltPatchAnimList(struct AnimTex *first, const struct Level *lev)
+{
+    if (first == NULL) return 0;
+
+    int patched = 0;
+    int guard = 0;
+    struct AnimTex *cur = first;
+
+    while (*(int *)cur != (int)first && guard++ < 1024) {
+        int n = cur->numFrames;
+        struct IconGroup4 **arr = ANIMTEX_GETARRAY(cur);
+        if (n <= 0 || n > 1024) break;
+
+        for (int i = 0; i < n; i++) {
+            /* Each frame is an IconGroup4* (far/middle/near/mosaic), not a
+             * TextureLayout*. Patch all four; NltPatchOne dedups. */
+            struct IconGroup4 *g = arr[i];
+            if (g == NULL) continue;
+            if (NltPointsIntoLevelHeader(&g->far, lev)) continue;
+            NltPatchOne(&g->far, 1);
+            NltPatchOne(&g->middle, 0);
+            NltPatchOne(&g->near, 0);
+            NltPatchOne(&g->mosaic, 0);
+            patched++;
+        }
+        cur = (struct AnimTex *)&arr[n];
+    }
+    return patched;
+}
+
+static void NltPatchAnimTex(struct Level *lev)
+{
+    int levFrames = NltPatchAnimList(lev->ptr_anim_tex, lev);
+    int modelFrames = 0;
+
+    if (lev->ptrModelsPtrArray != NULL) {
+        for (u32 m = 0; m < lev->numModels; m++) {
+            struct Model *pModel = lev->ptrModelsPtrArray[m];
+            if (pModel == NULL) break;
+            for (int h = 0; h < pModel->numHeaders; h++) {
+                struct ModelHeader *hdr = &pModel->headers[h];
+                if (hdr->animtex != NULL && (hdr->flags & 2) == 0)
+                    modelFrames += NltPatchAnimList(hdr->animtex, lev);
+            }
+        }
+    }
+    fprintf(stderr, "[NLT] AnimTex: patched %d level frames, %d model frames\n",
+            levFrames, modelFrames);
 }
 
 void NativeLevelTextures_PatchLev(struct Level *lev)
@@ -543,6 +620,8 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
             }
         }
     }
+    NltPatchAnimTex(lev);
+
     fprintf(stderr, "[NLT] skipped %d texture ptrs that pointed into the Level header\n", skippedHeader);
     fprintf(stderr, "[NLT] PatchLev: %d QB, %d unique TL, %d decoded, %d pages\n",
             mesh->numQuadBlock, s_seenCount, s_ltCount, s_pgCount);
@@ -558,8 +637,8 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
 int NativeLevelTextures_LookupPage(u16 tpage, u16 clut)
 {
     if (s_pgCount == 0) return -1;
+    if (!NativeLevelTextures_IsCustomLevelActive()) return -1;
 
-    
     const u16 key = tpage & 0x019F;
     for (int i = 0; i < s_pgCount; i++)
         if (s_pg[i].tpage == key && s_pg[i].clut == clut) return s_pg[i].idx;
@@ -568,5 +647,6 @@ int NativeLevelTextures_LookupPage(u16 tpage, u16 clut)
 
 void NativeLevelTextures_PatchTL(struct TextureLayout *tl)
 {
+    if (!NativeLevelTextures_IsCustomLevelActive()) return;
     NltPatchOne(tl, 1);
 }
