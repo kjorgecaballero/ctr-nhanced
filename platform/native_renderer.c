@@ -2566,25 +2566,10 @@ void NativeRenderer_PresentVRAMRect(int displayX, int displayY, int displayW, in
 		return;
 	}
 
-	// RES-ARCH: at N>1 blit main FBO straight to window (skip VRAM).
-	if (s_internalScale > 1 && s_mainRenderTarget.framebuffer != 0)
-	{
-		glDisable(GL_SCISSOR_TEST);
-		glDisable(GL_BLEND);
-		glDisable(GL_DEPTH_TEST);
-		glDisable(GL_STENCIL_TEST);
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, s_mainRenderTarget.framebuffer);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-		glBlitFramebuffer(0, 0, s_mainRenderTarget.width, s_mainRenderTarget.height,
-		                  s_presentViewport.x, s_presentViewport.y,
-		                  s_presentViewport.x + s_presentViewport.w,
-		                  s_presentViewport.y + s_presentViewport.h,
-		                  GL_COLOR_BUFFER_BIT, GL_LINEAR);
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		s_previousShader = (ShaderID)-1;
-		s_lastBoundTexture = (TextureID)-1;
-		return;
-	}
+	// RES-ARCH: Removed the internalScale > 1 bypass.
+	// VRAM is the source of truth for videos (Scrapbook) and the main FBO
+	// (via StoreFrameBuffer). Blitting the main FBO directly caused a black
+	// screen during Scrapbook playback because it ignored the uploaded video.
 
 	NativeRenderer_UpdateVRAM();
 
