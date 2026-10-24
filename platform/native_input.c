@@ -577,7 +577,22 @@ internal void NativeInput_ApplyKeyboard(s32 slot, u16 keyboardButtons)
 		return;
 	}
 
-	NativeInput_SetSnapshotButtons(snapshot, buttons);
+	// Forzar conexión para P2 (slot 1) siempre, para que el motor no haga fallback.
+	// Para P3 y P4, solo conectar si se presiona una tecla (para no activar multitap innecesariamente).
+	if (slot == 1)
+	{
+		snapshot->connected = 1;
+		snapshot->status = 0;
+		snapshot->id = NATIVE_INPUT_PAD_DIGITAL;
+		NativeInput_SetSnapshotButtons(snapshot, buttons);
+	}
+	else if (buttons != 0xffff)
+	{
+		snapshot->connected = 1;
+		snapshot->status = 0;
+		snapshot->id = NATIVE_INPUT_PAD_DIGITAL;
+		NativeInput_SetSnapshotButtons(snapshot, buttons);
+	}
 }
 
 internal s32 NativeInput_FindActiveControllerSlot(void)
@@ -877,11 +892,20 @@ int Platform_InputPadGetState(int port)
 	}
 	else
 	{
-		if (tap != 0)
+		// Sin multitap, el puerto 1 es P2 y usa el teclado.
+		// Los puertos 2 y 3 no existen sin multitap.
+		if (tap == 0)
+		{
+			slot = physicalSlot; // puerto 0 -> P1
+		}
+		else if (tap == 1 && physicalSlot == 0)
+		{
+			slot = 1; // puerto 1 -> P2
+		}
+		else
 		{
 			return PadStateDiscon;
 		}
-		slot = physicalSlot;
 	}
 
 	if ((slot < 0) || (slot >= NATIVE_INPUT_MAX_CONTROLLERS))
