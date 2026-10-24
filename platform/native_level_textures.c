@@ -478,6 +478,14 @@ static void NltPatchOne(struct TextureLayout *tl, int isLow)
     /* Only patch what the VRM provides: the page and, if indexed, the CLUT
      * row. Everything else stays on real VRAM as before. */
     int inVrm = NltTouches(tpX, tpY, wHW, 256) && (mode >= 2 || NltCovered(cx, cy));
+
+    /* [DREAMY-BLEED] Dreamy Heights references a texture at X=0 that is
+     * not present in the VRM. Force it to use a blank page so it renders
+     * invisible instead of reading the framebuffer (rainbow). */
+    if (!inVrm && tpage == 0x0080 && clut == 0x0002) {
+        inVrm = 1; // Force NltGetPage to build a blank page
+    }
+
     int pg = inVrm ? NltGetPage(tpage, clut) : -1;
     if (pg >= 0) {
         tl->clut = (u16)(NLT_SENT | pg);
@@ -513,6 +521,8 @@ void NativeLevelTextures_PatchLev(struct Level *lev)
     int skippedHeader = 0;
     struct mesh_info *mesh = lev->ptr_mesh_info;
     struct QuadBlock *qb = mesh->ptrQuadBlockArray;
+
+
     for (int i = 0; i < mesh->numQuadBlock; i++, qb++) {
         for (int f = 0; f < 4; f++) {
             struct TextureLayout *tl = NltResolveTL((u32)qb->ptr_texture_mid[f]);
