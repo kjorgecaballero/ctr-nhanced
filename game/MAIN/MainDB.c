@@ -53,6 +53,8 @@ void MainDB_PrimMem(struct PrimMem *primMem, u32 size)
 	pvVar1 = (void *)((int)pvVar1 + alignedSize);
 	primMem->end = pvVar1;
 	primMem->guardEnd = (void *)((int)pvVar1 - 0x100);
+
+	NativeSubpixel_RegisterRegion(primMem->start, size, "prim arena");
 }
 
 void MainDB_OTMem(struct OTMem *otMem, u32 size)

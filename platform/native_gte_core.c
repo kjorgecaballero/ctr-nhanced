@@ -314,8 +314,13 @@ internal int GTE_RotTransPers(int idx, int lm)
 	int h_over_sz3 = Lm_E(gte_divide(C2_H, C2_SZ3));
 	C2_SXY0 = C2_SXY1;
 	C2_SXY1 = C2_SXY2;
-	C2_SX2 = Lm_G1(F((s64)C2_OFX + ((s64)C2_IR1 * h_over_sz3)) >> 16);
-	C2_SY2 = Lm_G2(F((s64)C2_OFY + ((s64)C2_IR2 * h_over_sz3)) >> 16);
+	s64 sxFull = F((s64)C2_OFX + ((s64)C2_IR1 * h_over_sz3));
+	s64 syFull = F((s64)C2_OFY + ((s64)C2_IR2 * h_over_sz3));
+	C2_SX2 = Lm_G1(sxFull >> 16);
+	C2_SY2 = Lm_G2(syFull >> 16);
+	NativeSubpixel_PushFrac(sxFull, syFull,
+	                        (C2_FLAG & (1 << 14)) != 0,
+	                        (C2_FLAG & (1 << 13)) != 0);
 
 	return h_over_sz3;
 }

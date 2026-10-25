@@ -1025,6 +1025,7 @@ static void DrawLevelOvr1P_CopyProjectedScreenDepth(struct DrawLevelOvr1PScratch
 {
 	dst->posScreen[0] = src->posScreen[0];
 	dst->posScreen[1] = src->posScreen[1];
+	NativeSubpixel_CopyEntry(&dst->posScreen[0], &src->posScreen[0]);
 	dst->depth = src->depth;
 	dst->clipNear = src->clipNear;
 	dst->clipHalfNear = src->clipHalfNear;
@@ -2107,12 +2108,15 @@ static void DrawLevelOvr1P_WriteProjectedGT3(POLY_GT3 *poly, const struct DrawLe
 {
 	CtrGpu_WriteColorCode(&poly->r0, DrawLevelOvr1P_GetProjectedColorCode(&projected[indices[0]], code));
 	CtrGpu_WritePackedXY(&poly->x0, DrawLevelOvr1P_PackProjectedSxy(&projected[indices[0]]));
+	NativeSubpixel_Forward(&poly->x0, &projected[indices[0]].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u0, uv0);
 	CtrGpu_WriteColorCode(&poly->r1, DrawLevelOvr1P_GetProjectedColorCode(&projected[indices[1]], 0));
 	CtrGpu_WritePackedXY(&poly->x1, DrawLevelOvr1P_PackProjectedSxy(&projected[indices[1]]));
+	NativeSubpixel_Forward(&poly->x1, &projected[indices[1]].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u1, uv1);
 	CtrGpu_WriteColorCode(&poly->r2, DrawLevelOvr1P_GetProjectedColorCode(&projected[indices[2]], 0));
 	CtrGpu_WritePackedXY(&poly->x2, DrawLevelOvr1P_PackProjectedSxy(&projected[indices[2]]));
+	NativeSubpixel_Forward(&poly->x2, &projected[indices[2]].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u2, uv2);
 }
 
@@ -2122,6 +2126,7 @@ static void DrawLevelOvr1P_WriteProjectedGT4(POLY_GT4 *poly, const struct DrawLe
 	DrawLevelOvr1P_WriteProjectedGT3((POLY_GT3 *)poly, projected, indices, code, uv0, uv1, uv2);
 	CtrGpu_WriteColorCode(&poly->r3, DrawLevelOvr1P_GetProjectedColorCode(&projected[indices[3]], 0));
 	CtrGpu_WritePackedXY(&poly->x3, DrawLevelOvr1P_PackProjectedSxy(&projected[indices[3]]));
+	NativeSubpixel_Forward(&poly->x3, &projected[indices[3]].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u3, uv2 >> 16);
 }
 
@@ -2617,12 +2622,15 @@ static void DrawLevelOvr1P_WriteClipRecordGT3(POLY_GT3 *poly, const struct DrawL
 {
 	CtrGpu_WriteColorCode(&poly->r0, DrawLevelOvr1P_GetClipRecordColorCode(&emit[0], code));
 	CtrGpu_WritePackedXY(&poly->x0, DrawLevelOvr1P_PackProjectedSxy(&emit[0]));
+	NativeSubpixel_Forward(&poly->x0, &emit[0].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u0, uv0);
 	CtrGpu_WriteColorCode(&poly->r1, DrawLevelOvr1P_GetClipRecordColorCode(&emit[1], 0));
 	CtrGpu_WritePackedXY(&poly->x1, DrawLevelOvr1P_PackProjectedSxy(&emit[1]));
+	NativeSubpixel_Forward(&poly->x1, &emit[1].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u1, uv1);
 	CtrGpu_WriteColorCode(&poly->r2, DrawLevelOvr1P_GetClipRecordColorCode(&emit[2], 0));
 	CtrGpu_WritePackedXY(&poly->x2, DrawLevelOvr1P_PackProjectedSxy(&emit[2]));
+	NativeSubpixel_Forward(&poly->x2, &emit[2].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u2, uv2);
 }
 
@@ -2631,6 +2639,7 @@ static void DrawLevelOvr1P_WriteClipRecordGT4(POLY_GT4 *poly, const struct DrawL
 	DrawLevelOvr1P_WriteClipRecordGT3((POLY_GT3 *)poly, emit, code, uv0, uv1, uv2);
 	CtrGpu_WriteColorCode(&poly->r3, DrawLevelOvr1P_GetClipRecordColorCode(&emit[3], 0));
 	CtrGpu_WritePackedXY(&poly->x3, DrawLevelOvr1P_PackProjectedSxy(&emit[3]));
+	NativeSubpixel_Forward(&poly->x3, &emit[3].posScreen[0]);
 	CtrGpu_WritePackedUVWord(&poly->u3, DrawLevelOvr1P_GetClipRecordSignedUvWord(&emit[3]));
 }
 
@@ -2807,6 +2816,7 @@ static void Ovr226_800aaad0_PrepareClipRecordDepthScratch(struct DrawLevelOvr1PS
 	projected->posScreen[1] = DrawLevelOvr1P_ShiftLeft1S16Wrap(projected->pos[1]);
 	projected->depth = (u16)DrawLevelOvr1P_ShiftLeft1S16Wrap(projected->pos[2]);
 	DrawLevelOvr1P_SetClipRecordSourceDelta(projected, (s16)((s32)projected->pos[2] - threshold));
+	NativeSubpixel_InvalidateHand(&projected->posScreen[0]);
 }
 
 static void Ovr226_800aa858_ProjectClipRecordRawVertex(struct DrawLevelOvr1PScratchVertex *projected, const struct DrawLevelOvr1PClipRecordVertex *src)

@@ -182,6 +182,8 @@ void ClearSplits(void)
 	s_gpu.currentSplitDebugText = NULL;
 	s_gpu.vertexIndex = 0;
 	s_gpu.splitIndex = 0;
+	extern int g_subpixelForwarded;
+	g_subpixelForwarded = 0; // Resetear por frame
 	s_gpu.splits[0].texFormat = (TexFormat)0xFFFF;
 	s_gpu.splits[0].psxTexturedSemiTrans = false;
 	s_gpu.splits[0].psxTextureOutputSTP = false;
@@ -365,6 +367,32 @@ void MakeVertexTriangle(GrVertex *vertex, VERTTYPE *p0, VERTTYPE *p1, VERTTYPE *
 
 	vertex[2].x = p2[0] + ofsX;
 	vertex[2].y = p2[1] + ofsY;
+
+	// Subpixel wobble removal: carry the 4-bit fractional part of the
+	// projected screen position (from the shadow stack in native_subpixel.c)
+	// into _p0/_p1. The vertex shader adds a_extra.zw * (1/16) to the final
+	// XY. See include/ctr_subpixel.h.
+	{
+		extern int g_subpixelForwarded;
+		if (g_subpixelForwarded) {
+			int fx0, fy0, fx1, fy1, fx2, fy2;
+			const int ui = 0;
+
+			int ok0 = NativeSubpixel_Lookup(&p0[0], &fx0, &fy0, ui, 0);
+			int ok1 = NativeSubpixel_Lookup(&p1[0], &fx1, &fy1, ui, 0);
+			int ok2 = NativeSubpixel_Lookup(&p2[0], &fx2, &fy2, ui, 0);
+
+			if (!ok2 && ok0) { ok2 = 1; fx2 = fx0; fy2 = fy0; }
+			if (!ok1 && ok0) { ok1 = 1; fx1 = fx0; fy1 = fy0; }
+
+			if (ok0) { vertex[0]._p0 = (s8)fx0; vertex[0]._p1 = (s8)fy0; }
+			if (ok1) { vertex[1]._p0 = (s8)fx1; vertex[1]._p1 = (s8)fy1; }
+			if (ok2) { vertex[2]._p0 = (s8)fx2; vertex[2]._p1 = (s8)fy2; }
+
+			NativeSubpixel_NoteVertexCarried(ok0 + ok1 + ok2);
+		}
+		NativeSubpixel_NoteVertices(NATIVE_SUBPIXEL_VTX_TRI, 3);
+	}
 }
 
 void MakeVertexQuad(GrVertex *vertex, VERTTYPE *p0, VERTTYPE *p1, VERTTYPE *p2, VERTTYPE *p3)
@@ -390,6 +418,32 @@ void MakeVertexQuad(GrVertex *vertex, VERTTYPE *p0, VERTTYPE *p1, VERTTYPE *p2, 
 
 	vertex[3].x = p3[0] + ofsX;
 	vertex[3].y = p3[1] + ofsY;
+
+	{
+		extern int g_subpixelForwarded;
+		if (g_subpixelForwarded) {
+			int fx0, fy0, fx1, fy1, fx2, fy2, fx3, fy3;
+			const int ui = 0;
+
+			int ok0 = NativeSubpixel_Lookup(&p0[0], &fx0, &fy0, ui, 4);
+			int ok1 = NativeSubpixel_Lookup(&p1[0], &fx1, &fy1, ui, 4);
+			int ok2 = NativeSubpixel_Lookup(&p2[0], &fx2, &fy2, ui, 4);
+			int ok3 = NativeSubpixel_Lookup(&p3[0], &fx3, &fy3, ui, 4);
+
+			if (!ok0 || !ok1 || !ok2 || !ok3)
+			{
+				ok0 = ok1 = ok2 = ok3 = 0;
+			}
+
+			if (ok0) { vertex[0]._p0 = (s8)fx0; vertex[0]._p1 = (s8)fy0; }
+			if (ok1) { vertex[1]._p0 = (s8)fx1; vertex[1]._p1 = (s8)fy1; }
+			if (ok2) { vertex[2]._p0 = (s8)fx2; vertex[2]._p1 = (s8)fy2; }
+			if (ok3) { vertex[3]._p0 = (s8)fx3; vertex[3]._p1 = (s8)fy3; }
+
+			NativeSubpixel_NoteVertexCarried(ok0 + ok1 + ok2 + ok3);
+		}
+		NativeSubpixel_NoteVertices(NATIVE_SUBPIXEL_VTX_QUAD, 4);
+	}
 }
 
 void MakeVertexRect(GrVertex *vertex, VERTTYPE *p0, s16 w, s16 h)
@@ -412,6 +466,10 @@ void MakeVertexRect(GrVertex *vertex, VERTTYPE *p0, s16 w, s16 h)
 
 	vertex[3].x = vertex[0].x + w;
 	vertex[3].y = vertex[0].y;
+
+	// Rect (UI/SPRT) is 2D by construction, no GTE projection involved.
+	// Only count it for the census.
+	NativeSubpixel_NoteVertices(NATIVE_SUBPIXEL_VTX_RECT, 4);
 }
 
 void MakeTexcoordQuad(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, u8 *uv3, s16 page, s16 clut, u8 dither)

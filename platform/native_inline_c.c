@@ -90,6 +90,7 @@ void MTC2(u32 value, s32 reg)
 		C2_SXY0 = C2_SXY1;
 		C2_SXY1 = C2_SXY2;
 		C2_SXY2 = value;
+		NativeSubpixel_PushExternal();
 		break;
 
 	case 28:
@@ -105,6 +106,8 @@ void MTC2(u32 value, s32 reg)
 	case 31:
 		return;
 	}
+
+	NativeSubpixel_InvalidateReg(reg);
 
 	gteRegs.CP2D.p[reg].d = value;
 }
@@ -117,6 +120,7 @@ void MTC2_S(s32 value, s32 reg)
 		C2_SXY0 = C2_SXY1;
 		C2_SXY1 = C2_SXY2;
 		C2_SXY2 = value;
+		NativeSubpixel_PushExternal();
 		break;
 
 	case 28:
@@ -132,6 +136,8 @@ void MTC2_S(s32 value, s32 reg)
 	case 31:
 		return;
 	}
+
+	NativeSubpixel_InvalidateReg(reg);
 
 	gteRegs.CP2D.p[reg].sd = value;
 }

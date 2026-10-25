@@ -989,7 +989,7 @@ const char *gte_shader_32_rgba = "      uniform sampler2D s_texture;\n"
                                  "              if (psxSemiTransPass != 0 || psxKeepTextureAlpha == 0) fragColor.a = float(psxDrawMaskSet);\n"
                                  "      }\n";
 
-#define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy, 0.0, 1.0);\n"
+#define GTE_PERSPECTIVE_CORRECTION "	gl_Position = Projection * vec4(a_position.xy + a_extra.zw * (1.0 / 16.0), 0.0, 1.0);\n"
 
 #define GTE_VERTEX_SHADER                                                                                          \
 	"	attribute vec4 a_position;\n"                                                                                \

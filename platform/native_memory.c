@@ -45,6 +45,7 @@ void Platform_InitScratchpad(void)
 #if defined(CTR_NATIVE)
 	gCTRNativeScratchpadBase = &s_scratchpadMemory.bytes[0];
 	memset(&s_scratchpadMemory, 0, sizeof(s_scratchpadMemory));
+	NativeSubpixel_RegisterRegion(gCTRNativeScratchpadBase, CTR_SCRATCHPAD_SIZE, "scratchpad");
 #endif
 }
 

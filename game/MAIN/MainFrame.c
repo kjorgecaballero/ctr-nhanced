@@ -82,6 +82,8 @@ void MainFrame_ResetDB(struct GameTracker *gGT)
 
 #if defined(CTR_NATIVE)
 	MainFrame_RegisterGpuLinkRanges(gGT);
+	NativeSubpixel_ClearRegion(db->primMem.start);
+	NativeSubpixel_Frame();
 #endif
 
 	CTR_EmptyFunc_MainFrame_ResetDB();

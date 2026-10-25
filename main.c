@@ -48,6 +48,7 @@
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
 #include "platform/native_gte_core.c"
+#include "platform/native_subpixel.c"
 #include "platform/native_glad.c"
 #include "platform/native_input.c"
 #include "platform/native_inline_c.c"
@@ -152,6 +153,26 @@ int main(int argc, char *argv[])
 	}
 
 	printf("[CTR Native] Starting...\n");
+
+	/* Subpixel wobble removal (include/ctr_subpixel.h). Default off. */
+	for (int argIndex = 1; argIndex < argc; argIndex++)
+	{
+		if (strcmp(argv[argIndex], "--subpixel") == 0)
+		{
+			g_cfg_subpixel = 1;
+			printf("[CTR Sub] subpixel on (--subpixel)\n");
+		}
+		else if (strcmp(argv[argIndex], "--subpixel-report") == 0)
+		{
+			int everyFrames = 0;
+			if (((argIndex + 1) < argc) && (argv[argIndex + 1][0] != '-'))
+			{
+				everyFrames = atoi(argv[argIndex + 1]);
+				argIndex++;
+			}
+			NativeSubpixel_Arm(everyFrames);
+		}
+	}
 	fflush(stdout);
 
 	const char *sdlBasePath = SDL_GetBasePath();
