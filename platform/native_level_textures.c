@@ -504,7 +504,26 @@ static void NltPatchOne(struct TextureLayout *tl, int isLow)
     int inVrm = NltTouches(tpX, tpY, wHW, 256) && (mode >= 2 || NltCovered(cx, cy));
 
 
+    /* A level layout whose page/CLUT is NOT in the VRM can only point at stale
+     * VRAM (previous scene / framebuffer) => rainbow/magenta bleed. The custom
+     * VRM is the only texture source a level has, so build an empty page
+     * (transparent) instead of sampling raw VRAM. NLT_BLEED_RAW=1 restores the
+     * old fallback for comparison. */
+    static int s_bleedRaw = -1, s_bleedTrace = -1;
+    if (s_bleedRaw < 0) {
+        const char *e = getenv("NLT_BLEED_RAW");
+        s_bleedRaw = (e && e[0] == '1');
+        e = getenv("NLT_BLEED");
+        s_bleedTrace = (e && e[0] == '1');
+    }
+    int blank = 0;
+    if (!inVrm && !s_bleedRaw) { inVrm = 1; blank = 1; }
+
     int pg = inVrm ? NltGetPage(tpage, clut) : -1;
+    if (blank && s_bleedTrace) {
+        fprintf(stderr, "[BLEED] tpage=0x%04X clut=0x%04X mode=%d tpX=%d tpY=%d cx=%d cy=%d low=%d -> blank page idx=%d\n",
+                tpage, clut, mode, tpX, tpY, cx, cy, isLow, pg);
+    }
     if (pg >= 0) {
         tl->clut = (u16)(NLT_SENT | pg);
         NltDbgCount(tpage, isLow, pg, 1);
