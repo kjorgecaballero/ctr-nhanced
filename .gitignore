@@ -78,3 +78,6 @@ run*.log
 *.dmp
 crash_dumps/
 memcards_final_test_*
+apply_*fix.py
+*_debug.txt
+pack_overlap.txt
