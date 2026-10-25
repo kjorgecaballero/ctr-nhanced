@@ -88,23 +88,30 @@ static int s_levelCount;
 static int s_registryLoaded;
 static const struct LevelDef *s_activeLevel;
 
-#define LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS 16
-static struct HighScoreTrack s_customHighScoreTracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
-static int s_customHighScoresInit;
+/* Stable ghost keys (0x4000 | hash14 of manifest id). Built lazily. */
+static int s_ghostKeys[LEVEL_REGISTRY_MAX_LEVELS];
+static int s_ghostKeysBuilt;
+static const struct LevelDef *s_ghostContext;
+/* Last non-NULL active level. SetActive(NULL) is called on every retail load
+ * and by menus, so at ghost-save time the active pointer can already be NULL.
+ * Remembering the last custom level lets the base->virtual lookup pick the
+ * track that was actually raced instead of the first one sharing the base. */
+static const struct LevelDef *s_lastActiveLevel;
 
+#define LEVEL_REGISTRY_LEGACY_HS_SLOTS 16
 #define LEVEL_REGISTRY_HIGHSCORES_PATH "assets/mods/custom_highscores.bin"
 #define LEVEL_REGISTRY_HIGHSCORES_MAGIC 0x48534843u /* "CHSH" */
-#define LEVEL_REGISTRY_HIGHSCORES_VERSION 1u
+#define LEVEL_REGISTRY_HIGHSCORES_VERSION 2u
 
-struct LevelRegistryHighScoreFile
-{
-    u32 magic;
-    u32 version;
-    u32 slotCount;
-    u32 reserved;
-    struct HighScoreTrack tracks[LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS];
-};
-CTR_STATIC_ASSERT(sizeof(struct LevelRegistryHighScoreFile) == 16 + LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS * 0x124);
+struct LevelRegistryHighScoreHeader { u32 magic; u32 version; u32 slotCount; u32 reserved; };
+struct LevelRegistryHighScoreEntry  { s32 key; struct HighScoreTrack track; };
+
+static struct LevelRegistryHighScoreEntry s_customHS[LEVEL_REGISTRY_MAX_LEVELS];
+static int s_customHSCount;
+static struct HighScoreTrack s_legacyHS[LEVEL_REGISTRY_LEGACY_HS_SLOTS];
+static int s_legacyHSCount;
+static int s_customHSMigrated;
+static int s_customHighScoresInit;
 
 static void LevelRegistry_Load(void);
 
@@ -119,96 +126,122 @@ static void LevelRegistry_InitCustomHighScoreTrack(struct HighScoreTrack *track)
 	}
 }
 
-static void LevelRegistry_EnsureCustomHighScoresInit(void)
+static int LevelRegistry_FindCustomHS(int key)
 {
-    int i;
-    if (s_customHighScoresInit)
-        return;
-    for (i = 0; i < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS; i++)
-        LevelRegistry_InitCustomHighScoreTrack(&s_customHighScoreTracks[i]);
-    s_customHighScoresInit = 1;
+	int i;
+	for (i = 0; i < s_customHSCount; i++)
+		if (s_customHS[i].key == key) return i;
+	return -1;
 }
 
 void LevelRegistry_LoadCustomHighScores(void)
 {
-    FILE *f;
-    struct LevelRegistryHighScoreFile file;
-    int n;
+	FILE *f;
+	struct LevelRegistryHighScoreHeader h;
+	int i, n;
 
-    LevelRegistry_EnsureCustomHighScoresInit();
+	s_customHSCount = 0;
+	s_legacyHSCount = 0;
+	s_customHSMigrated = 0;
+	s_customHighScoresInit = 1;
 
-    f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "rb");
-    if (f == NULL) return;
+	f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "rb");
+	if (f == NULL) return;
 
-    if (fread(&file, sizeof(file), 1, f) != 1)
-    {
-        fclose(f);
-        fprintf(stderr, "[LevelRegistry] custom_highscores.bin malformed, keeping defaults\n");
-        return;
-    }
-    fclose(f);
+	if (fread(&h, sizeof(h), 1, f) != 1 || h.magic != LEVEL_REGISTRY_HIGHSCORES_MAGIC)
+	{
+		fprintf(stderr, "[LevelRegistry] custom_highscores.bin malformed, keeping defaults\n");
+		fclose(f);
+		return;
+	}
 
-    if (file.magic != LEVEL_REGISTRY_HIGHSCORES_MAGIC || file.version != LEVEL_REGISTRY_HIGHSCORES_VERSION)
-    {
-        fprintf(stderr, "[LevelRegistry] custom_highscores.bin bad magic/version, keeping defaults\n");
-        return;
-    }
+	if (h.version == 1u)
+	{
+		n = (h.slotCount > LEVEL_REGISTRY_LEGACY_HS_SLOTS) ? LEVEL_REGISTRY_LEGACY_HS_SLOTS : (int)h.slotCount;
+		if (fread(s_legacyHS, sizeof(struct HighScoreTrack), (size_t)n, f) == (size_t)n)
+			s_legacyHSCount = n;
+		fprintf(stderr, "[LevelRegistry] custom_highscores.bin v1 (%d slots) will be migrated\n", s_legacyHSCount);
+	}
+	else if (h.version == 2u)
+	{
+		n = (h.slotCount > LEVEL_REGISTRY_MAX_LEVELS) ? LEVEL_REGISTRY_MAX_LEVELS : (int)h.slotCount;
+		for (i = 0; i < n; i++)
+		{
+			if (fread(&s_customHS[s_customHSCount], sizeof(s_customHS[0]), 1, f) != 1) break;
+			if (s_customHS[s_customHSCount].key >= 0) s_customHSCount++;
+		}
+		fprintf(stderr, "[LevelRegistry] loaded custom_highscores.bin v2 (%d entries)\n", s_customHSCount);
+	}
+	else
+		fprintf(stderr, "[LevelRegistry] custom_highscores.bin unknown version, keeping defaults\n");
 
-    n = (file.slotCount < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS) ? (int)file.slotCount : LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS;
-    memcpy(s_customHighScoreTracks, file.tracks, (size_t)n * sizeof(struct HighScoreTrack));
-    fprintf(stderr, "[LevelRegistry] loaded custom_highscores.bin (%d slots)\n", n);
+	fclose(f);
+}
+
+static void LevelRegistry_MigrateLegacyHighScores(void)
+{
+	int i;
+	LevelRegistry_Load();
+	if (s_customHSMigrated) return;
+	s_customHSMigrated = 1;
+
+	for (i = 0; i < s_legacyHSCount; i++)
+	{
+		int key = LevelRegistry_GetGhostKey(LevelRegistry_GetAdditionalByLogicalID(LEVEL_REGISTRY_CUSTOM_BASE + i));
+		if (key < 0 || LevelRegistry_FindCustomHS(key) >= 0 || s_customHSCount >= LEVEL_REGISTRY_MAX_LEVELS)
+			continue;
+		s_customHS[s_customHSCount].key = key;
+		s_customHS[s_customHSCount].track = s_legacyHS[i];
+		s_customHSCount++;
+	}
 }
 
 void LevelRegistry_SaveCustomHighScores(void)
 {
-    FILE *f;
-    struct LevelRegistryHighScoreFile file;
+	FILE *f;
+	struct LevelRegistryHighScoreHeader h;
 
-    if (!s_customHighScoresInit) return;
+	if (!s_customHighScoresInit) return;
+	LevelRegistry_MigrateLegacyHighScores();
 
-    memset(&file, 0, sizeof(file));
-    file.magic = LEVEL_REGISTRY_HIGHSCORES_MAGIC;
-    file.version = LEVEL_REGISTRY_HIGHSCORES_VERSION;
-    file.slotCount = LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS;
-    memcpy(file.tracks, s_customHighScoreTracks, sizeof(s_customHighScoreTracks));
+	memset(&h, 0, sizeof(h));
+	h.magic = LEVEL_REGISTRY_HIGHSCORES_MAGIC;
+	h.version = LEVEL_REGISTRY_HIGHSCORES_VERSION;
+	h.slotCount = (u32)s_customHSCount;
 
-    f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "wb");
-    if (f == NULL)
-    {
-        fprintf(stderr, "[LevelRegistry] could not open custom_highscores.bin for writing\n");
-        return;
-    }
-
-    if (fwrite(&file, sizeof(file), 1, f) != 1)
-    {
-        fclose(f);
-        fprintf(stderr, "[LevelRegistry] failed to write custom_highscores.bin\n");
-        return;
-    }
-    fclose(f);
+	f = fopen(LEVEL_REGISTRY_HIGHSCORES_PATH, "wb");
+	if (f == NULL)
+	{
+		fprintf(stderr, "[LevelRegistry] could not open custom_highscores.bin for writing\n");
+		return;
+	}
+	if (fwrite(&h, sizeof(h), 1, f) != 1 ||
+	    (s_customHSCount > 0 && fwrite(s_customHS, sizeof(s_customHS[0]), (size_t)s_customHSCount, f) != (size_t)s_customHSCount))
+		fprintf(stderr, "[LevelRegistry] failed to write custom_highscores.bin\n");
+	fclose(f);
 }
 
 struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void)
 {
 	const struct LevelDef *active = s_activeLevel;
-	int slot;
+	int key, idx;
 
 	if (active == NULL || active->logicalLevelID < LEVEL_REGISTRY_CUSTOM_BASE)
 		return NULL;
-
-	slot = active->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
-	if (slot < 0 || slot >= LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS)
+	key = LevelRegistry_GetGhostKey(active);
+	if (key < 0)
 		return NULL;
 
-	if (!s_customHighScoresInit)
+	LevelRegistry_MigrateLegacyHighScores();
+	idx = LevelRegistry_FindCustomHS(key);
+	if (idx < 0)
 	{
-		int i;
-		for (i = 0; i < LEVEL_REGISTRY_CUSTOM_HIGHSCORE_SLOTS; i++)
-			LevelRegistry_InitCustomHighScoreTrack(&s_customHighScoreTracks[i]);
-		s_customHighScoresInit = 1;
+		if (s_customHSCount >= LEVEL_REGISTRY_MAX_LEVELS) return NULL;
+		idx = s_customHSCount++;
+		s_customHS[idx].key = key;
+		LevelRegistry_InitCustomHighScoreTrack(&s_customHS[idx].track);
 	}
-
-	return &s_customHighScoreTracks[slot];
+	return &s_customHS[idx].track;
 }
 
 int LevelRegistry_GetVirtualMemcardIDFromActive(void)
@@ -257,6 +290,17 @@ int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID)
 	    active->logicalLevelID >= LEVEL_REGISTRY_CUSTOM_BASE)
 	{
 		slot = active->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
+		if (slot >= 0 && slot < LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+			return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
+	}
+
+	/* Active is NULL here: prefer the last custom level that was raced, if it
+	 * matches this base, before falling back to the first match. */
+	if (s_lastActiveLevel != NULL && s_lastActiveLevel->baseLevelID == baseLevelID &&
+	    s_lastActiveLevel->replaceLevelID < 0 &&
+	    s_lastActiveLevel->logicalLevelID >= LEVEL_REGISTRY_CUSTOM_BASE)
+	{
+		slot = s_lastActiveLevel->logicalLevelID - LEVEL_REGISTRY_CUSTOM_BASE;
 		if (slot >= 0 && slot < LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
 			return LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + slot;
 	}
@@ -1081,6 +1125,7 @@ static void LevelRegistry_Load(void)
 	}
 
 	fprintf(stderr, "[LevelRegistry] === Total levels loaded: %d ===\n", s_levelCount);
+	s_ghostKeysBuilt = 0;
 }
 
 const struct LevelDef *LevelRegistry_GetReplacement(int levelID)
@@ -1150,11 +1195,82 @@ const struct LevelDef *LevelRegistry_GetAdditionalBattle(int requestedIndex)
 void LevelRegistry_SetActive(const struct LevelDef *level)
 {
 	s_activeLevel = level;
+	if (level != NULL)
+		s_lastActiveLevel = level;
 }
 
 const struct LevelDef *LevelRegistry_GetActive(void)
 {
 	return s_activeLevel;
+}
+
+/* === Stable ghost keys === */
+static unsigned LevelRegistry_HashId(const char *s)
+{
+	unsigned h = 2166136261u;
+	while (*s) { h ^= (unsigned char)*s++; h *= 16777619u; }
+	return h;
+}
+
+static void LevelRegistry_BuildGhostKeys(void)
+{
+	int i, j;
+	LevelRegistry_Load();
+	for (i = 0; i < s_levelCount; i++)
+	{
+		const struct LevelDef *d = &s_levels[i];
+		int key, clash;
+		s_ghostKeys[i] = -1;
+		if (d->replaceLevelID >= 0 || d->isBattle || d->id[0] == '\0')
+			continue;
+		key = (int)(LevelRegistry_HashId(d->id) & 0x3FFF);
+		do {
+			clash = 0;
+			for (j = 0; j < i; j++)
+				if (s_ghostKeys[j] == (LEVEL_REGISTRY_GHOST_KEY_BASE | key)) { clash = 1; break; }
+			if (clash) key = (key + 1) & 0x3FFF;
+		} while (clash);
+		s_ghostKeys[i] = LEVEL_REGISTRY_GHOST_KEY_BASE | key;
+	}
+	s_ghostKeysBuilt = 1;
+}
+
+int LevelRegistry_IsGhostKey(int v) { return v >= 0x4000 && v <= 0x7FFF; }
+
+int LevelRegistry_GetGhostKey(const struct LevelDef *def)
+{
+	if (def == NULL) return -1;
+	if (!s_ghostKeysBuilt) LevelRegistry_BuildGhostKeys();
+	if (def < s_levels || def >= s_levels + s_levelCount) return -1;
+	return s_ghostKeys[def - s_levels];
+}
+
+const struct LevelDef *LevelRegistry_GetByGhostKey(int key)
+{
+	int i;
+	if (!LevelRegistry_IsGhostKey(key)) return NULL;
+	if (!s_ghostKeysBuilt) LevelRegistry_BuildGhostKeys();
+	for (i = 0; i < s_levelCount; i++)
+		if (s_ghostKeys[i] == key) return &s_levels[i];
+	return NULL;
+}
+
+int LevelRegistry_GhostIDFromLogical(int logicalID)
+{
+	int key = LevelRegistry_GetGhostKey(LevelRegistry_GetAdditionalByLogicalID(logicalID));
+	return key >= 0 ? key : logicalID;
+}
+
+void LevelRegistry_SetGhostContext(const struct LevelDef *def) { s_ghostContext = def; }
+
+int LevelRegistry_ResolveGhostLevelID(int retailID)
+{
+	if (s_ghostContext != NULL && s_ghostContext->baseLevelID == retailID)
+	{
+		int key = LevelRegistry_GetGhostKey(s_ghostContext);
+		if (key >= 0) return key;
+	}
+	return retailID;
 }
 
 static const struct LevelDef *LevelRegistry_GetRuntimeLevel(int levelID)
@@ -1321,5 +1437,11 @@ struct HighScoreTrack *LevelRegistry_GetActiveCustomHighScoreTrack(void) { retur
 int LevelRegistry_GetVirtualMemcardIDFromActive(void) { return -1; }
 int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID) { (void)baseLevelID; return -1; }
 int LevelRegistry_MapLogicalToVirtual(int logicalID) { return logicalID; }
+int LevelRegistry_IsGhostKey(int v) { (void)v; return 0; }
+int LevelRegistry_GetGhostKey(const struct LevelDef *def) { (void)def; return -1; }
+const struct LevelDef *LevelRegistry_GetByGhostKey(int key) { (void)key; return 0; }
+int LevelRegistry_GhostIDFromLogical(int logicalID) { return logicalID; }
+void LevelRegistry_SetGhostContext(const struct LevelDef *def) { (void)def; }
+int LevelRegistry_ResolveGhostLevelID(int retailID) { return retailID; }
 
 #endif

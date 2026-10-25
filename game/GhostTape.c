@@ -38,17 +38,12 @@ void GhostTape_Start(void)
 	memset(gh, 0, sizeof(struct GhostHeader));
 
 	gh->version = GHOST_TAPE_VERSION_RETAIL;
-	gh->levelID = gGT->levelID;
 #ifdef CTR_NATIVE
-	{
-		// Customs get a virtual memcard ID (25-31) so their ghosts do not
-		// share the retail baseLevelID slot in the memcard filename.
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(gGT->levelID);
-		if (virtualID >= 0)
-			gh->levelID = (u16)virtualID;
-	}
+        gh->levelID = (s16)LevelRegistry_ResolveGhostLevelID(gGT->levelID);
+#else
+        gh->levelID = gGT->levelID;
 #endif
-	gh->characterID = data.characterIDs[d->driverID];       
+        gh->characterID = data.characterIDs[d->driverID];       
 
 
 	sdata->GhostRecording.VelX = 0;
@@ -157,13 +152,12 @@ GhostTape_WriteMoves(1);
 	 * with garbage: 15444/477). Rewrite the immutable fields so
 	 * the memcard saves the correct header. */
 	gh->version = GHOST_TAPE_VERSION_RETAIL;
-	gh->levelID = gGT->levelID;
-	{
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(gGT->levelID);
-		if (virtualID >= 0)
-			gh->levelID = (u16)virtualID;
-	}
-	gh->characterID = data.characterIDs[d->driverID];
+#ifdef CTR_NATIVE
+        gh->levelID = (s16)LevelRegistry_ResolveGhostLevelID(gGT->levelID);
+#else
+        gh->levelID = gGT->levelID;
+#endif
+        gh->characterID = data.characterIDs[d->driverID];
 
 	gh->ySpeed = d->ySpeed;
 	gh->speedApprox = d->speedApprox;

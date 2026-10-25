@@ -412,12 +412,15 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 #ifdef CTR_NATIVE
 		// Custom ghosts carry a virtual memcard ID (25-31). metaDataLEV[]
 		// is retail-only; resolve the custom's display name via the registry.
-		if ((profile->trackID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE) &&
-		    (profile->trackID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT))
+		if (LevelRegistry_IsGhostKey(profile->trackID))
 		{
-			int logicalID = 1000 + (profile->trackID - LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE);
-			const struct LevelDef *def = LevelRegistry_GetAdditionalByLogicalID(logicalID);
+			const struct LevelDef *def = LevelRegistry_GetByGhostKey(profile->trackID);
 			DecalFont_DrawLine(def != NULL ? def->name : "Custom", posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+		}
+		else if (profile->trackID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE &&
+		         profile->trackID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
+		{
+			DecalFont_DrawLine("Custom (old)", posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		}
 		else
 #endif
@@ -702,10 +705,7 @@ static void SelectProfile_StartGhostSave(struct RectMenu *menu)
 
 #ifdef CTR_NATIVE
 	{
-		int saveLevelID = gGT->levelID;
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(gGT->levelID);
-		if (virtualID >= 0)
-			saveLevelID = virtualID;
+		int saveLevelID = LevelRegistry_ResolveGhostLevelID(gGT->levelID);
 		RefreshCard_GhostEncodeProfile(menu->rowSelected, data.characterIDs[0], saveLevelID, time, gGT->prevNameEntered);
 	}
 #else
@@ -868,10 +868,7 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 		// levelID still refers to the previously loaded level.
 #ifdef CTR_NATIVE
 		{
-			int compareID = sdata->gGT->currLEV;
-			int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(sdata->gGT->currLEV);
-			if (virtualID >= 0)
-				compareID = virtualID;
+			int compareID = LevelRegistry_ResolveGhostLevelID(sdata->gGT->currLEV);
 			if ((profile != NULL) && (profile->trackID != compareID))
 			{
 				isWrongTrack = sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE;
@@ -1002,10 +999,7 @@ static void SelectProfile_StartLoadGhost(struct RectMenu *menu, int rowCount)
 	// selected Time Trial track until the queued load starts.
 #ifdef CTR_NATIVE
 	{
-		int compareID = sdata->gGT->currLEV;
-		int virtualID = LevelRegistry_GetVirtualMemcardIDFromBase(sdata->gGT->currLEV);
-		if (virtualID >= 0)
-			compareID = virtualID;
+		int compareID = LevelRegistry_ResolveGhostLevelID(sdata->gGT->currLEV);
 		if (sdata->ghostProfile_memcard[menu->rowSelected].trackID == compareID)
 		{
 			sdata->ghostProfile_indexLoad = menu->rowSelected;

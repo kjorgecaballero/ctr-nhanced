@@ -136,7 +136,7 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 			time = 0x8c9ff;
 		}
 
-		packed = (u32)characterID32 | ((u32)((s32)(s16)levelID << 4)) | ((u32)time << 9) | (slotIndex << 0x1d);
+		packed = (u32)characterID32 | ((u32)(((s32)(s16)levelID & 0x1f) << 4)) | ((u32)time << 9) | (slotIndex << 0x1d);
 		data.s_BASCUS_94426G_Question[13] = RefreshCard_GhostEncodeByte(packed & 0x3f);
 		data.s_BASCUS_94426G_Question[14] = RefreshCard_GhostEncodeByte((packed >> 6) & 0x3f);
 		data.s_BASCUS_94426G_Question[15] = RefreshCard_GhostEncodeByte((packed >> 0xc) & 0x3f);
@@ -156,15 +156,18 @@ void RefreshCard_GhostEncodeProfile(u32 slotIndex, u16 characterID, u16 levelID,
 	description[0] = '\0';
 
 #ifdef CTR_NATIVE
-	if ((levelID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE) &&
-	    (levelID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT))
+	if (LevelRegistry_IsGhostKey((s16)levelID))
 	{
-		int logicalID = 1000 + (levelID - LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE);
-		const struct LevelDef *def = LevelRegistry_GetAdditionalByLogicalID(logicalID);
+		const struct LevelDef *def = LevelRegistry_GetByGhostKey((s16)levelID);
 		if (def != NULL)
 			strcat(&description[strlen(description)], def->name);
 		else
 			strcat(&description[strlen(description)], "Custom");
+	}
+	else if ((levelID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE) &&
+	         (levelID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT))
+	{
+		strcat(&description[strlen(description)], "Custom (old)");
 	}
 	else
 #endif

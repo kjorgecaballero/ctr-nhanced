@@ -633,6 +633,8 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 					// by default, dont show ghost in race
 					sdata->boolReplayHumanGhost = 0;
 
+					LevelRegistry_SetGhostContext(LevelRegistry_GetActive());
+
 					SelectProfile_ToggleMode(SELECT_PROFILE_SCREEN_GHOST);
 
 					// open the ghost selection menu
@@ -1018,7 +1020,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 #ifdef CTR_NATIVE
 				// Map custom logicalLevelIDs to their virtual memcard IDs
 				// (25-31); retail rows pass through unchanged.
-				s16 ghostCheckID = (s16)LevelRegistry_MapLogicalToVirtual(selectMenu[currTrack].levID);
+				s16 ghostCheckID = (s16)LevelRegistry_GhostIDFromLogical(selectMenu[currTrack].levID);
 #else
 				s16 ghostCheckID = selectMenu[currTrack].levID;
 #endif

@@ -83,7 +83,7 @@ void LevelRegistry_SaveCustomHighScores(void);
 // the memcard filename both use these; the header wins on read.
 #define LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE  25
 #define LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT 7
-
+#define LEVEL_REGISTRY_GHOST_KEY_BASE 0x4000
 // Returns the virtual memcard ID for the active custom (set by Track
 // Select), or -1 if the active level is retail.
 int LevelRegistry_GetVirtualMemcardIDFromActive(void);
@@ -93,5 +93,15 @@ int LevelRegistry_GetVirtualMemcardIDFromBase(int baseLevelID);
 // Retail IDs (< 1000) pass through unchanged. Out-of-range customs
 // (logicalID >= 1000 + COUNT) return the input unchanged.
 int LevelRegistry_MapLogicalToVirtual(int logicalID);
+
+/* === Stable ghost keys (v2 ghost format) ===
+ * Customs get a key of 0x4000 | hash14(manifest id), so identity does
+ * not depend on registration order. Retail IDs (0-24) pass through. */
+int  LevelRegistry_IsGhostKey(int v);
+int  LevelRegistry_GetGhostKey(const struct LevelDef *def);
+const struct LevelDef *LevelRegistry_GetByGhostKey(int key);
+int  LevelRegistry_GhostIDFromLogical(int logicalID);
+void LevelRegistry_SetGhostContext(const struct LevelDef *def);
+int  LevelRegistry_ResolveGhostLevelID(int retailID);
 
 #endif
