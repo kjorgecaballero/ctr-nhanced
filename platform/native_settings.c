@@ -1,5 +1,6 @@
 #include <common.h>
 #include "native_settings.h"
+#include <platform/native_assets.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -19,6 +20,8 @@ static int s_character_detail = 1;
 static int s_bot_randomizer   = 0;
 static int s_high_mp          = -1;
 
+void NativeSettings_Load(void);
+
 int NativeSettings_GetDithering(void) { return s_dithering; }
 int NativeSettings_GetResolution(void) { return s_resolution; }
 int NativeSettings_GetBilinear(void)   { return s_bilinear; }
@@ -29,7 +32,12 @@ int NativeSettings_GetCharacterDetail(void)
      * HIGH on modern hardware. See native_graphics.c. */
     return 2;
 }
-int NativeSettings_GetBotRandomizer(void)   { return s_bot_randomizer; }
+int NativeSettings_GetBotRandomizer(void)
+{
+    /* Cheats can be queried before anything else touched the settings file. */
+    if (!s_loaded) NativeSettings_Load();
+    return s_bot_randomizer;
+}
 
 int NativeSettings_GetHighMp(void)
 {
@@ -42,10 +50,13 @@ int NativeSettings_GetHighMp(void)
 	return s_high_mp;
 }
 
+void NativeSettings_Load(void);
+
 void NativeSettings_Save(void)
 {
-    if (!s_loaded) return;
-    FILE *f = fopen(NATIVE_SETTINGS_FILE, "wb");
+    char path[512];
+    if (!NativeAssets_BuildPath(NATIVE_SETTINGS_FILE, path, sizeof(path))) return;
+    FILE *f = fopen(path, "wb");
     if (f == NULL) return;
     fprintf(f, "version=1\n");
     fprintf(f, "dithering=%d\n",  s_dithering);
@@ -68,7 +79,10 @@ void NativeSettings_Load(void)
     if (s_loaded) return;
     s_loaded = 1;
 
-    FILE *f = fopen(NATIVE_SETTINGS_FILE, "rb");
+    char path[512];
+    if (!NativeAssets_BuildPath(NATIVE_SETTINGS_FILE, path, sizeof(path))) return;
+
+    FILE *f = fopen(path, "rb");
     if (f == NULL)
     {
         NativeSettings_Apply();
@@ -86,7 +100,7 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "resolution") == 0) s_resolution = value;
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
-        else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = (value != 0);
+        else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value; /* 0=OFF 1=RETAIL 2=ALL (was squashed to 0/1) */
     }
     fclose(f);
 
@@ -94,6 +108,8 @@ void NativeSettings_Load(void)
     if (s_resolution > 8) s_resolution = 8;
     if (s_character_detail < 0) s_character_detail = 0;
     if (s_character_detail > 3) s_character_detail = 3;
+    if (s_bot_randomizer < 0) s_bot_randomizer = 0;
+    if (s_bot_randomizer > 2) s_bot_randomizer = 2;
 
     NativeSettings_Apply();
 }
@@ -137,6 +153,9 @@ void NativeSettings_SetCharacterDetail(int mode)
 
 void NativeSettings_SetBotRandomizer(int mode)
 {
+    /* Load first, otherwise Save() below would overwrite the file with the
+     * default values of every other setting. */
+    if (!s_loaded) NativeSettings_Load();
     if (mode < 0) mode = 0;
     if (mode > 2) mode = 2;
     if (s_bot_randomizer == mode) return;
