@@ -1,5 +1,6 @@
 #include <common.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #if defined(CTR_NATIVE) && defined(CTR_INTERNAL)
 #include <platform/native_perf.h>
@@ -15,6 +16,48 @@ volatile int gCtrDebugSkipLevelGeometry = 0;
 #endif
 
 static void RenderAllLevelGeometry_HighMp(struct GameTracker *gGT, struct Level *level1, struct mesh_info *ptr_mesh_info);
+
+/* Sky gradient ("glow") is drawn when the level says so (configFlags bit 0)
+ * OR when the level actually ships gradient colors. Some arenas (battle) have
+ * valid glowGradient data with the flag cleared; gating only on the flag left
+ * them with a black sky. All-zero data is still skipped so no black polys are
+ * emitted. CTR_SKYDBG=1 logs the values once per level. */
+static int Level_HasSkyGlow(struct Level *lev)
+{
+	int hasData = 0;
+	int i;
+
+	for (i = 0; i < 3; i++)
+	{
+		if (((lev->glowGradient[i].colorFrom | lev->glowGradient[i].colorTo) & 0xffffff) != 0)
+		{
+			hasData = 1;
+			break;
+		}
+	}
+
+#ifdef CTR_NATIVE
+	{
+		static int s_dbg = -1;
+		static int s_lastLevel = -1;
+		if (s_dbg < 0)
+		{
+			const char *e = getenv("CTR_SKYDBG");
+			s_dbg = (e != NULL && e[0] == '1');
+		}
+		if (s_dbg && sdata->gGT->levelID != s_lastLevel)
+		{
+			s_lastLevel = sdata->gGT->levelID;
+			fprintf(stderr, "[SKY] level=%d players=%d configFlags=0x%X skybox=%p glowData=%d clear0=%d clear1=%d clear2=%d renderFlags=0x%X\n",
+			        (int)sdata->gGT->levelID, (int)sdata->gGT->numPlyrCurrGame, (unsigned)lev->configFlags,
+			        (void *)lev->ptr_skybox, hasData, (int)lev->clearColor[0].enable, (int)lev->clearColor[1].enable,
+			        (int)lev->clearColor[2].enable, (unsigned)sdata->gGT->renderFlags);
+		}
+	}
+#endif
+
+	return ((lev->configFlags & 1) != 0) || hasData;
+}
 
 void MainFrame_RenderFrame(struct GameTracker *gGT, struct GamepadSystem *gGamepads)
 {
@@ -1027,7 +1070,7 @@ static void RenderAllLevelGeometry_HighMp(struct GameTracker *gGT, struct Level 
 
 		DrawSky_Full(level1->ptr_skybox, pushBuffer, &gGT->backBuffer->primMem);
 
-		if ((level1->configFlags & 1) != 0)
+		if (Level_HasSkyGlow(level1))
 		{
 			CAM_SkyboxGlow(&level1->glowGradient[0], pushBuffer, &gGT->backBuffer->primMem,
 			               &pushBuffer->ptrOT[0x3ff]);
@@ -1099,7 +1142,7 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		DrawSky_Full(level1->ptr_skybox, pushBuffer, &gGT->backBuffer->primMem);
 
 		// skybox gradient
-		if ((level1->configFlags & 1) != 0)
+		if (Level_HasSkyGlow(level1))
 		{
 			goto SkyboxGlow;
 		}
@@ -1139,7 +1182,11 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		for (i = 0; i < numPlyrCurrGame; i++)
 			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
 
-		goto SkyboxGlow;
+		if (Level_HasSkyGlow(level1))
+		{
+			goto SkyboxGlow;
+		}
+		return;
 	}
 
 	// 3P or 4P
@@ -1184,6 +1231,12 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		// pb->ptrOT[0x3ff], pb+0x20 frustum bounds), so loop it.
 		for (i = 0; i < numPlyrCurrGame; i++)
 			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
+
+		if (Level_HasSkyGlow(level1))
+		{
+			goto SkyboxGlow;
+		}
+		return;
 	}
 
 	else // 4P mode
@@ -1196,6 +1249,12 @@ void RenderAllLevelGeometry(struct GameTracker *gGT, struct Level *level1, struc
 		// CTR Native: see 3P branch.
 		for (i = 0; i < numPlyrCurrGame; i++)
 			DrawSky_Full(level1->ptr_skybox, &gGT->pushBuffer[i], &gGT->backBuffer->primMem);
+
+		if (Level_HasSkyGlow(level1))
+		{
+			goto SkyboxGlow;
+		}
+		return;
 	}
 
 SkyboxGlow:
