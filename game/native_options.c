@@ -6,12 +6,13 @@
 static const char *const s_opt_labels[2] = { "GRAPHICS", "CHEATS" };
 static int s_opt_open = 0, s_opt_row = 0;
 
-void NativeOptions_Open(void)   { s_opt_open = 1; s_opt_row = 0; }
+void NativeOptions_Open(void)   { s_opt_open = 1; s_opt_row = 0; MM_Title_KillThread(); }
 void NativeOptions_Close(void)  { s_opt_open = 0; }
 int  NativeOptions_IsOpen(void) { return s_opt_open; }
 
 void NativeOptions_MenuPtr(struct RectMenu *menu) {
     if (!s_opt_open) return;
+    if (menu) menu->state |= ONLY_DRAW_TITLE | INVISIBLE;
 
     u32 tap = sdata->AnyPlayerTap;
 
@@ -28,7 +29,7 @@ void NativeOptions_MenuPtr(struct RectMenu *menu) {
         } else if (tap & (BTN_TRIANGLE | BTN_SQUARE_one)) {
             OtherFX_Play(1, 1);
             NativeOptions_Close();
-            if (menu) menu->state &= ~ONLY_DRAW_TITLE;
+            if (menu) menu->state &= ~(ONLY_DRAW_TITLE | INVISIBLE);
             RECTMENU_ClearInput();
             return;
         }

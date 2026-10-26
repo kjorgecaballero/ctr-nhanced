@@ -25,6 +25,7 @@ void NativeGraphics_Open(void)  {
     s_open = 1;
     s_row = 0;
     s_res = NativeSettings_GetResolution();
+    MM_Title_KillThread();
 }
 void NativeGraphics_Close(void) { s_open = 0; }
 int  NativeGraphics_IsOpen(void) { return s_open; }
@@ -51,6 +52,8 @@ static int ng_chg(int r, int d) {
 }
 
 void NativeGraphics_MenuPtr(struct RectMenu *menu) {
+    if (menu) menu->state |= ONLY_DRAW_TITLE | INVISIBLE;
+
     u32 tap = sdata->AnyPlayerTap;
 
     if (tap != 0) {
@@ -62,7 +65,7 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
         } else if (tap & (BTN_TRIANGLE | BTN_SQUARE_one)) {
             OtherFX_Play(1, 1);
             NativeGraphics_Close();
-            if (menu) menu->state &= ~ONLY_DRAW_TITLE;
+            if (menu) menu->state &= ~(ONLY_DRAW_TITLE | INVISIBLE);
             RECTMENU_ClearInput();
             return;
         }

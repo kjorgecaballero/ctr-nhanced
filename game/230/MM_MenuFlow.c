@@ -290,7 +290,7 @@ void MM_MenuProc_Main(struct RectMenu *mainMenu)
         // NATIVE-GFX: graphics row opens graphics menu
         if (choose == LNG_NA_241)
         {
-                mainMenu->state |= ONLY_DRAW_TITLE;
+                mainMenu->state |= ONLY_DRAW_TITLE | INVISIBLE;
                 NativeOptions_Open();
                 return;
         }

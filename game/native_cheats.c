@@ -5,11 +5,13 @@
 static const char *const s_cheat_labels[1] = { "BOT RANDOMIZER" };
 static int s_cheat_open = 0, s_cheat_row = 0;
 
-void NativeCheats_Open(void)   { s_cheat_open = 1; s_cheat_row = 0; }
+void NativeCheats_Open(void)   { s_cheat_open = 1; s_cheat_row = 0; MM_Title_KillThread(); }
 void NativeCheats_Close(void)  { s_cheat_open = 0; }
 int  NativeCheats_IsOpen(void) { return s_cheat_open; }
 
 void NativeCheats_MenuPtr(struct RectMenu *menu) {
+    if (menu) menu->state |= ONLY_DRAW_TITLE | INVISIBLE;
+
     u32 tap = sdata->AnyPlayerTap;
 
     if (tap != 0) {
@@ -20,7 +22,7 @@ void NativeCheats_MenuPtr(struct RectMenu *menu) {
         } else if (tap & (BTN_TRIANGLE | BTN_SQUARE_one)) {
             OtherFX_Play(1, 1);
             NativeCheats_Close();
-            if (menu) menu->state &= ~ONLY_DRAW_TITLE;
+            if (menu) menu->state &= ~(ONLY_DRAW_TITLE | INVISIBLE);
             RECTMENU_ClearInput();
             return;
         }
