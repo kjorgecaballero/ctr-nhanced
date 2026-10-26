@@ -760,15 +760,6 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 dontDrawSelectCharacter:
 
-	/* Page indicator ("1 / 2") */
-	if (NativeCustomRacer_GetPageCount() > 1)
-	{
-		char pageBuf[16];
-		snprintf(pageBuf, sizeof(pageBuf), "%d / %d",
-		         NativeCustomRacer_GetCurrentPage() + 1,
-		         NativeCustomRacer_GetPageCount());
-		DecalFont_DrawLine(pageBuf, 0x100, 0x0A, FONT_SMALL, (JUSTIFY_CENTER | ORANGE));
-	}
 
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
