@@ -1,5 +1,7 @@
 #include <common.h>
 
+extern int g_nativeSubmitNameActive;
+
 enum
 {
 	SUBMIT_NAME_MODE_ADVENTURE = 0,
@@ -77,6 +79,8 @@ s16 SubmitName_DrawMenu(u16 string)
 	s16 nameLength = 0;
 	u16 stringCopy = string;
 	s16 currNameLength = strlen(gGT->currNameEntered);
+	fprintf(stderr, "[OSK] ENTER tap=%04x kbCurr=%d kbPrev=%d len=%d\n",
+	        sdata->buttonTapPerPlayer[0], kbCurr, kbPrev, currNameLength);
 	char *currNameEntered = gGT->currNameEntered;
 
 	while (currNameEntered[0] != 0)
@@ -195,6 +199,7 @@ s16 SubmitName_DrawMenu(u16 string)
 	RECTMENU_DrawInnerRect(&r, 0, gGT->backBuffer->otMem.uiOT);
 
 	int tap = sdata->buttonTapPerPlayer[0];
+	int kbProcessed = 0;
 
 #ifdef CTR_NATIVE
 	// NOTE(aalhendi): native keyboard shortcut; retail input remains gamepad-driven.
@@ -213,6 +218,7 @@ s16 SubmitName_DrawMenu(u16 string)
 			cursorPosition = kbCurr;
 			soundID = 1;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 
 		// '0' key
@@ -220,6 +226,7 @@ s16 SubmitName_DrawMenu(u16 string)
 		{
 			cursorPosition = 2 * SUBMIT_NAME_KEYBOARD_COLS;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 
 		// Between 1 and 9
@@ -233,6 +240,7 @@ s16 SubmitName_DrawMenu(u16 string)
 
 			cursorPosition = kbCurr;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 
 		// Escape
@@ -240,6 +248,7 @@ s16 SubmitName_DrawMenu(u16 string)
 		{
 			cursorPosition = SUBMIT_NAME_CURSOR_CANCEL;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 
 		// Backspace
@@ -247,6 +256,7 @@ s16 SubmitName_DrawMenu(u16 string)
 		{
 			cursorPosition = kbCurr - 4;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 
 		// Space
@@ -254,20 +264,51 @@ s16 SubmitName_DrawMenu(u16 string)
 		{
 			cursorPosition = 37;
 			tap = BTN_CIRCLE;
+			kbProcessed = 1;
+		}
+
+		// Period '.' (SDL_SCANCODE_PERIOD = 55, KP_PERIOD = 99)
+		// Grid position 36 in data.unicodeAscii.
+		// kbCurr is mutated so the same key works repeatedly: A-Z and 1-9
+		// already do this; '0' and Space do not (pre-existing limitation).
+		if ((kbCurr == 55) || (kbCurr == 99))
+		{
+			cursorPosition = 36;
+			kbCurr = 36;
+			tap = BTN_CIRCLE;
+			kbProcessed = 1;
+		}
+
+		// Minus / underscore (SDL_SCANCODE_MINUS = 45)
+		// Grid position 37. Shift state is ignored: both '-' and '_'
+		// type '_' (no '-' cell exists in the retail grid).
+		if (kbCurr == 45)
+		{
+			cursorPosition = 37;
+			kbCurr = 37;
+			tap = BTN_CIRCLE;
+			kbProcessed = 1;
 		}
 	}
 
 	kbPrev = kbCurr;
+
+	if (kbProcessed)
+	{
+		sdata->buttonTapPerPlayer[0] = 0;
+	}
 
 	// Press Enter
 	if (NikoGetEnterKey())
 	{
 		cursorPosition = SUBMIT_NAME_CURSOR_SAVE;
 		tap = BTN_CIRCLE;
+		kbProcessed = 1;
 	}
 
 #endif
 
+	fprintf(stderr, "[OSK] PROCESS tap=%04x kbProcessed=%d cursor=%d\n", tap, kbProcessed, cursorPosition);
 	if ((tap & (BTN_UP | BTN_DOWN | BTN_LEFT | BTN_RIGHT)) == 0)
 	{
 		if ((tap & BTN_START) == 0)
@@ -282,7 +323,8 @@ s16 SubmitName_DrawMenu(u16 string)
 						soundID = 2;
 						if (currNameLength != 0)
 						{
-							gGT->currNameEntered[currNameLength - 1] = 0;
+					fprintf(stderr, "[OSK] BACKSPACE len=%d\n", currNameLength);
+					gGT->currNameEntered[currNameLength - 1] = 0;
 						}
 					}
 
@@ -310,6 +352,7 @@ s16 SubmitName_DrawMenu(u16 string)
 								gGT->currNameEntered[currNameLength] = (cursorCharacter << 16) >> 24;
 							}
 
+							fprintf(stderr, "[OSK] WRITE char=0x%x pos=%d\n", cursorCharacter, currNameLengthIncrement);
 							gGT->currNameEntered[currNameLengthIncrement] = cursorCharacter;
 						}
 					}
@@ -376,6 +419,7 @@ s16 SubmitName_DrawMenu(u16 string)
 	else
 	{
 		int tap = sdata->buttonTapPerPlayer[0];
+		int kbProcessed = 0;
 
 		if (tap & BTN_UP)
 		{
@@ -434,6 +478,8 @@ void SubmitName_MenuProc(struct RectMenu *menu)
 {
 	struct GameTracker *gGT = sdata->gGT;
 
+	g_nativeSubmitNameActive = 1;
+
 	s16 selection = SubmitName_DrawMenu(0x13f);
 	menu->rowSelected = selection;
 
@@ -442,6 +488,8 @@ void SubmitName_MenuProc(struct RectMenu *menu)
 	{
 		return;
 	}
+
+	g_nativeSubmitNameActive = 0;
 
 	// if name entered for Time Trial
 	if (sdata->selectProfileState.submitNameMode == SUBMIT_NAME_MODE_TIME_TRIAL)

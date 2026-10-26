@@ -82,6 +82,8 @@ global_variable struct NativeInputController s_controllers[NATIVE_INPUT_MAX_CONT
 global_variable struct PlatformInputPadSnapshot s_installedSnapshots[NATIVE_INPUT_MAX_CONTROLLERS];
 global_variable u8 *s_padSlotData[NATIVE_INPUT_PHYSICAL_SLOT_COUNT];
 global_variable const bool *s_keyboardState;
+int g_nativeSubmitNameActive = 0;
+
 global_variable s32 s_inputInitialized;
 global_variable s32 s_installedSnapshotsActive;
 global_variable s32 s_keyboardControllerSlot = NATIVE_INPUT_DEFAULT_KEYBOARD_SLOT;
@@ -463,10 +465,13 @@ internal u16 NativeInput_ReadKeyboard(void)
 		return buttons;
 	}
 
+	if (!g_nativeSubmitNameActive)
+	{
 	if (s_keyboardState[mapping->kc_square])   buttons &= ~0x8000;
 	if (s_keyboardState[mapping->kc_circle])   buttons &= ~0x2000;
 	if (s_keyboardState[mapping->kc_triangle]) buttons &= ~0x1000;
 	if (s_keyboardState[mapping->kc_cross])    buttons &= ~0x4000;
+	}
 	if (s_keyboardState[mapping->kc_l1])       buttons &= ~0x400;
 	if (s_keyboardState[mapping->kc_l2])       buttons &= ~0x100;
 	if (s_keyboardState[mapping->kc_l3])       buttons &= ~0x2;

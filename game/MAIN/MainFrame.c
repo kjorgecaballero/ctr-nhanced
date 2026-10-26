@@ -1,4 +1,6 @@
 #include <common.h>
+
+extern int g_nativeSubmitNameActive;
 #include <stdio.h>
 #include <platform/native_custom_racer.h>
 #include "platform/native_vag.h"
@@ -540,6 +542,7 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 					return;
 				}
 
+				g_nativeSubmitNameActive = 1;
 				sVar2 = SubmitName_DrawMenu(0x140);
 
 				// if not done yet
@@ -547,6 +550,8 @@ void MainFrame_GameLogic(struct GameTracker *gGT, struct GamepadSystem *gGamepad
 				{
 					return;
 				}
+
+				g_nativeSubmitNameActive = 0;
 
 
 #if defined(CTR_NATIVE)
