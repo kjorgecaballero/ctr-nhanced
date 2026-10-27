@@ -2279,14 +2279,51 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 	{
 		struct Instance **visInstSrc = cDC[player].visInstSrc;
 
-		if (visInstSrc == 0)
+#ifdef CTR_NATIVE
+		/* Native port regression: the boss garage door
+		 * (STATIC_PINGARAGE..STATIC_OXIDEGARAGE, IDs 0x73..0x77) is not
+		 * reliably included in cDC[player].visInstSrc at distance (hub
+		 * PVS excludes the door's leaf), and its thread is not reliably
+		 * present in threadBuckets[STATIC] on every frame
+		 * (INSTANCE_LevDelayedLInBs runs only after NO_LEV_INSTANCE is
+		 * cleared, and thread recycling can gap a frame).
+		 *
+		 * Iterate level1->ptrInstDefs (source of truth for all LEV
+		 * instances) to find the door instance regardless of PVS state
+		 * or thread bucket. Dedup against visInstSrc so we don't
+		 * double-queue a door that IS in PVS this frame. */
 		{
-			continue;
-		}
+			struct Level *lvl = sdata->gGT->level1;
+			if (lvl != NULL && lvl->ptrInstDefs != NULL)
+			{
+				int ni = lvl->numInstances;
+				for (int i = 0; i < ni; i++)
+				{
+					struct Instance *di = lvl->ptrInstDefs[i].ptrInstance;
+					if (di == NULL || di->model == NULL) continue;
+					int mid = (int)di->model->id;
+					if (mid < STATIC_PINGARAGE || mid > STATIC_OXIDEGARAGE) continue;
 
-		for (; *visInstSrc != 0; visInstSrc++)
+					int inPvs = 0;
+					if (visInstSrc != NULL)
+					{
+						struct Instance **v = visInstSrc;
+						for (; *v != NULL; v++)
+							if (*v == di) { inPvs = 1; break; }
+					}
+					if (!inPvs)
+						entry = RenderBucket_QueueDraw(di, entry, player, lodMask, gameMode1, &queueState);
+				}
+			}
+		}
+#endif
+
+		if (visInstSrc != 0)
 		{
-			entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
+			for (; *visInstSrc != 0; visInstSrc++)
+			{
+				entry = RenderBucket_QueueDraw(*visInstSrc, entry, player, lodMask, gameMode1, &queueState);
+			}
 		}
 	}
 

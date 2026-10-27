@@ -398,6 +398,34 @@ void AH_Garage_LInB(struct Instance *inst)
 	t->inst = inst;
 	t->funcThDestroy = AH_Garage_ThDestroy;
 
+#ifdef CTR_NATIVE
+	/* Native port regression: the boss garage door (STATIC_PINGARAGE..
+	 * STATIC_OXIDEGARAGE, IDs 0x73..0x77) is culled by maxDistanceLOD
+	 * on its model headers at a much shorter distance than retail PS1.
+	 * At distance the door instance is still in threadBuckets[STATIC]
+	 * and the PVS may include it, but RenderBucket_SelectModelHeader
+	 * walks the headers and exhausts before finding one within
+	 * maxDistanceLOD. The result is that the door is not drawn and the
+	 * pixelated QuadBlock placeholder baked into the LEV becomes
+	 * visible instead, until the player is very close.
+	 *
+	 * Force maxDistanceLOD = 0xFFFF on every header so the walk always
+	 * stops at headers[0] (HI LOD). Same pattern as custom racers in
+	 * LOAD_TenStages.c:498 and vehicles in VehBirth.c:805.
+	 *
+	 * Unconditional (not gated by HIGHMP): this restores retail
+	 * behavior. */
+	{
+		struct ModelHeader *mh = inst->model->headers;
+		int nH = (int)inst->model->numHeaders;
+		int h;
+		for (h = 0; h < nH; h++)
+		{
+			mh[h].maxDistanceLOD = (s16)0xFFFF;
+		}
+	}
+#endif
+
 	garage = t->object;
 	garage->direction = BOSS_GARAGE_DOOR_STOPPED;
 	garage->cooldown = 0;
