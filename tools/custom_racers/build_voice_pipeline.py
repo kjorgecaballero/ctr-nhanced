@@ -38,8 +38,9 @@ by path. The old [GAME dance SFX (D)] row is gone.
 
 If N == 0 the output is byte-identical to the voice-only pipeline.
 
-Banks: voices go to XA/ENG/GAME/S{18+}.XA, music to
-XA/MUSIC/S{18+}.XA (separate dirs, same counter — no collision).
+Banks: voices go to XA/ENG/GAME/S{21+}.XA, music to
+XA/MUSIC/S{21+}.XA (separate dirs, separate counters). Retail
+GAME occupies S00-S20, so 21 is the first safe custom slot.
 
 Usage:
     python tools/custom_racers/build_voice_pipeline.py
@@ -72,11 +73,11 @@ MUSIC_CACHE_DIR  = ROOT / "assets" / "XA" / ".music_cache"
 
 VOICE_TRACK_BASE  = 314
 VOICE_EVENT_COUNT = 18
-VOICE_BANK_BASE   = 18
+VOICE_BANK_BASE   = 21
 CHUNK_SIZE        = 8   # XA Form2 audio channels per bank
 
 MUSIC_TRACK_BASE  = 13
-MUSIC_BANK_BASE   = 18
+MUSIC_BANK_BASE   = 21
 
 # Dance SFX: up to 16 per-frame XA triggers attached to a custom podium
 # dance. trackId = DANCE_SFX_TRACK_BASE + roster_index * DANCE_SFX_MAX + slot.
@@ -436,10 +437,12 @@ def cmd_restore():
 
 
 def _roster_filter(page, slot):
+    # Page 0 has 24 slots: 0-15 = retail originals, 16-23 = customs.
+    # Pages 1+ have 24 slots: 0-15 = base customs, 16-23 = extended customs.
     if page == 0:
-        return 16 <= slot <= 17
+        return 16 <= slot <= 23
     if page >= 1:
-        return 0 <= slot <= 17
+        return 0 <= slot <= 23
     return False
 
 
