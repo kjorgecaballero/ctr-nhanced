@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_renderer.h>
 #include "native_settings.h"
 
 
@@ -2814,7 +2815,7 @@ static int RenderBucket_CheckProjectedPrim(struct RenderBucketDrawContext *ctx, 
 
 	// NOTE(aalhendi): Source-backs the shared retail projection gate:
 	// flag reject, optional NCLIP, AVSZ3, screen-window reject, then MAC0.
-	if ((s32)(gteFlag << 13) < 0)
+	if (!NativeRenderer_GetWidescreen() && ((s32)(gteFlag << 13) < 0))
 	{
 		return 0;
 	}
@@ -2841,10 +2842,12 @@ static int RenderBucket_CheckProjectedPrim(struct RenderBucketDrawContext *ctx, 
 
 	gte_avsz3();
 
-	if (RenderBucket_TriangleInScreenWindow(ctx) == 0)
-	{
-		return 0;
-	}
+	
+        // [WIDESCREEN] Skip screen-window reject when widescreen is on.
+        if (!NativeRenderer_GetWidescreen())
+        {
+                if (!NativeRenderer_GetWidescreen() && RenderBucket_TriangleInScreenWindow(ctx) == 0) { return 0; }
+        }
 
 	gte_stopz(&depthMac0);
 	*depthMac0Out = depthMac0;

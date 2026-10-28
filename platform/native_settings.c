@@ -10,6 +10,8 @@
 extern int  gNativeDitheringEnabled;
 extern int  g_cfg_bilinearFiltering;
 extern void NativeRenderer_SetInternalScale(int scale);
+extern void NativeRenderer_SetWidescreen(int enabled);
+extern int  NativeRenderer_GetWidescreen(void);
 extern int  NativeRenderer_GetInternalScale(void);
 
 static int s_loaded           = 0;
@@ -39,6 +41,11 @@ int NativeSettings_GetBotRandomizer(void)
     return s_bot_randomizer;
 }
 
+int NativeSettings_GetWidescreen(void)
+{
+    return NativeRenderer_GetWidescreen();
+}
+
 int NativeSettings_GetHighMp(void)
 {
 	if (s_high_mp < 0)
@@ -64,6 +71,7 @@ void NativeSettings_Save(void)
     fprintf(f, "bilinear=%d\n",   s_bilinear);
     fprintf(f, "character_detail=%d\n", s_character_detail);
     fprintf(f, "bot_randomizer=%d\n", s_bot_randomizer);
+    fprintf(f, "widescreen=%d\n", NativeRenderer_GetWidescreen());
     fclose(f);
 }
 
@@ -72,6 +80,7 @@ static void NativeSettings_Apply(void)
     gNativeDitheringEnabled = s_dithering;
     g_cfg_bilinearFiltering = s_bilinear;
     NativeRenderer_SetInternalScale(s_resolution);
+    NativeRenderer_SetWidescreen(NativeRenderer_GetWidescreen()); /* apply at startup */
 }
 
 void NativeSettings_Load(void)
@@ -101,6 +110,7 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
         else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value; /* 0=OFF 1=RETAIL 2=ALL (was squashed to 0/1) */
+        else if (strcmp(key, "widescreen") == 0) NativeRenderer_SetWidescreen(value != 0);
     }
     fclose(f);
 
@@ -160,5 +170,13 @@ void NativeSettings_SetBotRandomizer(int mode)
     if (mode > 2) mode = 2;
     if (s_bot_randomizer == mode) return;
     s_bot_randomizer = mode;
+    NativeSettings_Save();
+}
+void NativeSettings_SetWidescreen(int enabled)
+{
+    if (!s_loaded) NativeSettings_Load();
+    enabled = (enabled != 0);
+    if (NativeRenderer_GetWidescreen() == enabled) return;
+    NativeRenderer_SetWidescreen(enabled);
     NativeSettings_Save();
 }

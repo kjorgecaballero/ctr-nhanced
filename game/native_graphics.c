@@ -6,18 +6,18 @@ extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
 extern int  gNativeDitheringEnabled;
 
-/* 3 rows. Removed:
- *   - ASPECT RATIO: worked but never persisted across sessions.
- *   - ANTI-ALIASING: local-only menu placeholder, never reached
- *     the renderer. No MSAA in native_renderer.c.
- *   - CHARACTER DETAIL: LOW is a joke (box LOD), SMART is
- *     indistinguishable from HIGH on modern hardware. Forced HIGH
- *     via NativeSettings (see native_settings.c). */
-static const char *const s_labels[3] = {
-    "DISPLAY MODE", "RESOLUTION", "DITHERING"
+/* 4 rows. HISTORICAL:
+ *   - ASPECT RATIO was removed because it only stretched the 4:3
+ *     framebuffer to a 16:9 viewport (Hor-stretch, karts looked fat).
+ *     Replaced by WIDESCREEN, which also compresses matrix_ViewProj X
+ *     in PushBuffer_SetMatrixVP for true Hor+ widescreen.
+ *   - ANTI-ALIASING: placeholder, never reached the renderer.
+ *   - CHARACTER DETAIL: forced HIGH via NativeSettings. */
+static const char *const s_labels[4] = {
+    "DISPLAY MODE", "RESOLUTION", "DITHERING", "WIDESCREEN"
 };
 
-#define NGFX_ROW_COUNT  3
+#define NGFX_ROW_COUNT  4
 
 static int s_open = 0, s_row = 0, s_res = 2;
 
@@ -34,7 +34,8 @@ static const char *ng_val(int r, char *b, int n) {
     switch (r) {
     case 0: return Platform_IsFullscreen() ? "FULLSCREEN" : "WINDOWED";
     case 1: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
-    default: return gNativeDitheringEnabled ? "ON" : "OFF";
+    case 2: return gNativeDitheringEnabled ? "ON" : "OFF";
+    default: return NativeSettings_GetWidescreen() ? "16:9" : "4:3";
     }
 }
 
@@ -47,7 +48,8 @@ static int ng_chg(int r, int d) {
             else      { if (s_res >= 8) return 0; s_res++; }
             NativeSettings_SetResolution(s_res);
             return 1;
-    default: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
+    case 2: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
+    default: NativeSettings_SetWidescreen(!NativeSettings_GetWidescreen()); return 1;
     }
 }
 
@@ -90,6 +92,6 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
     Color c;
     ColorCode_SetPacked(&c, sdata->battleSetup_Color_UI_1);
     RECTMENU_DrawOuterRect_Edge(&sep, c, 0x20, ot);
-    RECT bg = {56, 20, 400, 145};
+    RECT bg = {56, 20, 400, 163};
     RECTMENU_DrawInnerRect(&bg, 4, ot);
 }

@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -107,41 +108,41 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 		switch (quadIndex)
 		{
 		case 0:
-			p->x0 = posX;
+			p->x0 = (s16)Widescreen_ScaleAbout(posX + widthOffset, posX);
 			p->y0 = posY;
 
-			p->x1 = rightX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, rightX);
 			p->y1 = posY;
-			p->x2 = posX;
+			p->x2 = (s16)Widescreen_ScaleAbout(posX + widthOffset, posX);
 			p->y2 = bottomY;
-			p->x3 = rightX;
+			p->x3 = (s16)Widescreen_ScaleAbout(posX + widthOffset, rightX);
 			p->y3 = bottomY;
 			break;
 
 		case 1:
 			altX = (posX + widthOffset * 2) - angleX;
-			p->x0 = altX;
+			p->x0 = (s16)Widescreen_ScaleAbout(posX + widthOffset, altX);
 			p->y0 = posY;
 
-			p->x1 = leftX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			p->y1 = posY;
-			p->x2 = altX;
+			p->x2 = (s16)Widescreen_ScaleAbout(posX + widthOffset, altX);
 			p->y2 = bottomY;
-			p->x3 = leftX;
+			p->x3 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			p->y3 = bottomY;
 
 			break;
 
 		case 2:
 			altY = (posY + heightOffset * 2) - angleY;
-			p->x0 = posX;
+			p->x0 = (s16)Widescreen_ScaleAbout(posX + widthOffset, posX);
 			p->y0 = altY;
 
-			p->x1 = rightX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, rightX);
 			p->y1 = altY;
-			p->x2 = posX;
+			p->x2 = (s16)Widescreen_ScaleAbout(posX + widthOffset, posX);
 			p->y2 = topY;
-			p->x3 = rightX;
+			p->x3 = (s16)Widescreen_ScaleAbout(posX + widthOffset, rightX);
 			p->y3 = topY;
 
 			break;
@@ -149,14 +150,14 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 		case 3:
 			altX = (posX + widthOffset * 2) - angleX;
 			altY = (posY + heightOffset * 2) - angleY;
-			p->x0 = altX;
+			p->x0 = (s16)Widescreen_ScaleAbout(posX + widthOffset, altX);
 			p->y0 = altY;
 
-			p->x1 = leftX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			p->y1 = altY;
-			p->x2 = altX;
+			p->x2 = (s16)Widescreen_ScaleAbout(posX + widthOffset, altX);
 			p->y2 = topY;
-			p->x3 = leftX;
+			p->x3 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			p->y3 = topY;
 
 			break;
@@ -230,7 +231,7 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 		const int widescreenOffset = 0;
 
 		p->x0 = centerX + widescreenOffset;
-		p->x1 = rightX;
+		p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, rightX);
 		p->y0 = centerY;
 		p->y2 = bottomY;
 
@@ -238,7 +239,7 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 		{
 		case 1:
 			p->x0 = altX - widescreenOffset;
-			p->x1 = leftX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			break;
 
 		case 2:
@@ -250,7 +251,7 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 			p->x0 = altX - widescreenOffset;
 			p->y0 = altY;
 
-			p->x1 = leftX;
+			p->x1 = (s16)Widescreen_ScaleAbout(posX + widthOffset, leftX);
 			p->y2 = topY;
 			break;
 		}
@@ -314,6 +315,7 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 	p->v[3].texCoords.u = icon->texLayout.u3;
 	p->v[3].texCoords.v = bottomV;
 
-	AddPrimitive(p, ot);
+	if (Widescreen_GetFactor() != 1000) Widescreen_CompressNative(p);
+        AddPrimitive(p, ot);
 	primMem->cursor = p + 1;
 }

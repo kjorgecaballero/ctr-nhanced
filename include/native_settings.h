@@ -16,4 +16,6 @@ void NativeSettings_Save(void);
 int  NativeSettings_GetBotRandomizer(void);
 int  NativeSettings_GetHighMp(void);
 void NativeSettings_SetBotRandomizer(int enabled);
+void NativeSettings_SetWidescreen(int);
+int  NativeSettings_GetWidescreen(void);
 #endif

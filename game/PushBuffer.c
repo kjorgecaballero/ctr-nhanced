@@ -1,5 +1,9 @@
 #include <common.h>
 
+#if defined(CTR_NATIVE)
+extern int NativeSettings_GetWidescreen(void);
+#endif
+
 
 void PushBuffer_Init(struct PushBuffer *pb, int id, int total)
 {
@@ -402,6 +406,21 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
 
 	// scale Y axis (3)
 	pb->matrix_ViewProj.m[1][2] = pb->matrix_ViewProj.m[1][2] * r360 / r600;
+
+#if defined(CTR_NATIVE)
+    // A 16:9 presentation is one third wider than the original 4:3 output.
+    // Compress clip-space X to 3/4 so the final presentation expands the
+    // horizontal field of view instead of stretching the 3D scene.
+    // The main framebuffer stays 4:3 (512x240 * internalScale); only the
+    // presentation viewport and the projection matrix change.
+    if (NativeSettings_GetWidescreen())
+    {
+        pb->matrix_ViewProj.t[0]    = pb->matrix_ViewProj.t[0]    * 3 / 4;
+        pb->matrix_ViewProj.m[0][0] = pb->matrix_ViewProj.m[0][0] * 3 / 4;
+        pb->matrix_ViewProj.m[0][1] = pb->matrix_ViewProj.m[0][1] * 3 / 4;
+        pb->matrix_ViewProj.m[0][2] = pb->matrix_ViewProj.m[0][2] * 3 / 4;
+    }
+#endif
 
 	// store camera matrix,
 	// otherwise oxide intro cutscene bugs out,

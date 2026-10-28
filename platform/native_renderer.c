@@ -161,6 +161,7 @@ int g_windowHeight = 0;
 
 global_variable int s_presentAspectW = 4;
 global_variable int s_presentAspectH = 3;
+global_variable int s_widescreen = 0;
 global_variable SDL_Rect s_presentViewport = {0, 0, 0, 0};
 
 int g_dbg_wireframeMode = 0;
@@ -254,6 +255,19 @@ internal int NativeRenderer_InitialiseGLContext(char *windowName, int fullscreen
 	}
 
 	return 1;
+}
+
+int NativeRenderer_GetWidescreen(void)
+{
+    return s_widescreen;
+}
+
+void NativeRenderer_SetWidescreen(int enabled)
+{
+    s_widescreen = enabled != 0;
+    NativeRenderer_SetPresentationAspect(s_widescreen ? 16 : 4,
+                                         s_widescreen ? 9  : 3);
+    NativeRenderer_UpdatePresentationViewport();
 }
 
 internal int NativeRenderer_InitialiseGLExt(void)

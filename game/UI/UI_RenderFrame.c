@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include "native_settings.h"
 #include <platform/native_renderer.h>
 
@@ -7,6 +8,8 @@
 // CTR_NATIVE only adds an ST1 map-metadata null guard below.
 void UI_RenderFrame_Racing()
 {
+        Widescreen_HudReset();
+        Widescreen_HudBegin();
 	s16 sVar1;
 	s16 sVar2;
 	u8 bVar3;
@@ -880,6 +883,8 @@ void UI_RenderFrame_Racing()
 		// disable the randomizing effect in the HUD
 		gGT->gameMode1 &= ~ROLLING_ITEM;
 	}
+
+        Widescreen_HudEnd();
 }
 
 void UI_RenderFrame_AdvHub(void)

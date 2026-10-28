@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -44,7 +45,8 @@ void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 		setTransparency(p, transparency);
 	}
 
-	primMem->cursor = p + 1;
+	if (Widescreen_GetFactor() != 1000) Widescreen_CompressFT4(p);
+        primMem->cursor = p + 1;
 }
 
 
@@ -130,7 +132,8 @@ void DecalHUD_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 		setTransparency(p, transparency);
 	}
 
-	primMem->cursor = p + 1;
+	if (Widescreen_GetFactor() != 1000) Widescreen_CompressGT4(p);
+        primMem->cursor = p + 1;
 }
 
 

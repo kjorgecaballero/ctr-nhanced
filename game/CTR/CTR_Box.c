@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 void CTR_Box_DrawWirePrims(Point p1, Point p2, Color color, void *ot)
 {
@@ -112,6 +113,13 @@ void CTR_Box_DrawClearBox(const RECT *r, const Color *color, int transparency, u
 
 void CTR_Box_DrawSolidBox(RECT *r, Color color, u32 *ot)
 {
+        if (Widescreen_GetFactor() != 1000) {
+                int cx = 0x100;
+                int ox = r->x;
+                int ow = r->w;
+                r->x = cx + ((ox - cx) * Widescreen_GetFactor()) / 1000;
+                r->w = (ow * Widescreen_GetFactor()) / 1000;
+        }
 	PolyF4 *p;
 	GetPrimMem(p);
 	if (p == nullptr)
