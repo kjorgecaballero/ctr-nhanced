@@ -1,6 +1,9 @@
 #include "platform/native_checkpoint.h"
 
 #include <common.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
 #include <macros.h>
 
 #include <platform.h>
@@ -145,31 +148,75 @@ internal void NativeCheckpoint_WriteU32Slot(void *slot, u32 value)
 	}
 }
 
+void NativeCheckpoint_SlotHashReset(void);
+
 void NativeCheckpoint_OnMempackArenaReset(void)
 {
 	s_nativeCheckpointPointerSlotCount = 0;
+	NativeCheckpoint_SlotHashReset();
+}
+
+
+/* Hash set for O(1) duplicate rejection in RegisterPointerSlot. */
+static void **s_ncSlotHash = NULL;
+static u32 s_ncSlotHashMask = 0;
+
+void NativeCheckpoint_SlotHashReset(void)
+{
+	if (s_ncSlotHash != NULL)
+		memset(s_ncSlotHash, 0, (size_t)(s_ncSlotHashMask + 1) * sizeof(void *));
+}
+
+static int NativeCheckpoint_SlotHashInsert(void *slot)
+{
+	if (s_ncSlotHash == NULL)
+	{
+		u32 size = 1;
+		while (size < (u32)NATIVE_CHECKPOINT_POINTER_SLOT_CAP * 2u)
+			size <<= 1;
+		
+		s_ncSlotHash = (void **)calloc(size, sizeof(void *));
+		if (s_ncSlotHash == NULL) return -1;
+		s_ncSlotHashMask = size - 1;
+	}
+
+	u64 h = (u64)(uintptr_t)slot;
+	h = (h >> 2) * 11400714819323198485ull;
+	u32 i = (u32)(h >> 32) & s_ncSlotHashMask;
+	u32 probes = 0;
+
+	while (s_ncSlotHash[i] != NULL)
+	{
+		if (s_ncSlotHash[i] == slot) return 1;
+		i = (i + 1) & s_ncSlotHashMask;
+		if (++probes > s_ncSlotHashMask) return -1;
+	}
+
+	s_ncSlotHash[i] = slot;
+	return 0;
 }
 
 void NativeCheckpoint_RegisterPointerSlot(void *slot)
 {
-	if (slot == NULL)
+	if (slot == NULL) return;
+	if (s_nativeCheckpointPointerSlotCount >= NATIVE_CHECKPOINT_POINTER_SLOT_CAP) return;
+
+	int r = NativeCheckpoint_SlotHashInsert(slot);
+	if (r == 1) return;
+	if (r < 0)
 	{
-		return;
-	}
-	if (s_nativeCheckpointPointerSlotCount >= NATIVE_CHECKPOINT_POINTER_SLOT_CAP)
-	{
-		return;
-	}
-	for (u32 i = 0; i < s_nativeCheckpointPointerSlotCount; i++)
-	{
-		if (s_nativeCheckpointPointerSlots[i] == slot)
+		for (u32 i = 0; i < s_nativeCheckpointPointerSlotCount; i++)
 		{
-			return;
+			if (s_nativeCheckpointPointerSlots[i] == slot) return;
 		}
 	}
 
+
 	s_nativeCheckpointPointerSlots[s_nativeCheckpointPointerSlotCount++] = slot;
 }
+
+
+
 
 internal int NativeCheckpoint_GetActiveMempackIndex(void)
 {
@@ -1905,6 +1952,7 @@ internal int NativeCheckpoint_ApplyPointerSlotState(const struct NativeCheckpoin
 	}
 
 	s_nativeCheckpointPointerSlotCount = 0;
+	NativeCheckpoint_SlotHashReset();
 
 	for (u32 i = 0; i < state->count; i++)
 	{
