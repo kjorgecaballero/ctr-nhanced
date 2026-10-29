@@ -58,6 +58,7 @@ void NativeRenderer_PopDebugLabel(void);
 
 #endif
 void NativeRenderer_SetPresentationAspect(int width, int height);
+void NativeRenderer_UpdatePresentationViewport(void);
 
 // NATIVE-GFX: 1=native 512x216, 2=1024x432, 3=1536x648, 4=2048x864.
 // Internal render target scales; presentation downsamples to window.

@@ -15,5 +15,7 @@ void NativeSettings_Save(void);
 
 int  NativeSettings_GetBotRandomizer(void);
 int  NativeSettings_GetHighMp(void);
+int  NativeSettings_GetAspectRatio(void);
+void NativeSettings_SetAspectRatio(int mode);
 void NativeSettings_SetBotRandomizer(int enabled);
 #endif

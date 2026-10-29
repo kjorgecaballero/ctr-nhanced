@@ -19,12 +19,13 @@ static int s_bilinear         = 0;
 static int s_character_detail = 1;
 static int s_bot_randomizer   = 0;
 static int s_high_mp          = -1;
+static int s_aspect_ratio     = 0;
 
 void NativeSettings_Load(void);
 
-int NativeSettings_GetDithering(void) { return s_dithering; }
-int NativeSettings_GetResolution(void) { return s_resolution; }
-int NativeSettings_GetBilinear(void)   { return s_bilinear; }
+int NativeSettings_GetDithering(void) { if (!s_loaded) NativeSettings_Load(); return s_dithering; }
+int NativeSettings_GetResolution(void) { if (!s_loaded) NativeSettings_Load(); return s_resolution; }
+int NativeSettings_GetBilinear(void)   { if (!s_loaded) NativeSettings_Load(); return s_bilinear; }
 int NativeSettings_GetCharacterDetail(void)
 {
     /* Tester build: CHARACTER DETAIL is forced to HIGH (2).
@@ -50,6 +51,12 @@ int NativeSettings_GetHighMp(void)
 	return s_high_mp;
 }
 
+
+int NativeSettings_GetAspectRatio(void)
+{
+    if (!s_loaded) NativeSettings_Load();
+    return s_aspect_ratio;
+}
 void NativeSettings_Load(void);
 
 void NativeSettings_Save(void)
@@ -64,6 +71,7 @@ void NativeSettings_Save(void)
     fprintf(f, "bilinear=%d\n",   s_bilinear);
     fprintf(f, "character_detail=%d\n", s_character_detail);
     fprintf(f, "bot_randomizer=%d\n", s_bot_randomizer);
+    fprintf(f, "aspect_ratio=%d\n", s_aspect_ratio);
     fclose(f);
 }
 
@@ -90,6 +98,7 @@ void NativeSettings_Load(void)
         return;
     }
 
+    int sawAspect = 0;
     char line[128];
     while (fgets(line, sizeof(line), f) != NULL)
     {
@@ -101,6 +110,7 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
         else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value; /* 0=OFF 1=RETAIL 2=ALL (was squashed to 0/1) */
+        else if (strcmp(key, "aspect_ratio")     == 0) s_aspect_ratio     = value, sawAspect = 1;
     }
     fclose(f);
 
@@ -110,12 +120,16 @@ void NativeSettings_Load(void)
     if (s_character_detail > 3) s_character_detail = 3;
     if (s_bot_randomizer < 0) s_bot_randomizer = 0;
     if (s_bot_randomizer > 2) s_bot_randomizer = 2;
+    if (s_aspect_ratio < 0) s_aspect_ratio = 0;
+    if (s_aspect_ratio > 3) s_aspect_ratio = 3;
 
     NativeSettings_Apply();
+    if (!sawAspect) NativeSettings_Save(); /* cfg viejo: anadir aspect_ratio */
 }
 
 void NativeSettings_SetDithering(int enabled)
 {
+    if (!s_loaded) NativeSettings_Load();
     enabled = (enabled != 0);
     if (s_dithering == enabled) return;
     s_dithering = enabled;
@@ -125,6 +139,7 @@ void NativeSettings_SetDithering(int enabled)
 
 void NativeSettings_SetResolution(int scale)
 {
+    if (!s_loaded) NativeSettings_Load();
     if (scale < 1) scale = 1;
     if (scale > 8) scale = 8;
     if (s_resolution == scale) return;
@@ -135,6 +150,7 @@ void NativeSettings_SetResolution(int scale)
 
 void NativeSettings_SetBilinear(int enabled)
 {
+    if (!s_loaded) NativeSettings_Load();
     enabled = (enabled != 0);
     if (s_bilinear == enabled) return;
     s_bilinear = enabled;
@@ -144,6 +160,7 @@ void NativeSettings_SetBilinear(int enabled)
 
 void NativeSettings_SetCharacterDetail(int mode)
 {
+    if (!s_loaded) NativeSettings_Load();
     if (mode < 0) mode = 0;
     if (mode > 3) mode = 3;
     if (s_character_detail == mode) return;
@@ -160,5 +177,15 @@ void NativeSettings_SetBotRandomizer(int mode)
     if (mode > 2) mode = 2;
     if (s_bot_randomizer == mode) return;
     s_bot_randomizer = mode;
+    NativeSettings_Save();
+}
+
+void NativeSettings_SetAspectRatio(int mode)
+{
+    if (!s_loaded) NativeSettings_Load();
+    if (mode < 0) mode = 0;
+    if (mode > 3) mode = 3;
+    if (s_aspect_ratio == mode) return;
+    s_aspect_ratio = mode;
     NativeSettings_Save();
 }

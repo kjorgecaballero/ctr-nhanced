@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -167,7 +168,8 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 		CtrGpu_WriteColorCode(&p->r2, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_MID_ROW * sizeof(u32)]));
 		CtrGpu_WriteColorCode(&p->r3, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_BRIGHT_ROW * sizeof(u32)]));
 
-		setPolyGT4(p);
+		Widescreen_CompressGT4(p);
+                setPolyGT4(p);
 
 		if (transparency != 0)
 		{
@@ -294,7 +296,8 @@ void UI_DrawDriverIcon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *pr
 	p->v[3].pos.x = bottomX;
 	p->v[3].pos.y = bottomY;
 
-	p->polyClut.self = icon->texLayout.clut;
+	Widescreen_CompressNative(p);
+        p->polyClut.self = icon->texLayout.clut;
 	p->polyTpage.self = icon->texLayout.tpage;
 	p->v[2].page.clut.self = (icon->texLayout.v3 << 8) | icon->texLayout.u3;
 

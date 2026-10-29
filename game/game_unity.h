@@ -125,6 +125,7 @@
 
 #include "MAIN/MainFreeze.c"
 #include "native_graphics.c"
+#include "widescreen.c"
 #include "native_options.c"
 #include "native_cheats.c"
 

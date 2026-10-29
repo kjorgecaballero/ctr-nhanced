@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -34,6 +35,7 @@ void DecalHUD_DrawPolyFT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 rightX = posX + FP_Mult(width, scale);
 
 	setXY4CompilerHack(p, posX, posY, rightX, posY, posX, bottomY, rightX, bottomY);
+        Widescreen_CompressFT4(p);
 	setIconUV(p, icon);
 
 	// this function doesn't support coloring the primitives
@@ -90,6 +92,12 @@ void DecalHUD_DrawWeapon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *
 		}
 	}
 
+        if (rot == 0) {
+                Widescreen_CompressFT4(p);
+        } else {
+                int len = Widescreen_XShift(p->x2 - p->x0);
+                p->x0 += len; p->x1 += len; p->x2 -= len; p->x3 -= len;
+        }
 	setIconUV(p, icon);
 
 	// this function doesn't support coloring the primitives
@@ -123,6 +131,7 @@ void DecalHUD_DrawPolyGT4(struct Icon *icon, s16 posX, s16 posY, struct PrimMem 
 	u32 bottomY = posY + FP_Mult(height, scale);
 	u32 rightX = (u16)posX + FP_Mult(width, scale);
 	setXY4CompilerHack(p, (u16)posX, posY, rightX, posY, (u16)posX, bottomY, rightX, bottomY);
+        Widescreen_CompressGT4Scaled(p, (int)width, (int)scale);
 	setIconUV(p, icon);
 
 	if (transparency)
@@ -244,8 +253,8 @@ LAB_800232d8:
 	                                 ((u32)(posY - (-bitshiftTopRightCorner * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
 	CtrGpu_WritePackedXY(&p->x3, ((posX + ((bitshiftTopRightCorner + 1) * iVar13 >> DECAL_HUD_ARROW_ROTATE_SHIFT) + iVar7) & 0xffff) |
 	                                 ((u32)(posY - ((bitshiftTopRightCorner + 1) * iVar10 >> DECAL_HUD_ARROW_ROTATE_SHIFT)) << 16));
-
-	CtrGpu_WriteColorCode(&p->r1, color2);
+        Widescreen_CompressGT4(p);
+        CtrGpu_WriteColorCode(&p->r1, color2);
 	CtrGpu_WriteColorCode(&p->r2, color3);
 	CtrGpu_WriteColorCode(&p->r3, color4);
 

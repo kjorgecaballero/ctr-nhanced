@@ -6,18 +6,17 @@ extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
 extern int  gNativeDitheringEnabled;
 
-/* 3 rows. Removed:
- *   - ASPECT RATIO: worked but never persisted across sessions.
+/* 4 rows. ASPECT RATIO reinstated with persistence fix.
  *   - ANTI-ALIASING: local-only menu placeholder, never reached
  *     the renderer. No MSAA in native_renderer.c.
  *   - CHARACTER DETAIL: LOW is a joke (box LOD), SMART is
  *     indistinguishable from HIGH on modern hardware. Forced HIGH
  *     via NativeSettings (see native_settings.c). */
-static const char *const s_labels[3] = {
-    "DISPLAY MODE", "RESOLUTION", "DITHERING"
+static const char *const s_labels[4] = {
+    "DISPLAY MODE", "RESOLUTION", "DITHERING", "ASPECT RATIO"
 };
 
-#define NGFX_ROW_COUNT  3
+#define NGFX_ROW_COUNT  4
 
 static int s_open = 0, s_row = 0, s_res = 2;
 
@@ -34,6 +33,13 @@ static const char *ng_val(int r, char *b, int n) {
     switch (r) {
     case 0: return Platform_IsFullscreen() ? "FULLSCREEN" : "WINDOWED";
     case 1: if (s_res < 0) return "NATIVE"; snprintf(b, n, "%dX", s_res); return b;
+    case 3: {
+        int a = NativeSettings_GetAspectRatio();
+        if (a == 1) return "16:9";
+        if (a == 2) return "16:10";
+        if (a == 3) return "21:9";
+        return "4:3";
+    }
     default: return gNativeDitheringEnabled ? "ON" : "OFF";
     }
 }
@@ -47,6 +53,14 @@ static int ng_chg(int r, int d) {
             else      { if (s_res >= 8) return 0; s_res++; }
             NativeSettings_SetResolution(s_res);
             return 1;
+    case 3: {
+        int a = NativeSettings_GetAspectRatio();
+        if (d < 0) { if (a <= 0) return 0; a--; }
+        else       { if (a >= 3) return 0; a++; }
+        NativeSettings_SetAspectRatio(a);
+        NativeRenderer_UpdatePresentationViewport();
+        return 1;
+    }
     default: NativeSettings_SetDithering(!NativeSettings_GetDithering()); return 1;
     }
 }

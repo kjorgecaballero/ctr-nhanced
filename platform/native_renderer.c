@@ -5,6 +5,7 @@
  */
 
 #include <macros.h>
+#include <native_settings.h>
 #include "platform/native_renderer_types.h"
 #include <SDL3/SDL.h>
 
@@ -186,7 +187,7 @@ internal void NativeRenderer_SetScissorState(int enable);
 internal void NativeRenderer_EnableDepth(int enable);
 internal void NativeRenderer_SetViewPort(int x, int y, int width, int height);
 void NativeRenderer_SetPresentationAspect(int width, int height);
-internal void NativeRenderer_UpdatePresentationViewport(void);
+void NativeRenderer_UpdatePresentationViewport(void);
 internal void NativeRenderer_ClearPresentationBars(void);
 internal void NativeRenderer_SetWireframe(int enable);
 internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target);
@@ -494,9 +495,22 @@ internal void NativeRenderer_SetPresentationAspect(int width, int height)
 	s_presentAspectH = height / divisor;
 }
 
-internal void NativeRenderer_UpdatePresentationViewport(void)
+void NativeRenderer_UpdatePresentationViewport(void)
 {
-	if ((g_windowWidth <= 0) || (g_windowHeight <= 0) || (s_presentAspectW <= 0) || (s_presentAspectH <= 0))
+	int viewportW;
+	int viewportH;
+	int effAspectW = s_presentAspectW;
+	int effAspectH = s_presentAspectH;
+
+	switch (NativeSettings_GetAspectRatio())
+	{
+		case 1: effAspectW = 16; effAspectH = 9;  break;
+		case 2: effAspectW = 16; effAspectH = 10; break;
+		case 3: effAspectW = 64; effAspectH = 27; break;
+		default: break; // 4:3 - keep defaults from SetPresentationAspect
+	}
+
+	if ((g_windowWidth <= 0) || (g_windowHeight <= 0) || (effAspectW <= 0) || (effAspectH <= 0))
 	{
 		s_presentViewport.x = 0;
 		s_presentViewport.y = 0;
@@ -505,23 +519,17 @@ internal void NativeRenderer_UpdatePresentationViewport(void)
 		return;
 	}
 
-	int viewportW = g_windowWidth;
-	int viewportH = (viewportW * s_presentAspectH) / s_presentAspectW;
+	viewportW = g_windowWidth;
+	viewportH = (viewportW * effAspectH) / effAspectW;
 
 	if (viewportH > g_windowHeight)
 	{
 		viewportH = g_windowHeight;
-		viewportW = (viewportH * s_presentAspectW) / s_presentAspectH;
+		viewportW = (viewportH * effAspectW) / effAspectH;
 	}
 
-	if (viewportW < 1)
-	{
-		viewportW = 1;
-	}
-	if (viewportH < 1)
-	{
-		viewportH = 1;
-	}
+	if (viewportW < 1) viewportW = 1;
+	if (viewportH < 1) viewportH = 1;
 
 	s_presentViewport.w = viewportW;
 	s_presentViewport.h = viewportH;
