@@ -51,7 +51,6 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 		len--;
 	}
 
-	if (sdata->gGT != NULL && sdata->gGT->numPlyrCurrGame > 2) return pixLength;
 	return CTR_WIDESCREEN_SCALE_X(pixLength);
 }
 
@@ -81,7 +80,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 	const int widescreenLineStartX = posX;
 	int widescreenPenX = 0;
-	#define DECAL_FONT_DRAW_X(extra) ((sdata->gGT->numPlyrCurrGame > 2) ? (widescreenLineStartX + widescreenPenX + (extra)) : (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra))))
+	#define DECAL_FONT_DRAW_X(extra) (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra)))
 
 	flags &= 0xfff;
 
@@ -184,7 +183,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 			}
 		}
 		widescreenPenX += charWidth;
-		posX = (sdata->gGT->numPlyrCurrGame > 2) ? (widescreenLineStartX + widescreenPenX) : (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX));
+		posX = widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX);
 	}
 }
 

@@ -1,6 +1,7 @@
 #include <common.h>
 #include <stdio.h>
 #include <platform/native_custom_racer.h>
+#include <widescreen.h>
 
 enum
 {
@@ -1000,6 +1001,9 @@ dontDrawSelectCharacter:
 		drawRect.w = MM_CHARACTER_SELECT_ICON_RECT_W;
 		drawRect.h = MM_CHARACTER_SELECT_ICON_RECT_H;
 
+		int oOldW = drawRect.w;
+		drawRect.w = CTR_WIDESCREEN_SCALE_X(oOldW);
+		drawRect.x += ((oOldW - drawRect.w) / 2) + 1; // +1 para centrar perfecto
 		RECTMENU_DrawOuterRect_HighLevel(&drawRect, outlineColor, 0, ot);
 	}
 
@@ -1088,6 +1092,9 @@ dontDrawSelectCharacter:
 			drawRect.w = MM_CHARACTER_SELECT_HIGHLIGHT_W;
 			drawRect.h = MM_CHARACTER_SELECT_HIGHLIGHT_H;
 
+			int hOldW = drawRect.w;
+			drawRect.w = CTR_WIDESCREEN_SCALE_X(hOldW);
+			drawRect.x += ((hOldW - drawRect.w) / 2) + 1; // +1 para centrar perfecto
 			CTR_Box_DrawSolidBox(&drawRect, animatedColor, ot);
 		}
 		if ((D230.characterSelectModelMoveTimer[playerIndex] == 0) &&
@@ -1155,6 +1162,9 @@ dontDrawSelectCharacter:
 			drawRect.w = MM_CHARACTER_SELECT_ICON_RECT_W;
 			drawRect.h = MM_CHARACTER_SELECT_ICON_RECT_H;
 
+			int iOldW = drawRect.w;
+			drawRect.w = CTR_WIDESCREEN_SCALE_X(iOldW);
+			drawRect.x += ((iOldW - drawRect.w) / 2) + 1; // +1 para centrar perfecto
 			RECTMENU_DrawInnerRect(&drawRect, 0, ot);
 		}
 	}

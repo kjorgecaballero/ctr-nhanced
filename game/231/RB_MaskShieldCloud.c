@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 void RB_MaskWeapon_FadeAway(struct Thread *t)
@@ -282,12 +283,12 @@ void RB_ShieldDark_ThTick_Pop(struct Thread *t)
 	if (animFrame < 0xb)
 	{
 		// set scale
-		instDark->scale.x = s_shieldPopScale[animFrame][0];
+		instDark->scale.x = CTR_WIDESCREEN_SCALE_X(s_shieldPopScale[animFrame][0]);
 		instDark->scale.y = s_shieldPopScale[animFrame][1];
 		instDark->scale.z = s_shieldPopScale[animFrame][0];
 
 		// set scale
-		instColor->scale.x = s_shieldPopScale[animFrame][0];
+		instColor->scale.x = CTR_WIDESCREEN_SCALE_X(s_shieldPopScale[animFrame][0]);
 		instColor->scale.y = s_shieldPopScale[animFrame][1];
 		instColor->scale.z = s_shieldPopScale[animFrame][0];
 
@@ -444,12 +445,12 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		scaleY = s_shieldGrowScale[shield->animFrame][1];
 
 		// set scale
-		shieldInst->scale.x = scaleXZ;
+		shieldInst->scale.x = CTR_WIDESCREEN_SCALE_X(scaleXZ);
 		shieldInst->scale.y = scaleY;
 		shieldInst->scale.z = scaleXZ;
 
 		// set scale
-		colorInst->scale.x = scaleXZ;
+		colorInst->scale.x = CTR_WIDESCREEN_SCALE_X(scaleXZ);
 		colorInst->scale.y = scaleY;
 		colorInst->scale.z = scaleXZ;
 
@@ -466,12 +467,12 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 		scaleY = s_shieldPulseScale[timerIndex][1];
 
 		// set scale
-		shieldInst->scale.x = scaleXZ;
+		shieldInst->scale.x = CTR_WIDESCREEN_SCALE_X(scaleXZ);
 		shieldInst->scale.y = scaleY;
 		shieldInst->scale.z = scaleXZ;
 
 		// set scale
-		colorInst->scale.x = scaleXZ;
+		colorInst->scale.x = CTR_WIDESCREEN_SCALE_X(scaleXZ);
 		colorInst->scale.y = scaleY;
 		colorInst->scale.z = scaleXZ;
 
