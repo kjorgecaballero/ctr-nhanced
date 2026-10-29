@@ -168,7 +168,11 @@ void UI_WeaponBG_DrawShine(struct Icon *icon, s16 posX, s16 posY, struct PrimMem
 		CtrGpu_WriteColorCode(&p->r2, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_MID_ROW * sizeof(u32)]));
 		CtrGpu_WriteColorCode(&p->r3, CTR_ReadU32LE(&shineColors[UI_WEAPON_SHINE_COLOR_BRIGHT_ROW * sizeof(u32)]));
 
-		Widescreen_CompressGT4(p);
+		int shineCenterX = posX + widthOffset; // Centro exacto del sol
+		p->x0 = (s16)(shineCenterX + CTR_WIDESCREEN_SCALE_X(p->x0 - shineCenterX));
+		p->x1 = (s16)(shineCenterX + CTR_WIDESCREEN_SCALE_X(p->x1 - shineCenterX));
+		p->x2 = (s16)(shineCenterX + CTR_WIDESCREEN_SCALE_X(p->x2 - shineCenterX));
+		p->x3 = (s16)(shineCenterX + CTR_WIDESCREEN_SCALE_X(p->x3 - shineCenterX));
                 setPolyGT4(p);
 
 		if (transparency != 0)
