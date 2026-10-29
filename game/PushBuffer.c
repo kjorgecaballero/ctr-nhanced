@@ -407,11 +407,11 @@ void PushBuffer_SetMatrixVP(struct PushBuffer *pb)
         // widescreen: scale X by ws/r800 to widen horizontal FOV
         if (NativeSettings_GetAspectRatio() != 0)
         {
-                int ws = Widescreen_GetFactor() * 0x800 / 1000;
-                pb->matrix_ViewProj.t[0] = pb->matrix_ViewProj.t[0] * ws / 0x800;
-                pb->matrix_ViewProj.m[0][0] = pb->matrix_ViewProj.m[0][0] * ws / 0x800;
-                pb->matrix_ViewProj.m[0][1] = pb->matrix_ViewProj.m[0][1] * ws / 0x800;
-                pb->matrix_ViewProj.m[0][2] = pb->matrix_ViewProj.m[0][2] * ws / 0x800;
+                // widescreen: igual que vita
+                pb->matrix_ViewProj.t[0]    = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.t[0]);
+                pb->matrix_ViewProj.m[0][0] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][0]);
+                pb->matrix_ViewProj.m[0][1] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][1]);
+                pb->matrix_ViewProj.m[0][2] = CTR_WIDESCREEN_SCALE_X(pb->matrix_ViewProj.m[0][2]);
         }
 
 	// store camera matrix,
@@ -598,8 +598,7 @@ void PushBuffer_UpdateFrustum(struct PushBuffer *pb)
 	val_X = val_X / 2;
         if (NativeSettings_GetAspectRatio() != 0)
         {
-                int ws = Widescreen_GetFactor() * 0x800 / 1000;
-                val_X = val_X * 0x800 / ws;
+                val_X = CTR_WIDESCREEN_EXPAND_X(val_X);
         }
 
 	val_Y = ((pb->rect.h * 0x600) / 0x360);

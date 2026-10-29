@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 const u32 *s_fontColorOverride = NULL;
 
@@ -50,7 +51,7 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 		len--;
 	}
 
-	return pixLength;
+	return CTR_WIDESCREEN_SCALE_X(pixLength);
 }
 
 
@@ -77,6 +78,9 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 		posX -= alignX;
 	}
 
+	const int widescreenLineStartX = posX;
+	int widescreenPenX = 0;
+	#define DECAL_FONT_DRAW_X(extra) (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra)))
 
 	flags &= 0xfff;
 
@@ -168,7 +172,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 					DecalHUD_DrawPolyGT4(iconPtrArray[iconID],
 
-					                     posX + pixWidthExtra, posY + pixHeightExtra,
+					                     DECAL_FONT_DRAW_X(pixWidthExtra), posY + pixHeightExtra,
 
 					                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 
@@ -178,7 +182,8 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 				}
 			}
 		}
-		posX += charWidth;
+		widescreenPenX += charWidth;
+		posX = widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX);
 	}
 }
 

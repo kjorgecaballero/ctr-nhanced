@@ -1,5 +1,8 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <widescreen.h>
+
+void UI_Map_GetIconPos(struct UIMap *map, int *posX, int *posY);
 
 enum UIMapConstants
 {
@@ -131,6 +134,21 @@ void UI_Map_DrawMap_ExtraFunc(struct Icon *icon, POLY_FT4 *p, s16 posX, s16 empt
 	// letftX is the left side
 	leftX = posX - sizeX;
 
+	int centerX = (leftX + posX) / 2;
+	if (((sdata->gGT->gameMode1 & MAIN_MENU) == 0) && (sdata->gGT->level1 != NULL) && (sdata->gGT->level1->ptrSpawnType1 != NULL))
+	{
+		void **pointers = ST1_GETPOINTERS(sdata->gGT->level1->ptrSpawnType1);
+		struct UIMap *map = pointers[ST1_MAP];
+		if (map != NULL)
+		{
+			int centerY = 0;
+			centerX = 0;
+			UI_Map_GetIconPos(map, &centerX, &centerY);
+		}
+	}
+	leftX = (s16)(centerX + CTR_WIDESCREEN_SCALE_X(leftX - centerX));
+	posX = (s16)(centerX + CTR_WIDESCREEN_SCALE_X(posX - centerX));
+
 	p->x0 = leftX;
 	p->x1 = posX;
 	p->x2 = leftX;
@@ -201,6 +219,8 @@ void UI_Map_GetIconPos(struct UIMap *map, int *posX, int *posY)
 		addX = (*posY * map->iconSizeX) / worldRangeY;
 		addY = -(*posX * map->iconSizeY * 2) / worldRangeX;
 	}
+
+	addX = CTR_WIDESCREEN_SCALE_X(addX);
 
 	if (sdata->gGT->numPlyrCurrGame == 3)
 	{

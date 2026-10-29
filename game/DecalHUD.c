@@ -92,12 +92,7 @@ void DecalHUD_DrawWeapon(struct Icon *icon, s16 posX, s16 posY, struct PrimMem *
 		}
 	}
 
-        if (rot == 0) {
-                Widescreen_CompressFT4(p);
-        } else {
-                int len = Widescreen_XShift(p->x2 - p->x0);
-                p->x0 += len; p->x1 += len; p->x2 -= len; p->x3 -= len;
-        }
+        Widescreen_CompressFT4(p);
 	setIconUV(p, icon);
 
 	// this function doesn't support coloring the primitives
