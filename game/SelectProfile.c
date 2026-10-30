@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 #ifdef CTR_NATIVE
 #include <LevelRegistry.h>
@@ -171,7 +172,7 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 
 	profileRect.x = posX;
 	profileRect.y = posY;
-	profileRect.w = 0xdc;
+        profileRect.w = 0xdc;
 	profileRect.h = 0x3d;
 
 	if (isHighlighted != 0)
@@ -386,19 +387,19 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 
 	(void)unused;
 
-	profileRect.x = posX;
+	profileRect.x = Widescreen_ScaleAboutX(posX, 256);
 	profileRect.y = posY;
-	profileRect.w = 0xc8;
+	profileRect.w = CTR_WIDESCREEN_SCALE_X(0xc8);
 	profileRect.h = 0x29;
 
-	innerRect.x = posX + 6;
+	innerRect.x = Widescreen_ScaleAboutX(posX + 6, 256);
 	innerRect.y = posY + 3;
-	innerRect.w = 0xbc;
+	innerRect.w = CTR_WIDESCREEN_SCALE_X(0xbc);
 	innerRect.h = 0x23;
 
 	if (isUnavailable != 0)
 	{
-		DecalFont_DrawLine(sdata->lngStrings[LNG_NOT_AVAILABLE], posX + 0x64, posY + 0x11, FONT_SMALL, JUSTIFY_CENTER | SILVER);
+		DecalFont_DrawLine(sdata->lngStrings[LNG_NOT_AVAILABLE], Widescreen_ScaleAboutX(posX + 0x64, 256), posY + 0x11, FONT_SMALL, JUSTIFY_CENTER | SILVER);
 		Color redColor;
 		ColorCode_SetPacked(&redColor, (u32)sdata->redColor);
 		CTR_Box_DrawClearBox(&innerRect, &redColor, ADD_DECAL, gGT->backBuffer->otMem.uiOT);
@@ -415,21 +416,21 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 		if (LevelRegistry_IsGhostKey(profile->trackID))
 		{
 			const struct LevelDef *def = LevelRegistry_GetByGhostKey(profile->trackID);
-			DecalFont_DrawLine(def != NULL ? def->name : "Custom", posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+			DecalFont_DrawLine(def != NULL ? def->name : "Custom", Widescreen_ScaleAboutX(posX + 0x64, 256), posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		}
 		else if (profile->trackID >= LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE &&
 		         profile->trackID < LEVEL_REGISTRY_VIRTUAL_MEMCARD_BASE + LEVEL_REGISTRY_VIRTUAL_MEMCARD_COUNT)
 		{
-			DecalFont_DrawLine("Custom (old)", posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+			DecalFont_DrawLine("Custom (old)", Widescreen_ScaleAboutX(posX + 0x64, 256), posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		}
 		else
 #endif
 		{
 			struct MetaDataLEV *mdLev = &data.metaDataLEV[profile->trackID];
-			DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], posX + 0x64, posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
+			DecalFont_DrawLine(sdata->lngStrings[mdLev->name_LNG], Widescreen_ScaleAboutX(posX + 0x64, 256), posY + 0x1e, FONT_SMALL, JUSTIFY_CENTER | LIGHT_GREEN);
 		}
-		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), posX + 0x78, posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);
-		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(profile->characterID), posX + 8, posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
+		DecalFont_DrawLine(RECTMENU_DrawTime(profile->trackTime), Widescreen_ScaleAboutX(posX + 0x78, 256), posY + 10, FONT_BIG, JUSTIFY_CENTER | PERIWINKLE);
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(profile->characterID), Widescreen_ScaleAboutX(posX + 8, 256), posY + 5, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, sdata->ghostIconColor,
 		                     sdata->ghostIconColor, sdata->ghostIconColor, sdata->ghostIconColor, TRANS_50_DECAL, 0x1000);
 	}
 	else
@@ -437,7 +438,7 @@ void SelectProfile_DrawGhostProfile(struct GhostProfile *profile, int posX, int 
 		int lngIndex = (isLoading != 0) ? 0x6c : 0xb5;
 		int color = JUSTIFY_CENTER | ((isLoading != 0) ? PERIWINKLE : RED);
 
-		DecalFont_DrawLine(sdata->lngStrings[lngIndex], posX + 0x64, posY + 0x11, FONT_SMALL, color);
+		DecalFont_DrawLine(sdata->lngStrings[lngIndex], Widescreen_ScaleAboutX(posX + 0x64, 256), posY + 0x11, FONT_SMALL, color);
 	}
 
 	if (isHighlighted != 0)
@@ -813,7 +814,7 @@ static void SelectProfile_DrawGhostRows(struct RectMenu *menu, int rowCount, int
 		yBase = 0x12;
 		if (sdata->memcardAction != SELECT_PROFILE_ACTION_SAVE)
 		{
-			DecalFont_DrawMultiLine(sdata->lngStrings[LNG_INSERT_ANY_MEMORY_CARD_WITH_GHOST_DATA_IN], 0x100, 0xbe, 0x1ce, FONT_SMALL, JUSTIFY_CENTER | color);
+			DecalFont_DrawMultiLine(sdata->lngStrings[LNG_INSERT_ANY_MEMORY_CARD_WITH_GHOST_DATA_IN], 0x100, 0xbe, CTR_WIDESCREEN_SCALE_X(0x1ce), FONT_SMALL, JUSTIFY_CENTER | color);
 		}
 	}
 	else
