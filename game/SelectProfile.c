@@ -145,7 +145,7 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 
 	if (adv->characterID < 0)
 	{
-		DecalFont_DrawLine(sdata->lngStrings[LNG_EMPTY], posX + 0x6c, posY + 0x17, FONT_BIG, JUSTIFY_CENTER | emptyColor);
+		DecalFont_DrawLine(sdata->lngStrings[LNG_EMPTY], Widescreen_ScaleAboutX(posX + 0x6c, 256), posY + 0x17, FONT_BIG, JUSTIFY_CENTER | emptyColor);
 	}
 	else
 	{
@@ -153,26 +153,26 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 		int characterID = adv->characterID;
 		struct SelectProfileLoadSaveObj *obj = (struct SelectProfileLoadSaveObj *)sdata->ptrLoadSaveObj;
 
-		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(characterID), posX + 10, posY + 6, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, iconColor, iconColor, iconColor,
+		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(characterID), Widescreen_ScaleAboutX(posX + 10, 256), posY + 6, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, iconColor, iconColor, iconColor,
 		                     iconColor, 1, 0x1000);
 
-		DecalFont_DrawLine(adv->name, posX + 0x6c, posY + 0x29, FONT_BIG, JUSTIFY_CENTER | nameColor);
+		DecalFont_DrawLine(adv->name, Widescreen_ScaleAboutX(posX + 0x6c, 256), posY + 0x29, FONT_BIG, JUSTIFY_CENTER | nameColor);
 
-		SelectProfile_PrintInteger(gGT->currAdvProfile.completionPercent, posX + 0x6a, posY + 0x17, 0, profileTextColor);
-		SelectProfile_PrintInteger(gGT->currAdvProfile.numTrophies, posX + 0x6a, posY + 5, 0, profileTextColor);
-		SelectProfile_PrintInteger(gGT->currAdvProfile.numKeys, posX + 0xb5, posY + 5, 0, profileTextColor);
-		SelectProfile_PrintInteger(gGT->currAdvProfile.numRelics, posX + 0xb5, posY + 0x17, 0, profileTextColor);
+		SelectProfile_PrintInteger(gGT->currAdvProfile.completionPercent, Widescreen_ScaleAboutX(posX + 0x6a, 256), posY + 0x17, 0, profileTextColor);
+		SelectProfile_PrintInteger(gGT->currAdvProfile.numTrophies, Widescreen_ScaleAboutX(posX + 0x6a, 256), posY + 5, 0, profileTextColor);
+		SelectProfile_PrintInteger(gGT->currAdvProfile.numKeys, Widescreen_ScaleAboutX(posX + 0xb5, 256), posY + 5, 0, profileTextColor);
+		SelectProfile_PrintInteger(gGT->currAdvProfile.numRelics, Widescreen_ScaleAboutX(posX + 0xb5, 256), posY + 0x17, 0, profileTextColor);
 
-		DecalFont_DrawLine((char *)&sdata->s_percent_sign, posX + 0x70, posY + 0x17, FONT_BIG, percentColor);
+		DecalFont_DrawLine((char *)&sdata->s_percent_sign, Widescreen_ScaleAboutX(posX + 0x70, 256), posY + 0x17, FONT_BIG, percentColor);
 
-		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex, posX + 0xc3, posY + 0x1f);
-		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex + 1, posX + 0x78, posY + 0xd);
-		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex + 2, posX + 0xc3, posY + 0xd);
+		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex, Widescreen_ScaleAboutX(posX + 0xc3, 256), posY + 0x1f);
+		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex + 1, Widescreen_ScaleAboutX(posX + 0x78, 256), posY + 0xd);
+		SelectProfile_DrawAdvProfile_UpdateIcon(obj, slotIndex + 2, Widescreen_ScaleAboutX(posX + 0xc3, 256), posY + 0xd);
 	}
 
-	profileRect.x = posX;
+	profileRect.x = Widescreen_ScaleAboutX(posX, 256);
 	profileRect.y = posY;
-        profileRect.w = 0xdc;
+        profileRect.w = CTR_WIDESCREEN_SCALE_X(0xdc);
 	profileRect.h = 0x3d;
 
 	if (isHighlighted != 0)
@@ -180,9 +180,9 @@ void SelectProfile_DrawAdvProfile(struct AdvProgress *adv, int posX, int posY, s
 		RECT highlightRect;
 		Color *highlightColor = ((menuFlag & SELECT_PROFILE_DRAW_STYLE_GREEN) != 0) ? &sdata->menuRowHighlight_Green : &sdata->menuRowHighlight_Normal;
 
-		highlightRect.x = posX + 6;
+		highlightRect.x = Widescreen_ScaleAboutX(posX + 6, 256);
 		highlightRect.y = posY + 4;
-		highlightRect.w = 0xd0;
+		highlightRect.w = CTR_WIDESCREEN_SCALE_X(0xd0);
 		highlightRect.h = 0x35;
 
 		CTR_Box_DrawClearBox(&highlightRect, highlightColor, 1, &gGT->backBuffer->otMem.uiOT[3]);
