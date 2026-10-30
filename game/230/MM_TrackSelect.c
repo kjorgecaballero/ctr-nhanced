@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include "platform/native_debug.h"
 #include <stdlib.h>
 
@@ -270,9 +271,9 @@ static void MM_TrackSelect_Video_DrawNativePreview(RECT *r, int srcX, int srcY)
 	        .srcY = (s16)srcY,
 	        .srcW = MM_TRACK_VIDEO_FRAME_WIDTH,
 	        .srcH = MM_TRACK_VIDEO_FRAME_HEIGHT,
-	        .dstX = (s16)(r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X),
+	        .dstX = (s16)(r->x + (r->w - CTR_WIDESCREEN_SCALE_X(MM_TRACK_VIDEO_FRAME_WIDTH)) / 2),
 	        .dstY = (s16)(r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y),
-	        .dstW = MM_TRACK_VIDEO_FRAME_WIDTH,
+	        .dstW = CTR_WIDESCREEN_SCALE_X(MM_TRACK_VIDEO_FRAME_WIDTH),
 	        .dstH = MM_TRACK_VIDEO_FRAME_HEIGHT,
 	    },
 	};
@@ -400,7 +401,7 @@ void MM_TrackSelect_Video_Draw(RECT *r, struct MainMenu_LevelRow *selectMenu, in
 	if (D230.trackSelect.videoStateCurr != MM_TRACK_VIDEO_PLAYING)
 	{
 		// Draw Video icon
-		RECTMENU_DrawPolyGT4(gGT->ptrIcons[selectMenu->videoThumbnail], (r->x + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_X), (r->y + MM_TRACK_VIDEO_FRAME_SRC_OFFSET_Y),
+		RECTMENU_DrawPolyGT4(gGT->ptrIcons[selectMenu->videoThumbnail], (s16)(r->x - (MM_TRACK_VIDEO_FRAME_WIDTH - r->w) / 2), (s16)(r->y + (r->h - MM_TRACK_VIDEO_FRAME_HEIGHT) / 2),
 		                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, ColorCode_GetPacked(&D230.videoCol), ColorCode_GetPacked(&D230.videoCol),
 		                     ColorCode_GetPacked(&D230.videoCol), ColorCode_GetPacked(&D230.videoCol), 0, FP(1.0));
 	}
@@ -1077,11 +1078,12 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 		if (MM_TRACK_SELECT_VISIBLE_ROWS <= rowIndex)
 		{
 			RECT previewRect;
-			previewRect.w = MM_TRACK_VIDEO_WIDTH;
+			int origW = MM_TRACK_VIDEO_WIDTH;
+                   previewRect.w = CTR_WIDESCREEN_SCALE_X(origW);
 			previewRect.h = MM_TRACK_VIDEO_HEIGHT;
 
 			// posX of "SELECT LEVEL"
-			previewRect.x = D230.trackTransitions.named.trackSelect_previewTransition.currX + MM_TRACK_SELECT_PREVIEW_X;
+			previewRect.x = D230.trackTransitions.named.trackSelect_previewTransition.currX + MM_TRACK_SELECT_PREVIEW_X + (origW - previewRect.w) / 2;
 
 			// posY of "SELECT LEVEL"
 			// near-top if map exists, near-mid if no map

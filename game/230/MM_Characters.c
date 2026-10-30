@@ -208,9 +208,11 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 		struct TransitionMeta *tMeta = &D230.characterSelectTransitionMeta[playerIndex];
 
 		struct PushBuffer *pb = &gGT->pushBuffer[playerIndex];
-		pb->rect.x = windowPos->x + tMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST].currX;
+		int origW = D230.characterSelectWindowWidth;
+		int compW = CTR_WIDESCREEN_SCALE_X(origW);
+		pb->rect.x = windowPos->x + tMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST].currX + (origW - compW) / 2;
 		pb->rect.y = windowPos->y + tMeta[MM_CHARACTER_SELECT_DRIVER_WINDOW_TRANSITION_FIRST].currY;
-		pb->rect.w = D230.characterSelectWindowWidth;
+		pb->rect.w = compW;
 		pb->rect.h = D230.characterSelectWindowHeight;
 
 		if ((s16)pb->rect.x < 0)
@@ -1177,9 +1179,11 @@ dontDrawSelectCharacter:
 		b32 playerSelected = (((int)(s16)sdata->characterSelectFlags >> playerIndex) & 1U) != 0;
 		Color animatedColor;
 
-		drawRect.x = driverWindowTransition->currX + windowPos->x;
+		int origW = D230.characterSelectWindowWidth;
+		int compW = CTR_WIDESCREEN_SCALE_X(origW);
+		drawRect.x = driverWindowTransition->currX + windowPos->x + (origW - compW) / 2;
 		drawRect.y = driverWindowTransition->currY + windowPos->y;
-		drawRect.w = D230.characterSelectWindowWidth;
+		drawRect.w = compW;
 		drawRect.h = D230.characterSelectWindowHeight;
 
 		MM_Characters_AnimateColors((u8 *)&animatedColor, playerIndex,

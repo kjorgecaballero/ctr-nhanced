@@ -1140,6 +1140,8 @@ static int RenderBucket_AcceptProjectedBounds(const struct RenderBucketBounds *b
 		return 0;
 	}
 
+	// WIDESCREEN: Margen de 8px en el borde inferior para evitar flicker en 21:9
+
 	if (RenderBucket_MipsSub(bounds->minY, (u16)pb->rect.h) > 0)
 	{
 		return 0;

@@ -3,6 +3,18 @@
 
 const u32 *s_fontColorOverride = NULL;
 
+
+static int DecalFont_ShouldSkipCompression(void)
+{
+    if (sdata->gGT == NULL) return 0;
+    if (sdata->gGT->numPlyrNextGame <= 2) return 0;
+    // Menus siempre comprimen (están dibujados en pantalla completa)
+    if (sdata->ptrActiveMenu != NULL) return 0;
+    if ((sdata->gGT->gameMode1 & (MAIN_MENU | PAUSE_ALL | END_OF_RACE)) != 0) return 0;
+    // Solo el HUD de carrera de 4P salta la compresión
+    return 1;
+}
+
 int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 {
 	s16 font_charPixWidth;
@@ -51,6 +63,7 @@ int DecalFont_GetLineWidthStrlen(char *character, int len, int fontType)
 		len--;
 	}
 
+	if (DecalFont_ShouldSkipCompression()) return pixLength;
 	return CTR_WIDESCREEN_SCALE_X(pixLength);
 }
 
@@ -80,7 +93,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 
 	const int widescreenLineStartX = posX;
 	int widescreenPenX = 0;
-	#define DECAL_FONT_DRAW_X(extra) (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra)))
+	#define DECAL_FONT_DRAW_X(extra) (DecalFont_ShouldSkipCompression() ? (widescreenLineStartX + widescreenPenX + (extra)) : (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX + (extra))))
 
 	flags &= 0xfff;
 
@@ -183,7 +196,7 @@ void DecalFont_DrawLineStrlen(char *str, s16 len, int posX, s16 posY, s16 fontTy
 			}
 		}
 		widescreenPenX += charWidth;
-		posX = widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX);
+		posX = DecalFont_ShouldSkipCompression() ? (widescreenLineStartX + widescreenPenX) : (widescreenLineStartX + CTR_WIDESCREEN_SCALE_X(widescreenPenX));
 	}
 }
 
