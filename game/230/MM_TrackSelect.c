@@ -802,8 +802,8 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			lapSelTransitionState = RECTMENU_ProcessInput(&D230.menuLapSel);
 		}
 
-		RECTMENU_DrawSelf(&D230.menuLapSel, D230.trackTransitions.named.trackSelect_lapMenuTransition.currX,
-		                  D230.trackTransitions.named.trackSelect_lapMenuTransition.currY, MM_TRACK_SELECT_LAP_MENU_WIDTH);
+		RECTMENU_DrawSelf(&D230.menuLapSel, D230.trackTransitions.named.trackSelect_previewTransition.currX,
+                          D230.trackTransitions.named.trackSelect_lapMenuTransition.currY, CTR_WIDESCREEN_SCALE_X(MM_TRACK_SELECT_LAP_MENU_WIDTH));
 
 		// put LapRow back into 8d920
 		sdata->uselessLapRowCopy = D230.menuLapSel.rowSelected;
@@ -1085,14 +1085,9 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 			// posX of "SELECT LEVEL"
 			previewRect.x = D230.trackTransitions.named.trackSelect_previewTransition.currX + MM_TRACK_SELECT_PREVIEW_X + (origW - previewRect.w) / 2;
 
-			// posY of "SELECT LEVEL"
-			// near-top if map exists, near-mid if no map
-			previewRect.y = D230.trackTransitions.named.trackSelect_previewTransition.currY + MM_TRACK_SELECT_PREVIEW_Y_NO_MAP;
-
-			if (-1 < selectMenu[menu->rowSelected].mapTextureID)
-			{
-				previewRect.y = D230.trackTransitions.named.trackSelect_previewTransition.currY + MM_TRACK_SELECT_PREVIEW_Y_WITH_MAP;
-			}
+			// Siempre usar la misma Y que las pistas retail.
+			// Las pistas custom sin mapa simplemente omiten el mapa.
+			previewRect.y = D230.trackTransitions.named.trackSelect_previewTransition.currY + MM_TRACK_SELECT_PREVIEW_Y_WITH_MAP;
 
 			// D230.trackSelect.lapBoxOpen controls the 3/5/7 lap menu.
 
