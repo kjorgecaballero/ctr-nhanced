@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 static inline void VehPickupItem_CopyMatrix(MATRIX *dst, const MATRIX *src)
@@ -1153,6 +1154,9 @@ void VehPickupItem_ShootNow(struct Driver *d, s32 weaponID, s32 flags)
 		    data.characterIDs[d->driverID], NATIVE_ITEM_WARPBALL);
 
 		weaponInst = INSTANCE_BirthWithThread(WARPBALL_MODEL, warpballName, MEDIUM, TRACKING, RB_Warpball_ThTick, sizeof(struct TrackerWeapon), 0);
+
+	// WIDESCREEN: Comprimir el ancho de la Warpball (escala)
+	if (weaponInst != NULL) { weaponInst->scale.x = CTR_WIDESCREEN_SCALE_X(weaponInst->scale.x); }
 
 		if (nativeWarpballModel != NULL)
 		{
