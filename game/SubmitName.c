@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 extern int g_nativeSubmitNameActive;
 
@@ -135,23 +136,23 @@ s16 SubmitName_DrawMenu(u16 string)
 			}
 
 			// LETTER button draw
-			DecalFont_DrawLine(keyboardString, j * SUBMIT_NAME_KEY_SPACING_X + SUBMIT_NAME_KEYBOARD_START_X,
+			DecalFont_DrawLine(keyboardString, Widescreen_ScaleAboutX(j * SUBMIT_NAME_KEY_SPACING_X + SUBMIT_NAME_KEYBOARD_START_X, 256),
 			                   i * SUBMIT_NAME_KEY_SPACING_Y + SUBMIT_NAME_KEYBOARD_START_Y, FONT_BIG, strColorBlink);
 
 			letterID++;
 		}
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_PLEASE_ENTER_YOUR_NAME], SUBMIT_NAME_TITLE_X, SUBMIT_NAME_TITLE_Y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
+	DecalFont_DrawLine(sdata->lngStrings[LNG_PLEASE_ENTER_YOUR_NAME], Widescreen_ScaleAboutX(SUBMIT_NAME_TITLE_X, 256), SUBMIT_NAME_TITLE_Y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
 	// player name
-	DecalFont_DrawLine(gGT->currNameEntered, SUBMIT_NAME_TYPED_NAME_X, SUBMIT_NAME_TYPED_NAME_Y, FONT_BIG, WHITE);
+	DecalFont_DrawLine(gGT->currNameEntered, Widescreen_ScaleAboutX(SUBMIT_NAME_TYPED_NAME_X, 256), SUBMIT_NAME_TYPED_NAME_Y, FONT_BIG, WHITE);
 
 	if (((sdata->typeTimer & 2) != 0) && (currNameLength < SUBMIT_NAME_BUFFER_SIZE - 1))
 	{
 		int currNameWidth = DecalFont_GetLineWidth(gGT->currNameEntered, FONT_BIG);
 
-		DecalFont_DrawLine(sdata->str_underscore, currNameWidth + SUBMIT_NAME_TYPED_NAME_X,
+		DecalFont_DrawLine(sdata->str_underscore, Widescreen_ScaleAboutX(currNameWidth + SUBMIT_NAME_TYPED_NAME_X, 256),
 
 		                   SUBMIT_NAME_TYPED_NAME_Y, FONT_BIG, ORANGE);
 	}
@@ -164,7 +165,7 @@ s16 SubmitName_DrawMenu(u16 string)
 	}
 
 	// SAVE button draw
-	DecalFont_DrawLine(sdata->lngStrings[stringCopy], SUBMIT_NAME_ACTION_X, SUBMIT_NAME_ACTION_Y, FONT_BIG, (JUSTIFY_RIGHT | strColorBlink));
+	DecalFont_DrawLine(sdata->lngStrings[stringCopy], Widescreen_ScaleAboutX(SUBMIT_NAME_ACTION_X, 256), SUBMIT_NAME_ACTION_Y, FONT_BIG, (JUSTIFY_RIGHT | strColorBlink));
 
 	// CANCEL button blink
 	strColorBlink = 0;
@@ -173,7 +174,7 @@ s16 SubmitName_DrawMenu(u16 string)
 		strColorBlink = blinkWhite;
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_CANCEL], SUBMIT_NAME_CANCEL_X, SUBMIT_NAME_ACTION_Y, 1, strColorBlink);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_CANCEL], Widescreen_ScaleAboutX(SUBMIT_NAME_CANCEL_X, 256), SUBMIT_NAME_ACTION_Y, 1, strColorBlink);
 
 	// leftX = 32 (256-224)
 	// rightX = 480 (256+224)
@@ -183,8 +184,8 @@ s16 SubmitName_DrawMenu(u16 string)
 	// in 16x9,
 	// subtract 1/8 from r.x
 	// subtract 1/4 from r.w
-	r.x = SUBMIT_NAME_PANEL_X;
-	r.w = SUBMIT_NAME_PANEL_W;
+	r.x = Widescreen_ScaleAboutX(SUBMIT_NAME_PANEL_X, 256);
+	r.w = CTR_WIDESCREEN_SCALE_X(SUBMIT_NAME_PANEL_W);
 
 	r.y = SUBMIT_NAME_NAME_UNDERLINE_Y;
 	r.h = 2;
