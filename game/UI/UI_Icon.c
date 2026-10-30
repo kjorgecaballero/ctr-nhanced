@@ -267,6 +267,13 @@ void UI_TrackerBG(struct Icon *targetIcon, s16 centerX, s16 centerY, struct Prim
 		p->x3 = p->x1;
 		p->y3 = p->y2;
 
+		// Comprimir las flechas y los bordes anclándolos al centro del Tracker
+		int trackCenterX = centerX;
+		p->x0 = (s16)(trackCenterX + CTR_WIDESCREEN_SCALE_X(p->x0 - trackCenterX));
+		p->x1 = (s16)(trackCenterX + CTR_WIDESCREEN_SCALE_X(p->x1 - trackCenterX));
+		p->x2 = (s16)(trackCenterX + CTR_WIDESCREEN_SCALE_X(p->x2 - trackCenterX));
+		p->x3 = (s16)(trackCenterX + CTR_WIDESCREEN_SCALE_X(p->x3 - trackCenterX));
+
 		AddPrim(ot, p);
 	}
 	return;

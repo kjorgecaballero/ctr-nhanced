@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 void RB_Explosion_ThTick(struct Thread *t)
 {
@@ -56,6 +57,11 @@ void RB_Explosion_InitPotion(struct Instance *inst)
 
 	// copy position and rotation from one instance to the other
 	CTR_MatrixCopyRot(&shatterInst->matrix, &inst->matrix);
+
+        // WIDESCREEN: Comprimir la matriz de la explosión (eje X global)
+        shatterInst->matrix.m[0][0] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][0]);
+        shatterInst->matrix.m[0][1] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][1]);
+        shatterInst->matrix.m[0][2] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][2]);
 
 	for (int i = 0; i < 3; i++)
 	{

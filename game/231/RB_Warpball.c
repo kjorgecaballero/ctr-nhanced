@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 static const s16 s_warpballFadeScale[6 * 3] = {
     4505, 5120, 4096, 5226, 8192, 4096, 5600, 5501, 4096, 5272, 3183, 4096, 4242, 1411, 3337, 2878, 437, 1668,
@@ -42,7 +43,7 @@ void RB_Warpball_FadeAway(struct Thread *t)
 	}
 
 	// set scale (x, y, z)
-	inst->scale.x = s_warpballFadeScale[(frameId * 3) + 0];
+	inst->scale.x = CTR_WIDESCREEN_SCALE_X(s_warpballFadeScale[(frameId * 3) + 0]);
 	inst->scale.y = s_warpballFadeScale[(frameId * 3) + 1];
 	inst->scale.z = s_warpballFadeScale[(frameId * 3) + 2];
 

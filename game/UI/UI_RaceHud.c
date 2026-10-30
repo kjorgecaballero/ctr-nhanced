@@ -464,12 +464,12 @@ UpdateTrackerState:
 			CtrGpu_WriteColorCode(&poly->r1, UI_TRACKER_BORDER_CENTER_COLOR);
 			CtrGpu_WriteColorCode(&poly->r2, color2);
 
-			orientedX = orientation * sideOuterX;
-			poly->x0 = screenPosX + orientedX;
-			poly->x2 = screenPosX + orientedX;
+      orientedX = CTR_WIDESCREEN_SCALE_X(orientation * sideOuterX);
+      poly->x0 = screenPosX + orientedX;
+      poly->x2 = screenPosX + orientedX;
 
-			orientedX = orientation * trackerDistance;
-			poly->x1 = screenPosX + orientedX;
+      orientedX = CTR_WIDESCREEN_SCALE_X(orientation * trackerDistance);
+      poly->x1 = screenPosX + orientedX;
 
 			poly->y0 = screenPosY - (sideHalfHeight + UI_TRACKER_SIDE_TIP_OFFSET);
 			poly->y1 = screenPosY - UI_TRACKER_SIDE_TIP_OFFSET;
@@ -525,14 +525,14 @@ UpdateTrackerState:
 		}
 	}
 
-	UI_TrackerBG(
+        UI_TrackerBG(
 
-	    // missile lock-on icon
-	    gGT->ptrIcons[UI_TRACKER_LOCK_ICON],
+            // missile lock-on icon
+            gGT->ptrIcons[UI_TRACKER_LOCK_ICON],
 
-	    screenPosX - (x >> UI_TRACKER_BG_X_SHIFT), screenPosY - ((y * UI_TRACKER_BG_Y_SCALE) >> UI_TRACKER_BG_Y_SHIFT),
+            screenPosX - CTR_WIDESCREEN_SCALE_X(x >> UI_TRACKER_BG_X_SHIFT), screenPosY - ((y * UI_TRACKER_BG_Y_SCALE) >> UI_TRACKER_BG_Y_SHIFT),
 
-	    &gGT->backBuffer->primMem, gGT->pushBuffer[driverID].ptrOT, UI_TRACKER_BG_TRANSPARENCY, x, y, bgColor);
+            &gGT->backBuffer->primMem, gGT->pushBuffer[driverID].ptrOT, UI_TRACKER_BG_TRANSPARENCY, x, y, bgColor);
 }
 
 void UI_DrawPosSuffix(s16 posX, s16 posY, struct Driver *d, s16 flags)

@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -1065,14 +1066,14 @@ static void Particle_RenderList_WriteNormalPrimitive(POLY_FT4 *poly, struct Icon
 	width = (icon->texLayout.u1 - icon->texLayout.u0) + 1;
 	height = (icon->texLayout.v3 - icon->texLayout.v0) + 1;
 
-	halfWidth = width << 1;
-	halfHeight = height << 1;
+        halfWidth = width << 1;
+        halfHeight = height << 1;
 
-	if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_LARGE_QUAD) != 0)
-	{
-		halfWidth = width << 4;
-		halfHeight = height << 4;
-	}
+        if ((flagsSetColor & PARTICLE_SET_COLOR_FLAG_LARGE_QUAD) != 0)
+        {
+                halfWidth = width << 4;
+                halfHeight = height << 4;       
+        }
 
 	input = Particle_RenderList_PackXY(-halfWidth, -halfHeight);
 	MTC2(0, 1);
@@ -1096,6 +1097,13 @@ static void Particle_RenderList_WriteNormalPrimitive(POLY_FT4 *poly, struct Icon
 	MTC2(input, 0);
 	gte_rtps_b();
 	CtrGpu_WritePackedXY(&poly->x3, MFC2(14));
+
+        // WIDESCREEN: Comprimir las coordenadas 2D ya proyectadas (factor 0.85)
+        s32 cx = (poly->x0 + poly->x1) / 2;
+        poly->x0 = (s16)(cx + ((poly->x0 - cx) * 850) / 1000);
+        poly->x1 = (s16)(cx + ((poly->x1 - cx) * 850) / 1000);
+        poly->x2 = (s16)(cx + ((poly->x2 - cx) * 850) / 1000);
+        poly->x3 = (s16)(cx + ((poly->x3 - cx) * 850) / 1000);
 }
 
 void Particle_RenderList(struct PushBuffer *pb, void *particleList)

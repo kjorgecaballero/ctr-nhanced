@@ -138,7 +138,18 @@ void MM_Battle_DrawIcon_Weapon(struct Icon *icon, u32 posX, int posY, struct Pri
 	u32 uv1 = CTR_ReadU32LE(&icon->texLayout.u1);
 	u32 uv2 = CTR_ReadU32LE(&icon->texLayout.u2);
 	s32 scaledWidth = (((s32)((u8)icon->texLayout.u1 - (u8)icon->texLayout.u0)) * scale) >> 0xc;
-	s32 scaledHeight = (((s32)((u8)icon->texLayout.v2 - (u8)icon->texLayout.v0)) * scale) >> 0xc;
+        s32 scaledHeight = (((s32)((u8)icon->texLayout.v2 - (u8)icon->texLayout.v0)) * scale) >> 0xc;
+
+        // WIDESCREEN: Comprimir el ancho visual (0.85) y centrar
+        if ((rotation & 1) != 0) {
+            s32 originalHeight = scaledHeight;
+            scaledHeight = (scaledHeight * 700) / 1000;
+            posX = (u32)((s32)posX + (originalHeight - scaledHeight) / 2);
+        } else {
+            s32 originalWidth = scaledWidth;
+            scaledWidth = (scaledWidth * 700) / 1000;
+            posX = (u32)((s32)posX + (originalWidth - scaledWidth) / 2);
+        }
 	u32 code = BATTLE_GPU_CODE_POLY_FT4;
 	u32 packedY = (u32)(u16)posY << 0x10;
 
@@ -1056,6 +1067,11 @@ LAB_800b25f0:
 		}
 		weaponHighlightRect.w = BATTLE_WEAPON_HIGHLIGHT_W;
 		weaponHighlightRect.h = BATTLE_WEAPON_HIGHLIGHT_H;
+
+		// WIDESCREEN: Comprimir el ancho del cursor y centrarlo
+		int oldHighlightW = weaponHighlightRect.w;
+		weaponHighlightRect.w = (oldHighlightW * 700) / 1000;
+		weaponHighlightRect.x += (oldHighlightW - weaponHighlightRect.w) / 2;
 		weaponHighlightRect.y =
 		    weaponPanelRect.y + (sdata->battleSetupRowHighlighted - BATTLE_ROW_WEAPON_TOP) * BATTLE_WEAPON_GRID_Y_STEP + BATTLE_WEAPON_HIGHLIGHT_Y_OFFSET;
 

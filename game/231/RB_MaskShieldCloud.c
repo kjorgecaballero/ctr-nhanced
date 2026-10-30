@@ -435,6 +435,12 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	// convert 3 rotation shorts into rotation matrix
 	ConvertRotToMatrix(&highlightInst->matrix, &shield->highlightRot);
 
+	// WIDESCREEN: Comprimir el halo en el eje X GLOBAL (Matriz)
+	highlightInst->matrix.m[0][0] = CTR_WIDESCREEN_SCALE_X(highlightInst->matrix.m[0][0]);
+	highlightInst->matrix.m[0][1] = CTR_WIDESCREEN_SCALE_X(highlightInst->matrix.m[0][1]);
+	highlightInst->matrix.m[0][2] = CTR_WIDESCREEN_SCALE_X(highlightInst->matrix.m[0][2]);
+    
+
 	s16 scaleXZ;
 	s16 scaleY;
 
@@ -596,7 +602,7 @@ void RB_ShieldDark_ThTick_Grow(struct Thread *th)
 	bombInst->matrix.t[2] = shieldInst->matrix.t[2];
 
 	// set scale (x, y, z) and transparency
-	bombInst->scale.x = 0x400;
+	bombInst->scale.x = CTR_WIDESCREEN_SCALE_X(0x400);
 	bombInst->scale.y = 0x400;
 	bombInst->scale.z = 0x400;
 	bombInst->alphaScale = 0x400;
@@ -717,6 +723,8 @@ void RB_RainCloud_ThTick(struct Thread *t)
 		CTR_VECTOR_DATA(&(inst->scale))[i] += CTR_VECTOR_DATA(&(dInst->scale))[i];
 		CTR_VECTOR_DATA(&(inst->scale))[i] = CTR_VECTOR_DATA(&(inst->scale))[i] >> 1;
 	}
+	// WIDESCREEN: Comprimir la nube en X para que no se vea ovalada
+	inst->scale.x = (inst->scale.x * 850) / 1000;
 
 	// offset upward before averaging
 	inst->matrix.t[1] += (inst->scale.y * 5 >> 7);
