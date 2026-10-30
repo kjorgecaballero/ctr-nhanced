@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 enum
@@ -69,11 +70,12 @@ enum
 
 void MM_HighScore_Text3D(char *string, int posX, int posY, s16 font, u32 flags)
 {
-	// draw a string
-	DecalFont_DrawLine(string, posX, posY, font, flags);
+        int wx = Widescreen_ScaleAboutX(posX, 256);
+        // draw a string
+        DecalFont_DrawLine(string, wx, posY, font, flags);
 
-	// draw the same string in a different place
-	DecalFont_DrawLine(string, posX + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font, (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
+        // draw the same string in a different place       
+        DecalFont_DrawLine(string, wx + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font, (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
 }
 
 /* Same as MM_HighScore_Text3D, but for custom racers: the main draw uses
@@ -81,25 +83,28 @@ void MM_HighScore_Text3D(char *string, int posX, int posY, s16 font, u32 flags)
  * without a roster color fall through to the normal implementation. */
 static void MM_HighScore_Text3D_ForRacer(char *string, int posX, int posY, s16 font, u32 flags, int characterID)
 {
-	const u32 *custom = NativeCustomRacer_GetColorPtr(characterID);
-	if (custom == NULL)
-	{
-		MM_HighScore_Text3D(string, posX, posY, font, flags);
-		return;
-	}
+        const u32 *custom = NativeCustomRacer_GetColorPtr(characterID);
+        if (custom == NULL)
+        {
+                MM_HighScore_Text3D(string, posX, posY, font, flags);
+                return;
+        }
 
-	const u32 *saved = s_fontColorOverride;
-	s_fontColorOverride = custom;
-	DecalFont_DrawLine(string, posX, posY, font, flags);
-	s_fontColorOverride = saved;
+        const u32 *saved = s_fontColorOverride;
+        s_fontColorOverride = custom;
+        int wx = Widescreen_ScaleAboutX(posX, 256);
+        DecalFont_DrawLine(string, wx, posY, font, flags);
+        s_fontColorOverride = saved;
 
-	DecalFont_DrawLine(string, posX + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font,
-	                   (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
+        DecalFont_DrawLine(string, wx + MM_HIGHSCORE_TEXT_SHADOW_X, posY + MM_HIGHSCORE_TEXT_SHADOW_Y, font,        
+                           (flags & (JUSTIFY_CENTER | JUSTIFY_RIGHT)) | BLACK);
 }
 
 void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 {
 	struct GameTracker *gGT = sdata->gGT;
+        struct RectMenu *savedMenu = sdata->ptrActiveMenu;
+        sdata->ptrActiveMenu = (struct RectMenu*)1;
 
 	s16 offsetX = (s16)posX;
 	s16 offsetY = (s16)posY;
@@ -120,17 +125,17 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	const struct TransitionMeta *bestLapEntryMeta = &D230.transitionMeta_HighScores[MM_HIGHSCORE_BEST_LAP_ENTRY_META_INDEX];
 
 	// Draw arrow pointing Left
-	DecalHUD_Arrow2D(iconPtrArray[MM_HIGHSCORE_ARROW_ICON_ID], titleMeta->currX + (offsetX - lineWidth) + MM_HIGHSCORE_ARROW_LEFT_X_OFFSET,
+	DecalHUD_Arrow2D(iconPtrArray[MM_HIGHSCORE_ARROW_ICON_ID], Widescreen_ScaleAboutX(titleMeta->currX + offsetX, 256) - lineWidth + CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_ARROW_LEFT_X_OFFSET),
 	                 titleMeta->currY + offsetY + MM_HIGHSCORE_ARROW_Y_OFFSET, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, colorPtr[0], colorPtr[1],
 	                 colorPtr[2], colorPtr[3], 0, MM_HIGHSCORE_ARROW_SCALE, MM_HIGHSCORE_ARROW_LEFT_ROTATION);
 
 	// Draw arrow pointing Right
-	DecalHUD_Arrow2D(iconPtrArray[MM_HIGHSCORE_ARROW_ICON_ID], titleMeta->currX + (lineWidth + offsetX) + MM_HIGHSCORE_ARROW_RIGHT_X_OFFSET,
+	DecalHUD_Arrow2D(iconPtrArray[MM_HIGHSCORE_ARROW_ICON_ID], Widescreen_ScaleAboutX(titleMeta->currX + offsetX, 256) + lineWidth + CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_ARROW_RIGHT_X_OFFSET),
 	                 titleMeta->currY + offsetY + MM_HIGHSCORE_ARROW_Y_OFFSET, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, colorPtr[0], colorPtr[1],
 	                 colorPtr[2], colorPtr[3], 0, MM_HIGHSCORE_ARROW_SCALE, 0);
 
 	// draw track name
-	DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], titleMeta->currX + (s16)(posX + MM_HIGHSCORE_TITLE_X_OFFSET),
+	DecalFont_DrawLine(sdata->lngStrings[data.metaDataLEV[levelID].name_LNG], Widescreen_ScaleAboutX(titleMeta->currX + (s16)(posX + MM_HIGHSCORE_TITLE_X_OFFSET), 256),
 	                   titleMeta->currY + (s16)(posY + MM_HIGHSCORE_TITLE_Y_OFFSET), FONT_BIG, JUSTIFY_CENTER);
 
 	Color iconColor = D230.highscore_iconColor;
@@ -188,7 +193,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 
 		// Character Icon
 		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(entry[0].characterID),
-		                     bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_ICON_X_OFFSET,
+		                     Widescreen_ScaleAboutX(bestLapEntryMeta->currX + offsetX + MM_HIGHSCORE_BEST_LAP_ICON_X_OFFSET, 256),
 		                     bestLapEntryMeta->currY + offsetY + MM_HIGHSCORE_BEST_LAP_ICON_Y_OFFSET, &gGT->backBuffer->primMem, (gGT->pushBuffer_UI).ptrOT,
 		                     ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor),
 		                     MM_HIGHSCORE_ICON_TRANSPARENCY, MM_HIGHSCORE_ICON_SCALE);
@@ -203,7 +208,7 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 
 		// Character Icon
 		RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(entry[entryIndex].characterID),
-		                     D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_ICON_X_OFFSET,
+		                     Widescreen_ScaleAboutX(D230.transitionMeta_HighScores[metaIndex].currX + offsetX + MM_HIGHSCORE_SCORE_ICON_X_OFFSET, 256),
 		                     D230.transitionMeta_HighScores[metaIndex].currY + offsetY + (scoreRowIndex * MM_HIGHSCORE_SCORE_ROW_Y_STEP) +
 		                         MM_HIGHSCORE_SCORE_NAME_Y_OFFSET,
 		                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor),
@@ -225,12 +230,13 @@ void MM_HighScore_Draw(u16 trackIndex, u32 rowIndex, u32 posX, u32 posY)
 	}
 
 	RECT videoBox;
-	videoBox.w = MM_HIGHSCORE_VIDEO_BOX_W;
+	videoBox.w = CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_VIDEO_BOX_W);
 	videoBox.h = MM_HIGHSCORE_VIDEO_BOX_H;
-	videoBox.x = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currX + offsetX + MM_HIGHSCORE_VIDEO_BOX_X_OFFSET;
+	videoBox.x = Widescreen_ScaleAboutX(D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currX + offsetX + MM_HIGHSCORE_VIDEO_BOX_X_OFFSET, 256);
 	videoBox.y = D230.transitionMeta_HighScores[MM_HIGHSCORE_VIDEO_META_INDEX].currY + offsetY + MM_HIGHSCORE_VIDEO_BOX_Y_OFFSET;
 
 	MM_TrackSelect_Video_Draw(&videoBox, &D230.arcadeTracks[0], trackIndex, (D230.highScoreTransition.state == EXITING_MENU), 0);
+        sdata->ptrActiveMenu = savedMenu;
 }
 
 void MM_HighScore_Init(void)
@@ -247,6 +253,8 @@ void MM_HighScore_Init(void)
 void MM_HighScore_MenuProc(struct RectMenu *menu_unused)
 {
 	(void)menu_unused;
+        struct RectMenu *savedMenu = sdata->ptrActiveMenu;
+        sdata->ptrActiveMenu = (struct RectMenu*)1;
 	s16 nextFrameCount;
 	RECT wipeRect;
 
@@ -275,6 +283,7 @@ void MM_HighScore_MenuProc(struct RectMenu *menu_unused)
 			if (MM_HIGHSCORE_MAIN_TRANSITION_MAX_FRAME < D230.highScoreTransition.mainFrame)
 			{
 				MM_JumpTo_Title_Returning();
+				sdata->ptrActiveMenu = savedMenu;
 				return;
 			}
 		}
@@ -407,8 +416,13 @@ LAB_OVR_230__800b3c78:
 		}
 	}
 
-	RECTMENU_DrawSelf(&D230.menuHighScore, D230.transitionMeta_HighScores[MM_HIGHSCORE_MENU_META_INDEX].currX,
-	                  D230.transitionMeta_HighScores[MM_HIGHSCORE_MENU_META_INDEX].currY, MM_HIGHSCORE_MENU_WIDTH);
+	{
+        s16 origPosX = D230.menuHighScore.posX_curr;
+        D230.menuHighScore.posX_curr = Widescreen_ScaleAboutX(origPosX, 256);
+        RECTMENU_DrawSelf(&D230.menuHighScore, D230.transitionMeta_HighScores[MM_HIGHSCORE_MENU_META_INDEX].currX,
+                          D230.transitionMeta_HighScores[MM_HIGHSCORE_MENU_META_INDEX].currY, CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_MENU_WIDTH));
+        D230.menuHighScore.posX_curr = origPosX;
+    }
 
 	s32 currOffsetY = 0;
 	s32 currOffsetX = 0;
@@ -435,9 +449,9 @@ LAB_OVR_230__800b3c78:
 		if (D230.highScoreTransition.rowFrame != 0)
 		{
 			// draw rectangle
-			wipeRect.w = MM_HIGHSCORE_WIPE_RECT_W;
+			wipeRect.w = CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_WIPE_RECT_W);
 			wipeRect.h = MM_HIGHSCORE_WIPE_RECT_H;
-			wipeRect.x = titleMeta->currX + MM_HIGHSCORE_WIPE_RECT_X_OFFSET;
+			wipeRect.x = Widescreen_ScaleAboutX(titleMeta->currX + MM_HIGHSCORE_WIPE_RECT_X_OFFSET, 256);
 			wipeRect.y = titleMeta->currY + (s16)currOffsetY + MM_HIGHSCORE_WIPE_RECT_Y_OFFSET;
 			RECTMENU_DrawInnerRect(&wipeRect, 0, ot);
 		}
@@ -460,11 +474,11 @@ LAB_OVR_230__800b3c78:
 	}
 
 	// draw rectangle
-	wipeRect.w = MM_HIGHSCORE_WIPE_RECT_W;
+	wipeRect.w = CTR_WIDESCREEN_SCALE_X(MM_HIGHSCORE_WIPE_RECT_W);
 	wipeRect.h = MM_HIGHSCORE_WIPE_RECT_H;
-	wipeRect.x = titleMeta->currX + MM_HIGHSCORE_WIPE_RECT_X_OFFSET;
+	wipeRect.x = Widescreen_ScaleAboutX(titleMeta->currX + MM_HIGHSCORE_WIPE_RECT_X_OFFSET, 256);
 	wipeRect.y = titleMeta->currY + (s16)nextOffsetY + MM_HIGHSCORE_WIPE_RECT_Y_OFFSET;
 	RECTMENU_DrawInnerRect(&wipeRect, 0, ot);
-
-	return;
+        sdata->ptrActiveMenu = savedMenu;
+        return;
 }
