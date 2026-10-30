@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 void MM_CupSelect_Init(void)
 {
@@ -15,6 +16,10 @@ void MM_CupSelect_Init(void)
 void MM_CupSelect_MenuProc(struct RectMenu *menu)
 {
 	struct GameTracker *gGT = sdata->gGT;
+	int origPosX = D230.menuCupSelect.posX_curr;
+	if (Widescreen_GetFactor() != 1000) {
+		D230.menuCupSelect.posX_curr = Widescreen_ScaleAboutX(origPosX, 256);
+	}
 
 	if (menu->funcState == RECTMENU_FUNC_STATE_INPUT)
 	{
@@ -22,6 +27,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 		D230.cupSelectTransition.state = EXITING_MENU;
 		D230.menuCupSelect.state &= ~(EXECUTE_FUNCPTR);
 		D230.menuCupSelect.state |= DISABLE_INPUT_ALLOW_FUNCPTRS;
+		D230.menuCupSelect.posX_curr = origPosX;
 		return;
 	}
 
@@ -81,21 +87,23 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 
 					// set current level
 					gGT->currLEV = data.ArcadeCups[gGT->cup.cupID].CupTrack[gGT->cup.trackIndex].trackID;
-					return;
+					D230.menuCupSelect.posX_curr = origPosX;
+		return;
 				}
 
 				// return to character selection
 				sdata->ptrDesiredMenu = &D230.menuCharacterSelect;
 
 				MM_Characters_RestoreIDs();
-				return;
+				D230.menuCupSelect.posX_curr = origPosX;
+		return;
 			}
 		}
 	}
 
 	D230.cupSelectTransition.frame = elapsedFrames;
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_SELECT_CUP_RACE], D230.transitionMeta_cupSel[MM_CUP_SELECT_TITLE_META_INDEX].currX + MM_CUP_SELECT_TITLE_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_SELECT_CUP_RACE], Widescreen_ScaleAboutX(D230.transitionMeta_cupSel[MM_CUP_SELECT_TITLE_META_INDEX].currX + MM_CUP_SELECT_TITLE_X_OFFSET, 256),
 	                   D230.transitionMeta_cupSel[MM_CUP_SELECT_TITLE_META_INDEX].currY + MM_CUP_SELECT_TITLE_Y_OFFSET, FONT_BIG, MM_CUP_SELECT_TEXT_COLOR);
 
 	// Loop through all four cups
@@ -118,7 +126,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 		int startY = (s16)D230.transitionMeta_cupSel[cupIndex].currY + (cupIndex >> 1) * MM_CUP_SELECT_ROW_HEIGHT;
 
 		// draw the name of the cup
-		DecalFont_DrawLine(sdata->lngStrings[data.ArcadeCups[cupIndex].lngIndex_CupName], startX + MM_CUP_SELECT_NAME_X_OFFSET,
+		DecalFont_DrawLine(sdata->lngStrings[data.ArcadeCups[cupIndex].lngIndex_CupName], Widescreen_ScaleAboutX(startX + MM_CUP_SELECT_NAME_X_OFFSET, 256),
 		                   startY + MM_CUP_SELECT_NAME_Y_OFFSET, FONT_CREDITS, txtColor);
 
 		startX = startX + MM_CUP_SELECT_CONTENT_X_OFFSET;
@@ -135,7 +143,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 				struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[MM_CUP_SELECT_STAR_ICON_GROUP]);
 
 				DecalHUD_DrawPolyGT4(iconPtrArray[MM_CUP_SELECT_STAR_ICON_ID],
-				                     startX + (cupIndex & 1) * MM_CUP_SELECT_STAR_COLUMN_BIAS + MM_CUP_SELECT_STAR_X_OFFSET,
+				                     Widescreen_ScaleAboutX(startX + (cupIndex & 1) * MM_CUP_SELECT_STAR_COLUMN_BIAS + MM_CUP_SELECT_STAR_X_OFFSET, 256),
 				                     startY + starIndex * MM_CUP_SELECT_STAR_Y_STEP + MM_CUP_SELECT_STAR_Y_OFFSET, &gGT->backBuffer->primMem,
 				                     gGT->pushBuffer_UI.ptrOT, starColor[0], starColor[1], starColor[2], starColor[3], 0, FP(1.0));
 			}
@@ -144,7 +152,14 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 		// loop through all four track icons in one cup
 		for (u8 trackIndex = 0; trackIndex < MM_CUP_TRACK_COUNT; trackIndex++)
 		{
-			int posX = startX + (trackIndex & 1) * MM_CUP_SELECT_TRACK_X_STEP;
+			struct Icon *icon = gGT->ptrIcons[data.ArcadeCups[cupIndex].CupTrack[trackIndex].iconID];
+			int width_orig = icon->texLayout.u1 - icon->texLayout.u0;
+			int scaled_width = FP_Mult(width_orig, FP(0.5));
+			int comp_width = CTR_WIDESCREEN_SCALE_X(scaled_width);
+			
+			int baseX = startX + (trackIndex & 1) * MM_CUP_SELECT_TRACK_X_STEP;
+			// DecalHUD sumará (scaled_width - comp_width)/2. Nosotros lo restamos para compensar.
+			int posX = Widescreen_ScaleAboutX(baseX, 256) - (scaled_width - comp_width) / 2;
 			int posY = startY + (trackIndex >> 1) * MM_CUP_SELECT_TRACK_Y_STEP;
 
 			// Draw Icon of each track
@@ -158,18 +173,18 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 		if (cupIndex == menu->rowSelected)
 		{
 			// highlight box
-			cupBox.x = startX + MM_CUP_SELECT_HIGHLIGHT_X_OFFSET;
+			cupBox.x = Widescreen_ScaleAboutX(startX + MM_CUP_SELECT_HIGHLIGHT_X_OFFSET, 256);
 			cupBox.y = startY + MM_CUP_SELECT_HIGHLIGHT_Y_OFFSET;
-			cupBox.w = MM_CUP_SELECT_HIGHLIGHT_WIDTH;
+			cupBox.w = CTR_WIDESCREEN_SCALE_X(MM_CUP_SELECT_HIGHLIGHT_WIDTH);
 			cupBox.h = MM_CUP_SELECT_HIGHLIGHT_HEIGHT;
 
 			CTR_Box_DrawClearBox(&cupBox, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, gGT->backBuffer->otMem.uiOT);
 		}
 
 		// background box
-		cupBox.x = startX + MM_CUP_SELECT_BACKGROUND_X_OFFSET;
+		cupBox.x = Widescreen_ScaleAboutX(startX + MM_CUP_SELECT_BACKGROUND_X_OFFSET, 256);
 		cupBox.y = startY + MM_CUP_SELECT_BACKGROUND_Y_OFFSET;
-		cupBox.w = MM_CUP_SELECT_BACKGROUND_WIDTH;
+		cupBox.w = CTR_WIDESCREEN_SCALE_X(MM_CUP_SELECT_BACKGROUND_WIDTH);
 		cupBox.h = MM_CUP_SELECT_BACKGROUND_HEIGHT;
 
 		RECTMENU_DrawInnerRect(&cupBox, 0, gGT->backBuffer->otMem.uiOT);
