@@ -2,6 +2,7 @@
 #include <widescreen.h>
 #include "native_graphics.h"
 #include "native_settings.h"
+#include "native_options.h"
 
 extern int  Platform_IsFullscreen(void);
 extern void Platform_GraphicsSetFullscreen(int on);
@@ -80,7 +81,7 @@ void NativeGraphics_MenuPtr(struct RectMenu *menu) {
         } else if (tap & (BTN_TRIANGLE | BTN_SQUARE_one)) {
             OtherFX_Play(1, 1);
             NativeGraphics_Close();
-            if (menu) menu->state &= ~(ONLY_DRAW_TITLE | INVISIBLE);
+            NativeOptions_Open();
             RECTMENU_ClearInput();
             return;
         }

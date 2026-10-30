@@ -2,6 +2,7 @@
 #include "native_options.h"
 #include "native_graphics.h"
 #include "native_cheats.h"
+#include <widescreen.h>
 
 static const char *const s_opt_labels[2] = { "GRAPHICS", "CHEATS" };
 static int s_opt_open = 0, s_opt_row = 0;
@@ -42,14 +43,20 @@ void NativeOptions_MenuPtr(struct RectMenu *menu) {
     DecalFont_DrawLine("OPTIONS", 256, 26, FONT_BIG, JUSTIFY_CENTER | ORANGE);
     for (int r = 0; r < 2; r++) {
         int y = 58 + r * 18;
-        DecalFont_DrawLine((char *)s_opt_labels[r], 76, y, FONT_SMALL, ORANGE);
+        DecalFont_DrawLine((char *)s_opt_labels[r], Widescreen_ScaleAboutX(76, 256), y, FONT_SMALL, ORANGE);
     }
-    RECT cur = {74, 58 + s_opt_row*18 - 3, 364, 14};
+    int origW_cur = 364;
+    int compW_cur = CTR_WIDESCREEN_SCALE_X(origW_cur);
+    RECT cur = {74 + (origW_cur - compW_cur) / 2, 58 + s_opt_row*18 - 3, compW_cur, 14};
     CTR_Box_DrawClearBox(&cur, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, ot);
-    RECT sep = {66, 43, 380, 2};
+    int origW_sep = 380;
+    int compW_sep = CTR_WIDESCREEN_SCALE_X(origW_sep);
+    RECT sep = {66 + (origW_sep - compW_sep) / 2, 43, compW_sep, 2};
     Color c;
     ColorCode_SetPacked(&c, sdata->battleSetup_Color_UI_1);
     RECTMENU_DrawOuterRect_Edge(&sep, c, 0x20, ot);
-    RECT bg = {56, 20, 400, 145};
+    int origW_bg = 400;
+    int compW_bg = CTR_WIDESCREEN_SCALE_X(origW_bg);
+    RECT bg = {56 + (origW_bg - compW_bg) / 2, 20, compW_bg, 145};
     RECTMENU_DrawInnerRect(&bg, 4, ot);
 }
