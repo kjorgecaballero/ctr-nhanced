@@ -11,6 +11,7 @@ static int DecalFont_ShouldSkipCompression(void)
     // Menus siempre comprimen (están dibujados en pantalla completa)
     if (sdata->ptrActiveMenu != NULL) return 0;
     if ((sdata->gGT->gameMode1 & (MAIN_MENU | PAUSE_ALL | END_OF_RACE)) != 0) return 0;
+    if (sdata->framesSinceRaceEnded > 0) return 0;
     // Solo el HUD de carrera de 4P salta la compresión
     return 1;
 }

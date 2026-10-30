@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 #ifdef CTR_NATIVE
 #include <LevelRegistry.h>
@@ -126,7 +127,7 @@ void TT_EndEvent_DrawMenu(void)
 		{
 			UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), 0x264, 122, 0x100, 122, elapsedFrames, TT_LERP_FRAMES);
 
-			DecalFont_DrawLine(lngStrings[LNG_NEW_HIGH_SCORE], pos.x, pos.y, FONT_BIG, textColor);
+			DecalFont_DrawLine(lngStrings[LNG_NEW_HIGH_SCORE], Widescreen_ScaleAboutX(pos.x, 256), pos.y, FONT_BIG, textColor);
 
 			// Total time should flash
 			sdata->flags_timeTrialEndOfRace |= TT_TOTAL_TIME_FLASH_FLAG;
@@ -284,17 +285,17 @@ void TT_EndEvent_DisplayTime(int paramX, s16 paramY, u32 raceClockFlags)
 
 	// === Naughty Dog Bug ===
 	// Start and End is the same
-	UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), (paramX - (0x88 - startTextWidth) / 2), paramY, (paramX - (0x88 - endTextWidth) / 2), paramY,
+	UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), (paramX - (CTR_WIDESCREEN_SCALE_X(0x88) - startTextWidth) / 2), paramY, (paramX - (CTR_WIDESCREEN_SCALE_X(0x88) - endTextWidth) / 2), paramY,
 	                 sdata->framesSinceRaceEnded, TT_LERP_FRAMES);
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_YOUR_TIME], paramX, ((u32)pos.y - 0x4c), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
 	UI_DrawRaceClock(pos.x, pos.y, raceClockFlags, d);
 
-	rectangle.x = (pos.x - DecalFont_GetLineWidth(sdata->lngStrings[LNG_TOTAL], FONT_BIG)) - 6;
+	rectangle.x = pos.x - DecalFont_GetLineWidth(sdata->lngStrings[LNG_TOTAL], FONT_BIG) - CTR_WIDESCREEN_SCALE_X(6);
 	rectangle.y = pos.y - 0x50;
 
-	rectangle.w = DecalFont_GetLineWidth(sdata->lngStrings[LNG_TOTAL], FONT_BIG) + 0x94;
+	rectangle.w = DecalFont_GetLineWidth(sdata->lngStrings[LNG_TOTAL], FONT_BIG) + CTR_WIDESCREEN_SCALE_X(0x94);
 	rectangle.h = 99;
 
 	// Draw 2D Menu rectangle background
@@ -315,7 +316,7 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 
 	struct GameTracker *gGT = sdata->gGT;
 	struct Driver *d = gGT->drivers[0];
-	s16 timeboxX = startX - 0x1f;
+	s16 timeboxX = startX - CTR_WIDESCREEN_SCALE_X(0x1f);
 	u16 rowOffsetY = 0;
 
 	// 12 entries per track, 6 for Time Trial and 6 for Relic Race
@@ -335,6 +336,12 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), startX, startY, startX, startY, sdata->framesSinceRaceEnded, TT_LERP_FRAMES);
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_BEST_TIMES], pos.x, pos.y, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+
+	// Widescreen compensation for DecalHUD centering the icon
+	s16 iconShift = 0;
+	if (Widescreen_GetFactor() != 1000) {
+		iconShift = (s16)(14 * (1000 - Widescreen_GetFactor()) / (1000 - 563));
+	}
 
 	// Draw icon, name, and time of the
 	// 5 best times in Time Trial
@@ -363,10 +370,10 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		s_rankString224 = (char)rowIndex + '1';
 
 		// Draw String for Rank ('1', '2', '3', '4', '5')
-		DecalFont_DrawLine((char *)&s_rankString224, startX - 0x32, timeboxY - 1, FONT_SMALL, WHITE);
+		DecalFont_DrawLine((char *)&s_rankString224, startX - CTR_WIDESCREEN_SCALE_X(0x32), timeboxY - 1, FONT_SMALL, WHITE);
 
 		// Draw Character Icon
-    RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(scoreEntries[scoreEntryIndex].characterID), startX - 0x52, timeboxY,
+    RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(scoreEntries[scoreEntryIndex].characterID), startX - CTR_WIDESCREEN_SCALE_X(0x52) - iconShift, timeboxY,
 		                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
 		                     // color of each corner
 		                     TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR, TT_HIGH_SCORE_ICON_COLOR,
@@ -383,9 +390,9 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 		// If this loop index is a new high score
 		if (gGT->newHighScoreIndex == rowIndex)
 		{
-			box.x = startX - 0x56;
+			box.x = startX - CTR_WIDESCREEN_SCALE_X(0x56);
 			box.y = timeboxY - 1;
-			box.w = 0xab;
+			box.w = CTR_WIDESCREEN_SCALE_X(0xab);
 			box.h = 0x1a;
 
 			// Draw a rectangle to highlight your time on the "Best Times" list
@@ -420,9 +427,9 @@ void TT_EndEvent_DrawHighScore(s16 startX, int startY, s16 scoreMode)
 	// Print amount of time, for whichever purpose
 	DecalFont_DrawLine(timeString, startX, startY + 0xa6, FONT_SMALL, timeColor);
 
-	box.x = pos.x - 0x60;
+	box.x = pos.x - CTR_WIDESCREEN_SCALE_X(0x60);
 	box.y = pos.y - 4;
-	box.w = 0xc0;
+	box.w = CTR_WIDESCREEN_SCALE_X(0xc0);
 	box.h = 0xb4;
 
 	// Draw 2D Menu rectangle background
