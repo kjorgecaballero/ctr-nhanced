@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 
 void MainFreeze_ConfigDrawNPC105(s16 startX, s16 startY, s16 radius, int angleStep, s16 angle, char *color, u32 *otMem, struct PrimMem *primMem)
@@ -607,9 +608,20 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 		}
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_OPTIONS_TITLE], 256, 26 + (menuRowsNegativePadding / 2), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
+	DecalFont_DrawLine(sdata->lngStrings[LNG_OPTIONS_TITLE], Widescreen_ScaleAboutX(256, 256), 26 + (menuRowsNegativePadding / 2), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
-	int volumeSliderWidth = 380 - (30 + volumeSliderTriangleLeftMargin);
+		// Todo en espacio comprimido. volumeSliderTriangleLeftMargin ya viene comprimido
+	// (DecalFont_GetLineWidth), así que NO se vuelve a escalar.
+	int sliderLeft  = Widescreen_ScaleAboutX(86, 256) + volumeSliderTriangleLeftMargin;
+	int sliderRight = Widescreen_ScaleAboutX(436, 256);
+	int volumeSliderWidth = sliderRight - sliderLeft;
+
+	// ancho de la barra: 5 en retail, nunca menos de 3 para que se vea el borde
+	int barW = CTR_WIDESCREEN_SCALE_X(5);
+	if (barW < 3)
+	{
+		barW = 3;
+	}
 
 	u32 *ot = gGT->backBuffer->otMem.uiOT;
 	struct PrimMem *primMem = &gGT->backBuffer->primMem;
@@ -619,7 +631,7 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 	for (int i = 0; i < 3; i++)
 	{
 		int volume = howl_VolumeGet(i) & 0xff;
-		int volumeSliderValue = volume * (volumeSliderWidth - 5);
+		int volumeSliderValue = volume * (volumeSliderWidth - barW);
 
 		s16 volumeSliderPosY = (menuRowsNegativePadding / 2) + (i * 10);
 
@@ -628,14 +640,13 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 			volumeSliderValue += 0xff;
 		}
 
-		int volumeSliderTriangleLeftPosX = 30 + volumeSliderTriangleLeftMargin;
-		int volumeSliderBarPosX = 0x38 + volumeSliderTriangleLeftPosX + (s16)((u32)volumeSliderValue >> 8);
+		int volumeSliderBarPosX = sliderLeft + (s16)((u32)volumeSliderValue >> 8);
 
 		s16 volumeSliderTriangle[8] = {// 0, 1
-		                               volumeSliderTriangleLeftPosX + 56, volumeSliderPosY + 58,
+		                               sliderLeft, volumeSliderPosY + 58,
 
 		                               // 2, 3
-		                               volumeSliderTriangleLeftPosX + volumeSliderWidth + 56, volumeSliderPosY + 48,
+		                               sliderRight, volumeSliderPosY + 48,
 
 		                               // 4, 5
 		                               0, 0};
@@ -643,33 +654,32 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 		volumeSliderTriangle[4] = volumeSliderTriangle[2];
 		volumeSliderTriangle[5] = volumeSliderTriangle[1];
 
-		RECT volumeSliderBar = {.x = volumeSliderBarPosX + 1, .y = volumeSliderPosY + 48, .w = 3, .h = 10};
+		RECT volumeSliderBar = {.x = volumeSliderBarPosX + 1, .y = volumeSliderPosY + 48, .w = barW - 2, .h = 10};
 		color = *(Color *)(data.Options_VolumeSlider_Colors + 0xc);
 		CTR_Box_DrawSolidBox(&volumeSliderBar, color, ot);
 
-		RECT volumeSliderBarOutline = {.x = volumeSliderBarPosX, .y = volumeSliderPosY + 47, .w = 5, .h = 12};
-
+		RECT volumeSliderBarOutline = {.x = volumeSliderBarPosX, .y = volumeSliderPosY + 47, .w = barW, .h = 12};
 		color = *(Color *)(data.Options_VolumeSlider_Colors + 0x10);
 		CTR_Box_DrawSolidBox(&volumeSliderBarOutline, color, ot);
 
 		RECTMENU_DrawRwdTriangle(volumeSliderTriangle, data.Options_VolumeSlider_Colors, ot, primMem);
 
-		// "FX:" "MUSIC:" "VOICE:"
-		DecalFont_DrawLine(sdata->lngStrings[data.Options_StringIDs_Audio[i]], 76, 50 + (menuRowsNegativePadding / 2) + (i * 10), FONT_SMALL, ORANGE);
+		// "FX:" "MUSIC:" "VOICE:"  (sin cambios)
+		DecalFont_DrawLine(sdata->lngStrings[data.Options_StringIDs_Audio[i]], Widescreen_ScaleAboutX(76, 256), 50 + (menuRowsNegativePadding / 2) + (i * 10), FONT_SMALL, ORANGE);
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_MODE], 76, 80 + (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_MODE], Widescreen_ScaleAboutX(76, 256), 80 + (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
 
 	// 333: MONO
 	// 334: STEREO
 	int mode = howl_ModeGet();
 
 	// "MONO", "STEREO"
-	DecalFont_DrawLine(sdata->lngStrings[333 + mode], 436, 80 + (menuRowsNegativePadding / 2), FONT_SMALL, (JUSTIFY_RIGHT | WHITE));
+	DecalFont_DrawLine(sdata->lngStrings[333 + mode], Widescreen_ScaleAboutX(436, 256), 80 + (menuRowsNegativePadding / 2), FONT_SMALL, (JUSTIFY_RIGHT | WHITE));
 
 	if (gamepad->numGamepads != 0)
 	{
-		DecalFont_DrawLine(sdata->lngStrings[LNG_DUAL_SHOCK], 76, 90 + (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
+		DecalFont_DrawLine(sdata->lngStrings[LNG_DUAL_SHOCK], Widescreen_ScaleAboutX(76, 256), 90 + (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
 
 		int lineWidth_controller1A = DecalFont_GetLineWidth(sdata->lngStrings[data.Options_StringIDs_Gamepads[2]], FONT_SMALL);
 
@@ -681,7 +691,8 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 			lineWidth_vibrateOn = lineWidth_vibrateOff;
 		}
 
-		lineWidth_vibrateOn = (lineWidth_controller1A + lineWidth_vibrateOn + 10);
+		int gap = CTR_WIDESCREEN_SCALE_X(10);
+                lineWidth_vibrateOn = (lineWidth_controller1A + lineWidth_vibrateOn + gap);
 		lineWidth_vibrateOn = 256 - (lineWidth_vibrateOn >> 1);
 
 		for (int i = 0; i < gamepad->numGamepads; i++)
@@ -714,36 +725,36 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 			// 325: "VIBRATE ON"
 			// 326: "VIBRATE OFF"
 
-			DecalFont_DrawLine(sdata->lngStrings[325 + boolDisabled], lineWidth_vibrateOn + lineWidth_controller1A + 10, rowY, FONT_SMALL, dualShockRowColor);
+			DecalFont_DrawLine(sdata->lngStrings[325 + boolDisabled], lineWidth_vibrateOn + lineWidth_controller1A + gap, rowY, FONT_SMALL, dualShockRowColor);
 		}
 	}
 
 	if (gamepad->numAnalogs != 0)
 	{
-		DecalFont_DrawLine(sdata->lngStrings[LNG_CONFIGURE_ANALOG], 76, 90 + (menuRowsNegativePadding / 2) + analogRowPosY, FONT_SMALL, ORANGE);
+		DecalFont_DrawLine(sdata->lngStrings[LNG_CONFIGURE_ANALOG], Widescreen_ScaleAboutX(76, 256), 90 + (menuRowsNegativePadding / 2) + analogRowPosY, FONT_SMALL, ORANGE);
 
 		for (int i = 0; i < gamepad->numAnalogs; i++)
 		{
-			DecalFont_DrawLine(sdata->lngStrings[data.Options_StringIDs_Gamepads[gamepad->analogId[i] + multitapStringOffset]], 256,
+			DecalFont_DrawLine(sdata->lngStrings[data.Options_StringIDs_Gamepads[gamepad->analogId[i] + multitapStringOffset]], Widescreen_ScaleAboutX(256, 256),
 			                   100 + (menuRowsNegativePadding / 2) + analogRowPosY + (i * 10), FONT_SMALL, (JUSTIFY_CENTER | ORANGE));
 		}
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_OPTIONS_EXIT], 76, 140 - (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_OPTIONS_EXIT], Widescreen_ScaleAboutX(76, 256), 140 - (menuRowsNegativePadding / 2), FONT_SMALL, ORANGE);
 
-	RECT cursor = {.x = 74,
+	RECT cursor = {.x = Widescreen_ScaleAboutX(74, 256),
 	               .y = data.Options_HighlightBar[menu->rowSelected].posY + (menuRowsNegativePadding / 2) + 20,
-	               .w = 364,
+	               .w = CTR_WIDESCREEN_SCALE_X(364),
 	               .h = data.Options_HighlightBar[menu->rowSelected].sizeY};
 
 	CTR_Box_DrawClearBox(&cursor, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, ot);
 
-	RECT titleSeparatorLine = {.x = 66, .y = (menuRowsNegativePadding / 2) + 43, .w = 380, .h = 2};
+	RECT titleSeparatorLine = {.x = Widescreen_ScaleAboutX(66, 256), .y = (menuRowsNegativePadding / 2) + 43, .w = CTR_WIDESCREEN_SCALE_X(380), .h = 2};
 
 	ColorCode_SetPacked(&color, sdata->battleSetup_Color_UI_1);
 	RECTMENU_DrawOuterRect_Edge(&titleSeparatorLine, color, 0x20, ot);
 
-	RECT menuBG = {.x = 56, .y = (menuRowsNegativePadding / 2) + 20, .w = 400, .h = 135 - menuRowsNegativePadding};
+	RECT menuBG = {.x = Widescreen_ScaleAboutX(56, 256), .y = (menuRowsNegativePadding / 2) + 20, .w = CTR_WIDESCREEN_SCALE_X(400), .h = 135 - menuRowsNegativePadding};
 
 	RECTMENU_DrawInnerRect(&menuBG, 4, ot);
 }
