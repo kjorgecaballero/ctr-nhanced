@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 enum ArcadeAdventureEndMenuConstants
@@ -791,29 +792,36 @@ void AA_EndEvent_DisplayTime(s16 driverId, s16 timeOffsetFrames)
 
 	UI_DrawPosSuffix(pos.x, pos.y, driver, 0);
 
-	// === DrawRaceClock ===
+	        // === DrawRaceClock ===
+        // pos.x en espacio de pantalla: el fly-in/out va desde/hacia fuera de pantalla (0x218 / 0x27c),
+        // solo el punto de reposo (0x150) se mapea con S.
+        const int clockRestX = Widescreen_ScaleAboutX(0x150, 256);
 
-	if (AA_TIME_DISPLAY_LATE_FRAME - timeOffsetFrames < driver->framesSinceRaceEnded_forThisDriver)
-	{
-		UI_Lerp2D_Linear(CTR_VECTOR_DATA(&pos), 0x150, clockY, 0x27c, clockY,
-		                 driver->framesSinceRaceEnded_forThisDriver + (timeOffsetFrames - AA_TIME_DISPLAY_LATE_FRAME), AA_TIME_DISPLAY_FLYOUT_FRAMES);
-	}
+        if (AA_TIME_DISPLAY_LATE_FRAME - timeOffsetFrames < driver->framesSinceRaceEnded_forThisDriver)
+        {
+                UI_Lerp2D_Linear(CTR_VECTOR_DATA(&pos), clockRestX, clockY, 0x27c, clockY,
+                                 driver->framesSinceRaceEnded_forThisDriver + (timeOffsetFrames - AA_TIME_DISPLAY_LATE_FRAME), AA_TIME_DISPLAY_FLYOUT_FRAMES);
+        }
+        else
+        {
+                UI_Lerp2D_Linear(CTR_VECTOR_DATA(&pos), 0x218, clockY, clockRestX, clockY, driver->framesSinceRaceEnded_forThisDriver, AA_TIME_DISPLAY_FLYIN_FRAMES);
+        }
 
-	else
-	{
-		UI_Lerp2D_Linear(CTR_VECTOR_DATA(&pos), 0x218, clockY, 0x150, clockY, driver->framesSinceRaceEnded_forThisDriver, AA_TIME_DISPLAY_FLYIN_FRAMES);
-	}
+        UI_DrawRaceClock(pos.x, pos.y, UI_RACE_CLOCK_SHOW_RESULTS, driver);
 
-	UI_DrawRaceClock(pos.x, pos.y, UI_RACE_CLOCK_SHOW_RESULTS, driver);
+        // GetLineWidth ya viene comprimido; los offsets fijos van con SCALE
+        {
+                int totalW = DecalFont_GetLineWidth(languageStrings[LNG_TOTAL], FONT_BIG);
 
-	timeBoxRect.x = (pos.x - DecalFont_GetLineWidth(languageStrings[LNG_TOTAL], FONT_BIG)) + -6;
-	timeBoxRect.y = (pos.y - timeBoxHeight) + 0xd;
-	timeBoxRect.w = DecalFont_GetLineWidth(languageStrings[LNG_TOTAL], FONT_BIG) + 0x94;
-	timeBoxRect.h = timeBoxHeight + 6;
+                timeBoxRect.x = (pos.x - totalW) - CTR_WIDESCREEN_SCALE_X(6);
+                timeBoxRect.y = (pos.y - timeBoxHeight) + 0xd;
+                timeBoxRect.w = totalW + CTR_WIDESCREEN_SCALE_X(0x94);
+                timeBoxRect.h = timeBoxHeight + 6;
+        }
 
-	// Draw 2D Menu rectangle background
-	RECTMENU_DrawInnerRect(&timeBoxRect, 4, gameTrackerPtr->backBuffer->otMem.uiOT);
-	return;
+        // Draw 2D Menu rectangle background
+        RECTMENU_DrawInnerRect(&timeBoxRect, 4, gameTrackerPtr->backBuffer->otMem.uiOT);
+        return;
 }
 
 struct MenuRow rows222[5] = {

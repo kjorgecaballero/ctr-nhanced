@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 
 enum
 {
@@ -217,7 +218,7 @@ void UI_DrawRaceClock(s16 labelPosX, s16 labelPosY, u32 flags, struct Driver *dr
 	// then adjust them accordingly
 	else
 	{
-		posX = (int)(((u32)textPosX + UI_RACE_CLOCK_RESULTS_TIME_X_OFFSET) * 0x10000) >> 0x10;
+		posX = (int)textPosX + CTR_WIDESCREEN_SCALE_X(UI_RACE_CLOCK_RESULTS_TIME_X_OFFSET);
 		numParamY = (u32)textPosY << 0x10;
 	}
 
@@ -329,7 +330,7 @@ void UI_DrawRaceClock(s16 labelPosX, s16 labelPosY, u32 flags, struct Driver *dr
 					                   (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10, lapFontType,
 					                   (JUSTIFY_RIGHT | RED));
 
-					DecalFont_DrawLine(sdata->lngStrings[LNG_LAP], (int)(((u32)textPosX - (u32)data.font_charPixWidth[lapFontType])),
+					DecalFont_DrawLine(sdata->lngStrings[LNG_LAP], (int)textPosX - CTR_WIDESCREEN_SCALE_X(data.font_charPixWidth[lapFontType]),
 					                   (int)(((u32)textPosY - (gGT->numLaps - numLaps) * (int)*lapTextHeight) * 0x10000) >> 0x10, lapFontType,
 					                   (JUSTIFY_RIGHT | RED));
 
@@ -425,7 +426,7 @@ LAB_8004f378:
 		lapOrRelicColor = lapOrRelicColor | JUSTIFY_RIGHT;
 		relicLabelY = textPosY - UI_RACE_CLOCK_RELIC_RESULTS_Y_OFFSET;
 		relicTimeY = relicLabelY;
-		relicTimeX = textPosX + UI_RACE_CLOCK_RESULTS_TIME_X_OFFSET;
+		relicTimeX = textPosX + CTR_WIDESCREEN_SCALE_X(UI_RACE_CLOCK_RESULTS_TIME_X_OFFSET);
 	}
 
 	DecalFont_DrawLine(sdata->lngStrings[lngIndex], (int)(s16)textPosX, (int)relicLabelY, fontType, (int)(s16)lapOrRelicColor);
