@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 void MM_Battle_DrawIcon_Character(struct Icon *icon, int posX, int posY, struct PrimMem *primMem, u32 *ot, char transparency, s16 scale)
@@ -7,6 +8,11 @@ void MM_Battle_DrawIcon_Character(struct Icon *icon, int posX, int posY, struct 
 	{
 		return;
 	}
+
+	int w = FP_Mult(icon->texLayout.u1 - icon->texLayout.u0, scale);
+	int shift = (w - CTR_WIDESCREEN_SCALE_X(w)) / 2;
+	posX = Widescreen_ScaleAboutX(posX, 256) - shift;
+
 	DecalHUD_DrawPolyFT4(icon, posX, posY, primMem, ot, transparency, scale);
 }
 
@@ -140,16 +146,13 @@ void MM_Battle_DrawIcon_Weapon(struct Icon *icon, u32 posX, int posY, struct Pri
 	s32 scaledWidth = (((s32)((u8)icon->texLayout.u1 - (u8)icon->texLayout.u0)) * scale) >> 0xc;
         s32 scaledHeight = (((s32)((u8)icon->texLayout.v2 - (u8)icon->texLayout.v0)) * scale) >> 0xc;
 
-        // WIDESCREEN: Comprimir el ancho visual (0.85) y centrar
-        if ((rotation & 1) != 0) {
-            s32 originalHeight = scaledHeight;
-            scaledHeight = (scaledHeight * 700) / 1000;
-            posX = (u32)((s32)posX + (originalHeight - scaledHeight) / 2);
-        } else {
-            s32 originalWidth = scaledWidth;
-            scaledWidth = (scaledWidth * 700) / 1000;
-            posX = (u32)((s32)posX + (originalWidth - scaledWidth) / 2);
-        }
+        	// WIDESCREEN: posX llega en coords retail. CompressFT4 (al final) comprime
+	// alrededor del centro del quad, así que ponemos ese centro en S(centro retail).
+	// El ancho en X es scaledHeight cuando el icono va rotado (rotation & 1).
+	{
+		int xExtent = ((rotation & 1) != 0) ? scaledHeight : scaledWidth;
+		posX = (u32)(Widescreen_ScaleAboutX((int)posX, 256) - Widescreen_XShift(xExtent));
+	}
 	u32 code = BATTLE_GPU_CODE_POLY_FT4;
 	u32 packedY = (u32)(u16)posY << 0x10;
 
@@ -207,6 +210,8 @@ void MM_Battle_DrawIcon_Weapon(struct Icon *icon, u32 posX, int posY, struct Pri
 	}
 
 	CtrGpu_LinkPacket24(ot, &p->tag, p, BATTLE_GPU_TAG_LENGTH_POLY_FT4);
+
+	Widescreen_CompressFT4(p);
 
 	primMem->cursor = p + 1;
 }
@@ -731,10 +736,10 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 
 	struct TransitionMeta *tmbattle = D230.transitionMeta_battle;
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_SETUP_BATTLE], tmbattle[BATTLE_TITLE_META_INDEX].currX + BATTLE_TITLE_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_SETUP_BATTLE], Widescreen_ScaleAboutX(Widescreen_ScaleAboutX(tmbattle[BATTLE_TITLE_META_INDEX].currX + BATTLE_TITLE_X_OFFSET, 256), 256),
 	                   tmbattle[BATTLE_TITLE_META_INDEX].currY + BATTLE_TITLE_Y_OFFSET, FONT_BIG, BATTLE_TITLE_TEXT_FLAGS);
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_TYPE], tmbattle[BATTLE_ROW_TYPE_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_TYPE], Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TYPE_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET, 256),
 	                   tmbattle[BATTLE_ROW_TYPE_LABEL_META_INDEX].currY + BATTLE_TYPE_ROW_Y_OFFSET, FONT_BIG, BATTLE_LABEL_TEXT_FLAGS);
 
 	D230.menuBattleType.state &= ~(HIDE_ROW_HIGHLIGHT | SHOW_ONLY_HIGHLIT_ROW);
@@ -750,15 +755,17 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 		D230.menuBattleType.state |= HIDE_ROW_HIGHLIGHT;
 	}
 
-	RECTMENU_DrawSelf(&D230.menuBattleType, tmbattle[BATTLE_ROW_TYPE_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET,
-	                  tmbattle[BATTLE_ROW_TYPE_MENU_META_INDEX].currY + BATTLE_TYPE_ROW_Y_OFFSET, BATTLE_WIDE_MENU_WIDTH);
+	RECTMENU_DrawSelf(&D230.menuBattleType,
+                          Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TYPE_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256),
+                          tmbattle[BATTLE_ROW_TYPE_MENU_META_INDEX].currY + BATTLE_TYPE_ROW_Y_OFFSET,
+                          CTR_WIDESCREEN_SCALE_X(BATTLE_WIDE_MENU_WIDTH));
 
 	s16 menuHeight = BATTLE_MENU_DEFAULT_HEIGHT;
 	RECTMENU_GetHeight(&D230.menuBattleType, &menuHeight, 0);
 	s16 lengthRowY = menuHeight + BATTLE_LENGTH_ROW_Y_OFFSET;
 	s16 afterLengthY = lengthRowY;
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_LENGTH], tmbattle[BATTLE_ROW_LENGTH_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_LENGTH], Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_LENGTH_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET, 256),
 	                   tmbattle[BATTLE_ROW_LENGTH_LABEL_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET, FONT_BIG, BATTLE_LABEL_TEXT_FLAGS);
 
 	struct RectMenu *lengthMenu;
@@ -798,8 +805,10 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 					D230.menuBattleLengthLifeLife.state |= HIDE_ROW_HIGHLIGHT;
 				}
 
-				RECTMENU_DrawSelf(&D230.menuBattleLengthLifeLife, tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_LENGTH_DUAL_MENU_X_OFFSET,
-				                  tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET, BATTLE_LENGTH_DUAL_MENU_WIDTH);
+				RECTMENU_DrawSelf(&D230.menuBattleLengthLifeLife,
+                                              Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_LENGTH_DUAL_MENU_X_OFFSET, 256),
+                                              tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET,
+                                              CTR_WIDESCREEN_SCALE_X(BATTLE_LENGTH_DUAL_MENU_WIDTH));
 
 				s16 lifeTimeMenuHeight = BATTLE_MENU_DEFAULT_HEIGHT;
 				RECTMENU_GetHeight(&D230.menuBattleLengthLifeTime, &lifeTimeMenuHeight, 0);
@@ -831,8 +840,10 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 		lengthMenu->state |= HIDE_ROW_HIGHLIGHT;
 	}
 
-	RECTMENU_DrawSelf(lengthMenu, tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET,
-	                  tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET, BATTLE_WIDE_MENU_WIDTH);
+	RECTMENU_DrawSelf(lengthMenu,
+                      Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256),
+                      tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET,
+                      CTR_WIDESCREEN_SCALE_X(BATTLE_WIDE_MENU_WIDTH));
 
 	menuHeight = BATTLE_MENU_DEFAULT_HEIGHT;
 	RECTMENU_GetHeight(lengthMenu, &menuHeight, 0);
@@ -843,7 +854,7 @@ LAB_800b25f0:
 
 	teamPanelX = BATTLE_TEAM_PANEL_START_X;
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_TEAMS], tmbattle[BATTLE_ROW_TEAM_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_TEAMS], Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TEAM_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET, 256),
 	                   tmbattle[BATTLE_ROW_TEAM_LABEL_META_INDEX].currY + afterLengthY + BATTLE_TEAM_LABEL_Y_OFFSET, FONT_BIG, BATTLE_LABEL_TEXT_FLAGS);
 
 	s32 accumulatedTeamWidth = BATTLE_TEAM_SEGMENT_BASE_WIDTH;
@@ -913,11 +924,11 @@ LAB_800b25f0:
 
 		RECT teamColorRect;
 		teamColorRect.h = BATTLE_TEAM_COLOR_H;
-		teamColorRect.x = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (s16)teamPanelX;
+		teamColorRect.x = Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + (s16)teamPanelX, 256);
 		teamColorRect.y = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + afterLengthY + BATTLE_TEAM_COLOR_Y_OFFSET;
 		teamPanelX = teamPanelX + (u32)teamSegmentWidth;
 
-		teamColorRect.w = teamSegmentWidth;
+		teamColorRect.w = CTR_WIDESCREEN_SCALE_X(teamSegmentWidth);
 
 		Color color;
 		ColorCode_SetPacked(&color, *data.ptrColor[PLAYER_BLUE + teamIndex]);
@@ -927,24 +938,24 @@ LAB_800b25f0:
 	if (sdata->battleSetupRowHighlighted == BATTLE_ROW_TEAMS)
 	{
 		RECT teamHighlightRect;
-		teamHighlightRect.w = BATTLE_TEAM_HIGHLIGHT_W;
+		teamHighlightRect.w = CTR_WIDESCREEN_SCALE_X(BATTLE_TEAM_HIGHLIGHT_W);
 		teamHighlightRect.h = BATTLE_TEAM_HIGHLIGHT_H;
-		teamHighlightRect.x = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + BATTLE_MENU_X_OFFSET;
+		teamHighlightRect.x = Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256);
 		teamHighlightRect.y = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + afterLengthY + BATTLE_TEAM_HIGHLIGHT_Y_OFFSET;
 
 		CTR_Box_DrawClearBox(&teamHighlightRect, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, (u32 *)ot);
 	}
 
 	RECT teamPanelRect;
-	teamPanelRect.w = BATTLE_TEAM_PANEL_W;
+	teamPanelRect.w = CTR_WIDESCREEN_SCALE_X(BATTLE_TEAM_PANEL_W);
 	teamPanelRect.h = BATTLE_TEAM_PANEL_H;
-	teamPanelRect.x = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + BATTLE_TEAM_PANEL_X_OFFSET;
+	teamPanelRect.x = Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_TEAM_META_INDEX].currX + BATTLE_TEAM_PANEL_X_OFFSET, 256);
 	teamPanelRect.y = tmbattle[BATTLE_ROW_TEAM_META_INDEX].currY + afterLengthY;
 
 	// Draw 2D Menu rectangle background
 	RECTMENU_DrawInnerRect(&teamPanelRect, 0, ot);
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_WEAPONS], tmbattle[BATTLE_ROW_WEAPON_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET,
+	DecalFont_DrawLine(sdata->lngStrings[LNG_WEAPONS], Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_WEAPON_LABEL_META_INDEX].currX + BATTLE_LABEL_X_OFFSET, 256),
 	                   tmbattle[BATTLE_ROW_WEAPON_LABEL_META_INDEX].currY + afterLengthY + BATTLE_WEAPON_LABEL_Y_OFFSET, FONT_BIG, BATTLE_LABEL_TEXT_FLAGS);
 
 	// make flashing color for error message
@@ -995,8 +1006,10 @@ LAB_800b25f0:
 		{
 			D230.menuBattleStartGame.state |= HIDE_ROW_HIGHLIGHT;
 		}
-		RECTMENU_DrawSelf(&D230.menuBattleStartGame, tmbattle[BATTLE_ROW_START_META_INDEX].currX + BATTLE_MENU_X_OFFSET,
-		                  tmbattle[BATTLE_ROW_START_META_INDEX].currY + afterLengthY + BATTLE_START_MENU_Y_OFFSET, BATTLE_WIDE_MENU_WIDTH);
+		RECTMENU_DrawSelf(&D230.menuBattleStartGame,
+                                  Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_START_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256),
+                                  tmbattle[BATTLE_ROW_START_META_INDEX].currY + afterLengthY + BATTLE_START_MENU_Y_OFFSET,
+                                  CTR_WIDESCREEN_SCALE_X(BATTLE_WIDE_MENU_WIDTH));
 
 		menuHeight = BATTLE_MENU_DEFAULT_HEIGHT;
 		RECTMENU_GetHeight(&D230.menuBattleStartGame, &menuHeight, 0);
@@ -1011,9 +1024,9 @@ LAB_800b25f0:
 		// BATTLE_ERROR_TEXT_X for halfway on the X-axis,
 		// flashing color
 
-		DecalFont_DrawLine(sdata->lngStrings[errorLine1], BATTLE_ERROR_TEXT_X, afterLengthY + BATTLE_ERROR_TEXT_LINE_1_Y_OFFSET, FONT_BIG,
+		DecalFont_DrawLine(sdata->lngStrings[errorLine1], Widescreen_ScaleAboutX(BATTLE_ERROR_TEXT_X, 256), afterLengthY + BATTLE_ERROR_TEXT_LINE_1_Y_OFFSET, FONT_BIG,
 		                   (int)flashingErrorColor);
-		DecalFont_DrawLine(sdata->lngStrings[errorLine2], BATTLE_ERROR_TEXT_X, afterLengthY + BATTLE_ERROR_TEXT_LINE_2_Y_OFFSET, FONT_BIG,
+		DecalFont_DrawLine(sdata->lngStrings[errorLine2], Widescreen_ScaleAboutX(BATTLE_ERROR_TEXT_X, 256), afterLengthY + BATTLE_ERROR_TEXT_LINE_2_Y_OFFSET, FONT_BIG,
 		                   (int)flashingErrorColor);
 	}
 	RECT weaponPanelRect;
@@ -1049,7 +1062,7 @@ LAB_800b25f0:
 		if (((weaponIndex - BATTLE_WEAPON_AMMO_TEXT_FIRST) & 0xffff) < BATTLE_WEAPON_AMMO_TEXT_COUNT)
 		{
 			// draw the "3" over the icons
-			DecalFont_DrawLine(&R230.s_3[0], weaponPosX, weaponPosY, 2, weaponTextColor);
+			DecalFont_DrawLine(&R230.s_3[0], Widescreen_ScaleAboutX(weaponPosX, 256), weaponPosY, 2, weaponTextColor);
 		}
 
 		MM_Battle_DrawIcon_Weapon(gGT->ptrIcons[weaponItem->iconID], weaponPosX, weaponPosY, &gGT->backBuffer->primMem, (u32 *)gGT->pushBuffer_UI.ptrOT, 1,
@@ -1059,34 +1072,31 @@ LAB_800b25f0:
 	if ((u32)sdata->battleSetupRowHighlighted - BATTLE_ROW_WEAPON_TOP < BATTLE_WEAPON_ROW_COUNT)
 	{
 		RECT weaponHighlightRect;
-		s16 highlightedWeaponX = weaponPanelRect.x + sdata->battleSetupWeaponHighlighted * BATTLE_WEAPON_GRID_X_STEP;
-		weaponHighlightRect.x = highlightedWeaponX + BATTLE_WEAPON_HIGHLIGHT_LEFT_X_OFFSET;
-		if (sdata->battleSetupRowHighlighted == BATTLE_ROW_WEAPON_BOTTOM)
-		{
-			weaponHighlightRect.x = highlightedWeaponX + BATTLE_WEAPON_HIGHLIGHT_RIGHT_X_OFFSET;
-		}
-		weaponHighlightRect.w = BATTLE_WEAPON_HIGHLIGHT_W;
+		int hlX = weaponPanelRect.x + sdata->battleSetupWeaponHighlighted * BATTLE_WEAPON_GRID_X_STEP;
+		hlX += (sdata->battleSetupRowHighlighted == BATTLE_ROW_WEAPON_BOTTOM) ? BATTLE_WEAPON_HIGHLIGHT_RIGHT_X_OFFSET
+		                                                                      : BATTLE_WEAPON_HIGHLIGHT_LEFT_X_OFFSET;
+		weaponHighlightRect.x = Widescreen_ScaleAboutX(hlX, 256);
+		weaponHighlightRect.w = CTR_WIDESCREEN_SCALE_X(BATTLE_WEAPON_HIGHLIGHT_W);
 		weaponHighlightRect.h = BATTLE_WEAPON_HIGHLIGHT_H;
-
-		// WIDESCREEN: Comprimir el ancho del cursor y centrarlo
-		int oldHighlightW = weaponHighlightRect.w;
-		weaponHighlightRect.w = (oldHighlightW * 700) / 1000;
-		weaponHighlightRect.x += (oldHighlightW - weaponHighlightRect.w) / 2;
-		weaponHighlightRect.y =
-		    weaponPanelRect.y + (sdata->battleSetupRowHighlighted - BATTLE_ROW_WEAPON_TOP) * BATTLE_WEAPON_GRID_Y_STEP + BATTLE_WEAPON_HIGHLIGHT_Y_OFFSET;
+		weaponHighlightRect.y = weaponPanelRect.y + (sdata->battleSetupRowHighlighted - BATTLE_ROW_WEAPON_TOP) * BATTLE_WEAPON_GRID_Y_STEP + BATTLE_WEAPON_HIGHLIGHT_Y_OFFSET;
 
 		CTR_Box_DrawClearBox(&weaponHighlightRect, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, ot);
 	}
 
 	RECT weaponPanelInsetRect;
-	weaponPanelInsetRect.x = weaponPanelRect.x + BATTLE_WEAPON_PANEL_INSET_X;
+	weaponPanelInsetRect.x = Widescreen_ScaleAboutX(weaponPanelRect.x + BATTLE_WEAPON_PANEL_INSET_X, 256);
 	weaponPanelInsetRect.y = weaponPanelRect.y + BATTLE_WEAPON_PANEL_INSET_Y;
-	weaponPanelInsetRect.w = weaponPanelRect.w - BATTLE_WEAPON_PANEL_INSET_W_SHRINK;
+	weaponPanelInsetRect.w = CTR_WIDESCREEN_SCALE_X(weaponPanelRect.w) - CTR_WIDESCREEN_SCALE_X(BATTLE_WEAPON_PANEL_INSET_W_SHRINK);
 	weaponPanelInsetRect.h = weaponPanelRect.h - BATTLE_WEAPON_PANEL_INSET_H_SHRINK;
 
 	CTR_Box_DrawClearBox(&weaponPanelInsetRect, &D230.battleWeaponPanelColor, TRANS_50_DECAL, ot);
 
-	RECTMENU_DrawInnerRect(&weaponPanelRect, 0, ot);
+	{
+        RECT _wp = weaponPanelRect;
+        _wp.x = Widescreen_ScaleAboutX(weaponPanelRect.x, 256);
+        _wp.w = CTR_WIDESCREEN_SCALE_X(weaponPanelRect.w);
+        RECTMENU_DrawInnerRect(&_wp, 0, ot);
+    }
 
 	// save all five battle settings
 	// these are selected rows from all battle options
