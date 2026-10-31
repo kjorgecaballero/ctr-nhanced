@@ -326,6 +326,57 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 
 		driverInst->model = model;
 
+                /* NITROS_OXIDE base scale capture.
+                 *
+                 * driverInst is a shared instance reused across all
+                 * character previews, and its scale is also touched by
+                 * other code paths (the exact value varies per session,
+                 * so we must not hardcode it). Capture it once per
+                 * playerIndex on the first frame, then reuse it:
+                 *   - non-Oxide: restore the captured base scale
+                 *   - Oxide:     base scale * 0.5 (race model is ~2x)
+                 *
+                 * Without this capture, a hardcoded 0x1000 makes the
+                 * rest look too big, and 0x800 makes them too small.
+                 * The real value lives somewhere in between.
+                 */
+                static s16 s_baseScaleX[4] = {0};
+                static s16 s_baseScaleY[4] = {0};
+                static s16 s_baseScaleZ[4] = {0};
+                static u8  s_baseCaptured[4] = {0};
+
+                if (!s_baseCaptured[playerIndex])
+                {
+                        s_baseScaleX[playerIndex] = driverInst->scale.x;
+                        s_baseScaleY[playerIndex] = driverInst->scale.y;
+                        s_baseScaleZ[playerIndex] = driverInst->scale.z;
+                        s_baseCaptured[playerIndex] = 1;
+                        fprintf(stderr,
+                                "[OxideDiag] captured base scale[%d] = (%d, %d, %d)\n",
+                                (int)playerIndex,
+                                (int)driverInst->scale.x,
+                                (int)driverInst->scale.y,
+                                (int)driverInst->scale.z);
+                }
+
+                /* Restore the captured base scale for the current frame. */
+                driverInst->scale.x = s_baseScaleX[playerIndex];
+                driverInst->scale.y = s_baseScaleY[playerIndex];
+                driverInst->scale.z = s_baseScaleZ[playerIndex];
+
+                /* Override: Oxide uses the race model, which is ~2x the
+                 * menu models. Halve his scale so his preview matches. */
+                /* Override: Oxide uses the race model, which is ~2x the
+                 * menu models. Use a fixed 0x800 (empirically verified) so
+                 * his preview matches. Do NOT use base >> 1: the captured
+                 * base varies per driver and makes Oxide too small. */
+                if (_cid == NITROS_OXIDE && model != NULL)
+                {
+                        driverInst->scale.x = 0x900;
+                        driverInst->scale.y = 0x900;
+                        driverInst->scale.z = 0x900;
+                }
+
 		/* Wheels in char-select: custom racers consult roster.txt
 		 * (wheels=yes|no). Re-applied every frame since DrawWindows
 		 * runs every frame. 0xccc == VEH_BIRTH_WHEEL_SIZE. */
