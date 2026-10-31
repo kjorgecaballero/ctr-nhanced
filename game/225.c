@@ -1,4 +1,5 @@
 #include <common.h>
+#include <widescreen.h>
 #include <platform/native_custom_racer.h>
 
 global_variable struct RectMenu menuVS;
@@ -73,6 +74,32 @@ global_variable s16 s_vsStandingsYByPlayerCount[3][VB_POSY_NUM] = {
     {0xa, 0x35, 0x5b, 0x81, 0xa7} // 4P
 };
 
+
+static int VB_FlyTargetX(int retailX)
+{
+	return (retailX == VB_TITLE_ENTRY_X) ? retailX : Widescreen_ScaleAboutX(retailX, 256);
+}
+
+// screenX = borde izquierdo del icono, ya en espacio de pantalla (S(retail)).
+static void VB_DrawIcon(struct Icon *icon, int screenX, int posY, struct PrimMem *primMem, u32 *ot)
+{
+	if (!icon)
+	{
+		return;
+	}
+
+	POLY_FT4 *p = (POLY_FT4 *)primMem->cursor;
+	DecalHUD_DrawPolyFT4(icon, screenX, posY, primMem, ot, VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
+
+	if (Widescreen_GetFactor() != 1000)
+	{
+		int w = FP_Mult(icon->texLayout.u1 - icon->texLayout.u0, VB_ICON_SCALE);
+		int wScreen = CTR_WIDESCREEN_SCALE_X(w);
+		p->x0 = p->x2 = (s16)screenX;
+		p->x1 = p->x3 = (s16)(screenX + wScreen);
+	}
+}
+
 void VB_EndEvent_DrawMenu(void)
 {
 	char text[24];
@@ -82,6 +109,12 @@ void VB_EndEvent_DrawMenu(void)
 	s32 numPlayers = gGT->numPlyrCurrGame;
 	s32 playerCountIndex = numPlayers - VB_MIN_PLAYERS;
 	b32 isBattleMode = (gGT->gameMode1 & BATTLE_MODE) != 0;
+    {
+        s16 endMenuX = (s16)Widescreen_ScaleAboutX(143, 256); // retail: posX_curr = 143
+        menuVS.posX_curr = endMenuX;
+        menuBattle.posX_curr = endMenuX;
+    }
+
 
 	if (sdata->framesSinceRaceEnded < VB_RESULT_MAX_FRAMES)
 	{
@@ -131,7 +164,7 @@ void VB_EndEvent_DrawMenu(void)
 	}
 
 	// fly-in interpolation
-	UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), VB_TITLE_ENTRY_X, titleY, titleTargetX, titleY, titleFrame, VB_LERP_FRAMES);
+	UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), VB_TITLE_ENTRY_X, titleY, VB_FlyTargetX(titleTargetX), titleY, titleFrame, VB_LERP_FRAMES);
 
 	s32 rowY = titleY + VB_TITLE_TO_ROWS_Y;
 
@@ -168,7 +201,7 @@ void VB_EndEvent_DrawMenu(void)
 		}
 
 		// fly-in interpolation
-		UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), VB_TITLE_ENTRY_X, currRowY, rowTargetX, currRowY, rowFrame, VB_LERP_FRAMES);
+		UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), VB_TITLE_ENTRY_X, currRowY, VB_FlyTargetX(rowTargetX), currRowY, rowFrame, VB_LERP_FRAMES);
 
 		s16 rankTextY;
 		if (!isBattleMode)
@@ -181,7 +214,7 @@ void VB_EndEvent_DrawMenu(void)
 
 			struct Icon *icon = NativeCustomRacer_GetIconPtr(data.characterIDs[driver->driverID]);
 
-			DecalHUD_DrawPolyFT4(icon, pos.x, rankTextY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT, VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
+			VB_DrawIcon(icon, pos.x, rankTextY, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT);
 		}
 		else
 		{
@@ -201,8 +234,7 @@ void VB_EndEvent_DrawMenu(void)
 				/* BUG-ICON-01 */
 
 				struct Icon *icon = NativeCustomRacer_GetIconPtr(data.characterIDs[driver->driverID]);
-				DecalHUD_DrawPolyFT4(icon, pos.x, currRowY + iconSlot * VB_BATTLE_PLAYER_ICON_SPACING, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
-				                     VB_ICON_TRANSPARENCY, VB_ICON_SCALE);
+				VB_DrawIcon(icon, pos.x, currRowY + iconSlot * VB_BATTLE_PLAYER_ICON_SPACING, &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT);
 				iconSlot++;
 			}
 
@@ -222,7 +254,7 @@ void VB_EndEvent_DrawMenu(void)
 			sprintf(text, "%d%s-%2.02ld", place + 1, sdata->lngStrings[VB_STANDINGS_SUFFIX_FIRST + place],
 			        CTR_PRINTF_PSX_LONG(gGT->standingsPoints[entityID * VB_STANDINGS_POINTS_PER_ENTRY + place]));
 
-			DecalFont_DrawLine(text, pos.x + VB_STANDINGS_TEXT_X_OFFSET,
+			DecalFont_DrawLine(text, pos.x + CTR_WIDESCREEN_SCALE_X(VB_STANDINGS_TEXT_X_OFFSET),
 			                   rankTextY - (visiblePlaces * VB_STANDINGS_ROW_HALF_HEIGHT - VB_STANDINGS_ROW_BASELINE_BIAS) + place * 8, FONT_SMALL,
 			                   placeTextColor);
 		}
@@ -243,7 +275,7 @@ void VB_EndEvent_DrawMenu(void)
 		previousStandingsScore = (s16)gGT->battleSetup.standingsScore[entityID];
 		sprintf(text, "%d%s", displayedRank + 1, sdata->lngStrings[VB_STANDINGS_SUFFIX_FIRST + displayedRank]);
 
-		DecalFont_DrawLine(text, pos.x + VB_STANDINGS_RANK_X_OFFSET, rankTextY + VB_STANDINGS_RANK_Y_OFFSET, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
+		DecalFont_DrawLine(text, pos.x + CTR_WIDESCREEN_SCALE_X(VB_STANDINGS_RANK_X_OFFSET), rankTextY + VB_STANDINGS_RANK_Y_OFFSET, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 	}
 
 	b32 winnerViewportFound = false;
@@ -264,20 +296,30 @@ void VB_EndEvent_DrawMenu(void)
 		{
 			winnerViewportFound = true;
 
-			if ((numPlayers == 2) && (view->rect.w > VB_WINNER_2P_MIN_WIDE_RECT))
+						const int winnerMaxW = CTR_WIDESCREEN_SCALE_X(VB_WINNER_2P_MIN_WIDE_RECT); // retail: 0x100
+
+			if (numPlayers == 2)
 			{
-				view->rect.w -= VB_WINNER_2P_WIDTH_STEP;
-				view->distanceToScreen_CURR = VB_WINNER_DISTANCE_TO_SCREEN;
+				if (view->rect.w > winnerMaxW)
+				{
+					view->rect.w -= VB_WINNER_2P_WIDTH_STEP; // sin escalar
+					view->distanceToScreen_CURR = VB_WINNER_DISTANCE_TO_SCREEN;
+				}
+			}
+			else if (view->rect.w > winnerMaxW)
+			{
+				// 3P/4P: el cuarto de pantalla retail mide 256 lógico, que en widescreen es demasiado ancho
+				view->rect.w = winnerMaxW;
 			}
 
 			// fly-in interpolation
-			UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), view->rect.x, view->rect.y, VB_WINNER_TARGET_X, VB_WINNER_TARGET_Y, sdata->framesSinceRaceEnded,
+			UI_Lerp2D_Linear(CTR_VECTOR_DATA(&(pos)), view->rect.x, view->rect.y, Widescreen_ScaleAboutX(VB_WINNER_TARGET_X, 256), VB_WINNER_TARGET_Y, sdata->framesSinceRaceEnded,
 			                 VB_WINNER_LERP_FRAMES);
 
 			RECT box;
-			box.x = pos.x - VB_WINNER_BOX_X_PAD;
+			box.x = pos.x - CTR_WIDESCREEN_SCALE_X(VB_WINNER_BOX_X_PAD);
 			box.y = pos.y - VB_WINNER_BOX_Y_PAD;
-			box.w = view->rect.w + 2 * VB_WINNER_BOX_X_PAD;
+			box.w = view->rect.w + 2 * CTR_WIDESCREEN_SCALE_X(VB_WINNER_BOX_X_PAD);
 			box.h = view->rect.h + 2 * VB_WINNER_BOX_Y_PAD;
 
 			Color color;
@@ -291,9 +333,9 @@ void VB_EndEvent_DrawMenu(void)
 		{
 			if (view->rect.w > 0)
 			{
-				view->rect.x += VB_LOSER_RECT_STEP_X;
+				view->rect.x += CTR_WIDESCREEN_SCALE_X(VB_LOSER_RECT_STEP_X);
 				view->rect.y += VB_LOSER_RECT_STEP_Y;
-				view->rect.w -= VB_LOSER_RECT_STEP_W;
+				view->rect.w -= CTR_WIDESCREEN_SCALE_X(VB_LOSER_RECT_STEP_W);
 				view->rect.h -= VB_LOSER_RECT_STEP_H;
 			}
 		}
