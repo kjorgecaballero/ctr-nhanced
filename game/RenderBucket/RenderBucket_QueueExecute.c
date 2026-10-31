@@ -1235,6 +1235,42 @@ static int RenderBucket_IsRacerInstance(const struct Instance *inst)
 
 static struct ModelHeader *RenderBucket_SelectModelHeader(struct Instance *inst, struct PushBuffer *pb, int *lodIndexOut, int *lodExhaustedOut, int viewDepth)
 {
+    /* ITEM HI LOD FORCE v4 */
+    if (inst->model && inst->model->numHeaders > 0) {
+        int id = inst->model->id;
+        if (id == STATIC_CRATE_TNT
+            || id == PU_EXPLOSIVE_CRATE
+            || id == STATIC_BEAKER_GREEN
+            || id == STATIC_BEAKER_RED
+            || id == DYNAMIC_ROCKET
+            || id == DYNAMIC_BOMB
+            || id == DYNAMIC_SHIELD_GREEN
+            || id == DYNAMIC_SHIELD
+            || id == DYNAMIC_WARPBALL
+            || id == STATIC_CRATE_NITRO
+            || id == PU_FRUIT_CRATE
+            || id == PU_RANDOM_CRATE
+            || id == PU_TIME_CRATE_1
+            || id == PU_TIME_CRATE_2
+            || id == PU_TIME_CRATE_3
+            || id == STATIC_TIME_CRATE_01
+            || id == STATIC_TIME_CRATE_02
+            || id == STATIC_TIME_CRATE_03
+            || id == STATIC_CRATE_EXPLOSION)
+        {
+            for (int i = 0; i < inst->model->numHeaders; i++) {
+                inst->model->headers[i].maxDistanceLOD = (s16)0x7FFF;
+            }
+            if (getenv("CTR_DEBUG_ITEMS")) {
+                fprintf(stderr, "[ItemLOD] id=%d numH=%d depth=%d\n",
+                        id, inst->model->numHeaders, viewDepth);
+            }
+        }
+    }
+
+
+
+
 	struct ModelHeader *mh;
 	int headersRemaining;
 	int lodIndex;
