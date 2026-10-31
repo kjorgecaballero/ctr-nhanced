@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <widescreen.h>
 
 enum GarageInputMask
 {
@@ -145,9 +146,9 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 		statBarPosX = 393;
 	}
 
-	DecalFont_DrawLine(sdata->lngStrings[LNG_SPEED], statNamePosX, GARAGE_STAT_NAME_SPEED_Y, FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
-	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], statNamePosX, GARAGE_STAT_NAME_ACCEL_Y, FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
-	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], statNamePosX, GARAGE_STAT_NAME_TURN_Y, FONT_BIG, JUSTIFY_RIGHT | BLUE);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_SPEED], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_SPEED_Y, FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_ACCEL_Y, FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
+	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_TURN_Y, FONT_BIG, JUSTIFY_RIGHT | BLUE);
 
 	int engineID = MDC->engineID;
 
@@ -174,7 +175,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	u16 statBarShadows_Y = GARAGE_STAT_BAR_SHADOW_Y;
 
 	// Draw class name
-	DecalFont_DrawLine(sdata->lngStrings[gGarage.classStringIDs[classStringIndex]], classNamePosX, GARAGE_CLASS_NAME_Y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
+	DecalFont_DrawLine(sdata->lngStrings[gGarage.classStringIDs[classStringIndex]], Widescreen_ScaleAboutX(classNamePosX, 256), GARAGE_CLASS_NAME_Y, FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
 	// bar length (animated)
 
@@ -183,18 +184,18 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 		statBarLength = &gGarage.statBarLengths[i];
 
 		// bar outline
-		r.x = statBarPosX;
+		r.x = Widescreen_ScaleAboutX(statBarPosX, 256);
 		r.y = statBarStart_Y;
-		r.w = *statBarLength;
+		r.w = CTR_WIDESCREEN_SCALE_X(*statBarLength);
 		r.h = GARAGE_STAT_BAR_HEIGHT;
 
 		// outline color white at 0x800b7780
 		CTR_Box_DrawWireBox(&r, &white, gGT->pushBuffer_UI.ptrOT, primMem);
 
 		// bar shadows
-		r.x = statBarPosX + 1;
+		r.x = Widescreen_ScaleAboutX(statBarPosX, 256) + CTR_WIDESCREEN_SCALE_X(1);
 		r.y = statBarShadows_Y;
-		r.w = *statBarLength - 2;
+		r.w = CTR_WIDESCREEN_SCALE_X(*statBarLength) - CTR_WIDESCREEN_SCALE_X(2);
 		r.h = GARAGE_STAT_BAR_SHADOW_HEIGHT;
 
 		// outline color black (shadows)
@@ -240,21 +241,23 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 				CtrGpu_WriteColorCode(&p->r3, barColor[1] | GARAGE_STAT_BAR_POLY_G4_COLOR_CODE);
 
 				s16 segmentX = statBarPosX + segmentStart;
+				s16 segmentX_comp = Widescreen_ScaleAboutX(segmentX, 256);
+				s16 segmentX2_comp = Widescreen_ScaleAboutX(segmentX + currSegmentLen, 256);
 
 				// top left
-				p->x0 = segmentX;
+				p->x0 = segmentX_comp;
 				p->y0 = statBarStart_Y;
 
 				// top right
-				p->x1 = segmentX + currSegmentLen;
+				p->x1 = segmentX2_comp;
 				p->y1 = statBarStart_Y;
 
 				// bottom left
-				p->x2 = segmentX;
+				p->x2 = segmentX_comp;
 				p->y2 = statBarEnd_Y;
 
 				// bottom right
-				p->x3 = segmentX + currSegmentLen;
+				p->x3 = segmentX2_comp;
 				p->y3 = statBarEnd_Y;
 
 				addPolyG4(gGT->pushBuffer_UI.ptrOT, p);
@@ -272,9 +275,9 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	s16 classMaxLen = DecalFont_GetLineWidth(sdata->lngStrings[LNG_INTERMEDIATE], FONT_BIG);
 
 	// Stats box
-	r.x = (classNamePosX - (classMaxLen >> 1)) - GARAGE_STAT_BOX_PADDING_X;
+	r.x = Widescreen_ScaleAboutX(classNamePosX, 256) - (classMaxLen >> 1) - CTR_WIDESCREEN_SCALE_X(GARAGE_STAT_BOX_PADDING_X);
 	r.y = GARAGE_STAT_BOX_Y;
-	r.w = classMaxLen + GARAGE_STAT_BOX_PADDING_X * 2;
+	r.w = classMaxLen + CTR_WIDESCREEN_SCALE_X(GARAGE_STAT_BOX_PADDING_X * 2);
 	r.h = GARAGE_STAT_BOX_HEIGHT;
 
 	// Draw 2D Menu rectangle background
@@ -298,7 +301,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 
 	int nameLen = DecalFont_GetLineWidth(name, FONT_BIG) >> 1;
 
-	int arrowPos[2] = {GARAGE_CHARACTER_ARROW_LEFT_BASE_X - nameLen, nameLen + GARAGE_CHARACTER_ARROW_RIGHT_BASE_X};
+	int arrowPos[2] = {Widescreen_ScaleAboutX(GARAGE_CHARACTER_ARROW_LEFT_BASE_X, 256) - nameLen, Widescreen_ScaleAboutX(GARAGE_CHARACTER_ARROW_RIGHT_BASE_X, 256) + nameLen};
 	int arrowRot[2] = {GARAGE_CHARACTER_ARROW_ROT_LEFT, 0};
 
 	struct Icon **iconPtrArray = ICONGROUP_GETICONS(gGT->iconGroup[4]);
