@@ -473,7 +473,11 @@ b32 MM_TrackSelect_boolTrackOpen(struct MainMenu_LevelRow *menuSelect)
 
 	if (flag == MM_TRACK_UNLOCK_1P_ONLY)
 	{
-		return sdata->gGT->numPlyrNextGame == 1;
+	    /* HIGHMP: allow 1P-only tracks (Oxide Station) in 2P/3P/4P.
+	     * With HIGHMP off, retail behavior (1P only). */
+	    if (NativeSettings_GetHighMp() != 0)
+	        return true;
+	    return sdata->gGT->numPlyrNextGame == 1;
 	}
 
 	if (flag < 0)
