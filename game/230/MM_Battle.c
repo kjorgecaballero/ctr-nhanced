@@ -791,8 +791,12 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 					D230.menuBattleLengthLifeTime.state |= HIDE_ROW_HIGHLIGHT;
 				}
 
-				RECTMENU_DrawSelf(&D230.menuBattleLengthLifeTime, tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET,
-				                  tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET, BATTLE_LENGTH_DUAL_MENU_WIDTH);
+/* WIDESCREEN: LENGTH dual menu (time) —
+ * match the LifeLife sibling below. */
+RECTMENU_DrawSelf(&D230.menuBattleLengthLifeTime,
+                  Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256),
+                  tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currY + lengthRowY + BATTLE_LENGTH_LABEL_Y_OFFSET,
+                  CTR_WIDESCREEN_SCALE_X(BATTLE_LENGTH_DUAL_MENU_WIDTH));
 
 				D230.menuBattleLengthLifeLife.state &= ~(HIDE_ROW_HIGHLIGHT | SHOW_ONLY_HIGHLIT_ROW);
 
