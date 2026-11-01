@@ -255,12 +255,21 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 				sdata->levelLOD = LOAD_LEVEL_LOD_RELIC;
 			}
 			else
-			{
-				sdata->levelLOD = gGT->numPlyrCurrGame;
-			}
+                {
+                        sdata->levelLOD = gGT->numPlyrCurrGame;
+                }
 		}
 
-		gGT->hudFlags |= HUD_FLAG_INIT_UI_INSTANCES;
+		/* BATTLE HIGHMP v2: force 1P LOD for the level GEOMETRY only.
+                 * Vehicles keep their native LOD so P2-4 load correctly. */
+                int geoLOD = sdata->levelLOD;
+                if (NativeSettings_GetHighMp() != 0 &&
+                    gGT->numPlyrCurrGame > 1)
+                {
+                        geoLOD = LOAD_LEVEL_LOD_1P;
+                }
+
+                gGT->hudFlags |= HUD_FLAG_INIT_UI_INSTANCES;
 
 
 		// ========== End of LevelLOD ================
@@ -557,7 +566,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if (NativeLevelTextures_IsCustomLevelActive())
 		{
 			/* Sentinel pages for the level geometry... */
-			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, sdata->levelLOD, LVI_VRAM);
+			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, geoLOD, LVI_VRAM);
 		}
 		/* ...and ALWAYS upload the VRM to real VRAM too. Model instances
 		 * (crates, animated models, enemies) are not patched to sentinel
@@ -566,11 +575,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		 * NativeLevelTextures_Reset), and retail loads overwrite it. */
 		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
 
-		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
+		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, geoLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
 
 		if (((u32)(levelID - GEM_STONE_VALLEY) < LOAD_PTR_MAP_ADV_LEVEL_COUNT) || ((u32)(levelID - CREDITS_CRASH) < LOAD_PTR_MAP_CREDIT_LEVEL_COUNT))
 		{
-			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
+			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, geoLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
 		}
 
 		/* NITROS_OXIDE isn't in the char-select BSP's model list, but his
