@@ -256,18 +256,23 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			}
 			else
                 {
-                        sdata->levelLOD = gGT->numPlyrCurrGame;
+                        /* BATTLE-HIGHMP-LEVEL: with HIGHMP, force
+                         * 1P LOD for the level geometry. The
+                         * driverLOD path (separate) still uses
+                         * numPlyrCurrGame so P2-P4 load their
+                         * custom models correctly. */
+                        if (NativeSettings_GetHighMp() != 0 &&
+                            gGT->numPlyrCurrGame > 1)
+                        {
+                                sdata->levelLOD = LOAD_LEVEL_LOD_1P;
+                        }
+                        else
+                        {
+                                sdata->levelLOD = gGT->numPlyrCurrGame;
+                        }
                 }
 		}
 
-		/* BATTLE HIGHMP v2: force 1P LOD for the level GEOMETRY only.
-                 * Vehicles keep their native LOD so P2-4 load correctly. */
-                int geoLOD = sdata->levelLOD;
-                if (NativeSettings_GetHighMp() != 0 &&
-                    gGT->numPlyrCurrGame > 1)
-                {
-                        geoLOD = LOAD_LEVEL_LOD_1P;
-                }
 
                 gGT->hudFlags |= HUD_FLAG_INIT_UI_INSTANCES;
 
@@ -415,7 +420,9 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		// Tracked separately.
 		int driverLOD = sdata->levelLOD;
 #ifdef CTR_NATIVE
-		if (LOAD_IsCustomLevel(gGT->levelID))
+		/* BATTLE-HIGHMP-DRIVERLOD: with HIGHMP, iterate all players
+ * so P2/P3/P4 load their per-player custom models. */
+if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		{
 			int n = gGT->numPlyrCurrGame;
 			if (n < 1) n = 1;
@@ -566,7 +573,7 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		if (NativeLevelTextures_IsCustomLevelActive())
 		{
 			/* Sentinel pages for the level geometry... */
-			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, geoLOD, LVI_VRAM);
+			NativeLevelTextures_DecodeVRMFromDisk(gGT->levelID, sdata->levelLOD, LVI_VRAM);
 		}
 		/* ...and ALWAYS upload the VRM to real VRAM too. Model instances
 		 * (crates, animated models, enemies) are not patched to sentinel
@@ -575,11 +582,11 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 		 * NativeLevelTextures_Reset), and retail loads overwrite it. */
 		LOAD_AppendQueue(bigfile, LT_VRAM, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_VRAM), NULL, NULL);
 
-		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, geoLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
+		LOAD_AppendQueue(bigfile, LT_GETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_LEV), NULL, LOAD_Callback_LEV);
 
 		if (((u32)(levelID - GEM_STONE_VALLEY) < LOAD_PTR_MAP_ADV_LEVEL_COUNT) || ((u32)(levelID - CREDITS_CRASH) < LOAD_PTR_MAP_CREDIT_LEVEL_COUNT))
 		{
-			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, geoLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
+			LOAD_AppendQueue(bigfile, LT_SETADDR, LOAD_GetBigfileIndex(gGT->levelID, sdata->levelLOD, LVI_PTR), sdata->PatchMem_Ptr, LOAD_Callback_PatchMem);
 		}
 
 		/* NITROS_OXIDE isn't in the char-select BSP's model list, but his
