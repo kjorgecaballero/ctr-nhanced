@@ -1,18 +1,10 @@
-"""Add a custom racer end-to-end from a source_mesh.json.
-
-Usage:
-    python add_racer.py <slug> <source_mesh.json> <page> <slot> <engine> "<Display Name>" [--icon <icon.png>]
-
-Example:
-    python add_racer.py ernest ../native_fork/racers/source_mesh_ernest.json 1 3 SPEED "Ernest"
-
-Runtime output goes to <repo>/nhanced/assets/mods/racers/<slug>/
-"""
+"""Add a custom racer end-to-end from a source_mesh.json."""
 import argparse
 import re
 import shutil
 import subprocess
 import sys
+import json
 from pathlib import Path
 
 TOOLS  = Path(__file__).resolve().parent
@@ -34,39 +26,66 @@ def run(cmd, cwd=TOOLS, quiet=False):
         sys.exit(f"FAILED (exit {r.returncode}): {printable}")
 
 
+def generate_rot_bin(mesh, dest_dir):
+    if not mesh.get("jump_rot_enable"):
+        return
+    import math, struct
+    pitch = mesh.get("jump_rot_pitch", 0)
+    roll  = mesh.get("jump_rot_roll", 0)
+    yaw   = mesh.get("jump_rot_yaw", 0)
+    pz    = mesh.get("jump_rot_pivot_z", 0.35)
+    frames = mesh.get("jump_rot_frames", 4)
+    
+    c = [0, pz * 64, 0]
+    
+    blob = b""
+    for i in range(frames):
+        t = i / max(1, frames - 1)
+        p_rad = math.radians(pitch * t)
+        r_rad = math.radians(roll * t)
+        y_rad = math.radians(yaw * t)
+        
+        cp, sp = math.cos(p_rad), math.sin(p_rad)
+        cr, sr = math.cos(r_rad), math.sin(r_rad)
+        cy, sy = math.cos(y_rad), math.sin(y_rad)
+        
+        B = [
+            [cy*cr + sy*sp*sr, -cy*sr + sy*sp*cr, sy*cp],
+            [cp*sr, cp*cr, -sp],
+            [-sy*cr + cy*sp*sr, sy*sr + cy*sp*cr, cy*cp]
+        ]
+        
+        Bc = [sum(B[r_][k]*c[k] for k in range(3)) for r_ in range(3)]
+        v = [(c[k] - Bc[k]) * 256 for k in range(3)]
+        
+        blob += struct.pack("<4h", int(round(v[0])), int(round(v[1])), int(round(v[2])), 0)
+        blob += struct.pack("<9h", *[int(round(B[r_][c_]*4096)) for r_ in range(3) for c_ in range(3)])
+        blob += b"\0" * 6
+    
+    blob += b"\0" * 8
+    with open(dest_dir / "rot.bin", "wb") as f:
+        f.write(blob)
+    print("  rot.bin generado (custom rotation)")
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("slug",           help="folder name and internal .ctr name, e.g. 'ernest'")
+    ap.add_argument("slug",           help="folder name and internal .ctr name")
     ap.add_argument("source_mesh",    help="path to source_mesh_<slug>.json")
-    ap.add_argument("page", type=int, help="roster page (0 = originals page, slots 16-23 only; 1..8 = custom pages)")
-    ap.add_argument("slot", type=int, help="slot within the page (0..23 for pages 1..8; 16..23 for page 0)")
+    ap.add_argument("page", type=int, help="roster page")
+    ap.add_argument("slot", type=int, help="slot within the page")
     ap.add_argument("engine",         choices=sorted(VALID_ENGINES))
     ap.add_argument("display_name",   help="label shown in character select")
     ap.add_argument("--icon", default=None, help="optional path to icon.png")
-    ap.add_argument("--color", default=None,
-                    help="optional minimap color #RRGGBB")
+    ap.add_argument("--color", default=None, help="optional minimap color #RRGGBB")
     ap.add_argument("--mask", choices=["good", "bad", "custom_good", "custom_bad"],
-                    default="good",
-                    help="Aku Aku (good, default), Uka Uka (bad), or a custom model "
-                         "(custom_good / custom_bad) loaded from <slug>/mask/mask.ctr. "
-                         "The custom model only replaces the gameplay shield mask "
-                         "(items); the adventure talking mask stays retail.")
-    ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
-                    help="wheels visible (default) or hidden (Oxide-style)")
-    ap.add_argument("--rot", default="auto",
-                    help="kart rotation matrices style (auto, none, crash, cortex, etc.)")
-    ap.add_argument("--no-clean-stale", action="store_true",
-                    help="keep same-slug entries elsewhere in the roster "
-                         "(default: remove them, so moving a racer to a new page "
-                         "or slot does not leave the old entry orphaned)")
-    ap.add_argument("--sentinel", action="store_true",
-                    help="emit Sentinel CLUT textures instead of the VRAM "
-                         "atlas. Skips textures.vrm and copies sentinel_NN.bin "
-                         "into the racer folder. Requires the C-side runtime "
-                         "to support sentinel_00.bin (commit 95cf1cf70+)")
+                    default="good")
+    ap.add_argument("--wheels", choices=["yes", "no"], default="yes")
+    ap.add_argument("--rot", default="auto", help="kart rotation style")
+    ap.add_argument("--no-clean-stale", action="store_true")
+    ap.add_argument("--sentinel", action="store_true")
     args = ap.parse_args()
 
-    # Validate arguments before touching the filesystem.
     if not (0 <= args.page <= 8):
         sys.exit("ERROR: page must be 0..8")
     if args.page == 0:
@@ -94,6 +113,12 @@ def main():
     if icon and not icon.exists():
         sys.exit(f"ERROR: icon not found: {icon}")
 
+    # Cargar el JSON para obtener los datos de rotacion
+    try:
+        mesh_data = json.loads(src.read_text(encoding="utf-8"))
+    except Exception as e:
+        sys.exit(f"ERROR: no se pudo leer el JSON: {e}")
+
     dest = RACERS / slug
     dest.mkdir(parents=True, exist_ok=True)
     print(f"source:  {src}")
@@ -101,12 +126,7 @@ def main():
     print()
 
     # 1. Build 4 .ctr files
-    # Clear sentinel side-cars from any previous build in TOOLS. Both
-    # branches need this: sentinel mode copies the .bin to dest, VRM
-    # mode regenerates textures.vrm and would otherwise let TOOLS
-    # accumulate orphan .png files from the last sentinel run.
-    for stale in list(TOOLS.glob("sentinel_*.bin")) + \
-                 list(TOOLS.glob("sentinel_*.png")):
+    for stale in list(TOOLS.glob("sentinel_*.bin")) + list(TOOLS.glob("sentinel_*.png")):
         stale.unlink()
     for s in range(4):
         out_name = f"model_p{s}.ctr"
@@ -117,26 +137,20 @@ def main():
         run(cmd)
         shutil.copy(TOOLS / out_name, dest / out_name)
 
-    # 2. VRM path (default) OR Sentinel side-car copy. Never both.
+    # 2. VRM path OR Sentinel copy
     if args.sentinel:
         print("--- sentinel mode: textures.vrm skipped ---")
-        for stale in list(dest.glob("sentinel_*.bin")) + \
-                     list(dest.glob("sentinel_*.png")):
+        for stale in list(dest.glob("sentinel_*.bin")) + list(dest.glob("sentinel_*.png")):
             stale.unlink()
         bins = sorted(TOOLS.glob("sentinel_*.bin"))
         for b in bins:
             shutil.copy(b, dest / b.name)
         print(f"  copied {len(bins)} sentinel_*.bin -> {dest}")
-        # Cleanup: canonical copies are already in dest/. Wipe the
-        # TOOLS working files (bins + debug PNGs) so they don't
-        # accumulate between exports.
-        for stale in list(TOOLS.glob("sentinel_*.bin")) + \
-                     list(TOOLS.glob("sentinel_*.png")):
+        for stale in list(TOOLS.glob("sentinel_*.bin")) + list(TOOLS.glob("sentinel_*.png")):
             stale.unlink()
     else:
         print("--- building textures.vrm ---")
-        for stale in list(dest.glob("sentinel_*.bin")) + \
-                     list(dest.glob("sentinel_*.png")):
+        for stale in list(dest.glob("sentinel_*.bin")) + list(dest.glob("sentinel_*.png")):
             stale.unlink()
         run([sys.executable, TOOLS / "build_character.py",
              src, slug, "model_p0.ctr", "--player_slot", "0"], quiet=True)
@@ -154,17 +168,9 @@ def main():
         else:
             print(f"icon already in place: {dst_abs}")
     elif not (dest / "icon.png").exists():
-        print(f"WARNING: no icon.png for '{slug}'; character select will show a blank cell")
+        print(f"WARNING: no icon.png for '{slug}'")
 
     # 4. roster.txt
-    # Two dedup rules, applied in order:
-    #   (a) (page, slot): the target slot is replaced in place, regardless
-    #       of the previous slug — a different custom can take over a slot.
-    #   (b) (slug, page): any OTHER slot on the same page that had this
-    #       slug is removed, so moving a racer to a new slot doesn't leave
-    #       the old entry orphaned. Controlled by --no-clean-stale.
-    # A slug may still live on multiple PAGES (page 0 + page 1) because
-    # rule (b) is scoped to a single page.
     roster_path = RACERS / "roster.txt"
     lines = roster_path.read_text().splitlines()
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
@@ -172,7 +178,6 @@ def main():
         new_line += f"\t{color}"
     new_line += f"\tmask={args.mask}"
     new_line += f"\twheels={args.wheels}"
-    new_line += f"\trot={args.rot}"
     new_line += f"\trot={args.rot}"
 
     def _parse_ps(line):
@@ -192,14 +197,10 @@ def main():
             cleaned.append(l)
             continue
         line_page, line_slot, line_slug = ps
-        # Rule (a): replace the target slot in place.
         if line_page == args.page and line_slot == args.slot:
             cleaned.append(new_line)
             updated = True
             continue
-        # Rule (b): drop stale same-slug entries anywhere in the roster
-        # (any page, any slot). A custom racer should exist at most once.
-        # Use --no-clean-stale to keep same-slug entries on other slots.
         if (not args.no_clean_stale) and line_slug == slug:
             print(f"  removing stale entry: page {line_page} slot {line_slot} ({line_slug})")
             continue
@@ -208,6 +209,9 @@ def main():
         cleaned.append(new_line)
     roster_path.write_text("\n".join(cleaned) + "\n")
     print(f"roster.txt {'updated' if updated else 'appended'}: {slug}")
+
+    # Generar el rot.bin
+    generate_rot_bin(mesh_data, dest)
 
     # 5. Regenerate page icons
     run([sys.executable, TOOLS / "build_icons.py", "--page", str(args.page)])

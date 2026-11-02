@@ -8,13 +8,25 @@ bpy.types.Object. Registers/unregisters its own class.
 """
 import bpy
 from bpy.props import (
-    StringProperty, IntProperty, BoolProperty,
+    StringProperty, IntProperty, BoolProperty, FloatProperty,
     EnumProperty, FloatVectorProperty, PointerProperty,
 )
 from bpy.types import PropertyGroup
 
 from ..constants import ENGINES
 
+
+
+def update_rot_preview(self, context):
+    obj = context.active_object
+    if obj and obj.type == 'MESH' and obj.racer.is_racer:
+        import math
+        if obj.racer.jump_rot_enable:
+            obj.delta_rotation_euler[0] = math.radians(obj.racer.jump_rot_pitch)
+            obj.delta_rotation_euler[1] = math.radians(obj.racer.jump_rot_yaw)
+            obj.delta_rotation_euler[2] = math.radians(obj.racer.jump_rot_roll)
+        else:
+            obj.delta_rotation_euler = (0, 0, 0)
 
 class NFR_RacerProps(PropertyGroup):
     is_racer:   BoolProperty(name="Is Racer", default=False)
@@ -61,6 +73,14 @@ class NFR_RacerProps(PropertyGroup):
     short_name: StringProperty(name="Short Name")
     color:      FloatVectorProperty(name="Minimap Color", subtype="COLOR",
                                     default=(1.0, 1.0, 1.0), min=0.0, max=1.0)
+
+    jump_rot_enable: BoolProperty(name="Enable Custom Jump Rotation", default=False, update=update_rot_preview)
+    jump_rot_pitch: FloatProperty(name="Pitch (Up/Down)", default=45.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)
+    jump_rot_roll: FloatProperty(name="Roll (Sideways)", default=0.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)
+    jump_rot_yaw: FloatProperty(name="Yaw (Spin)", default=0.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)
+    jump_rot_pivot_z: FloatProperty(name="Pivot Height (Z)", default=0.35, min=0.0, max=2.0)
+    jump_rot_frames: IntProperty(name="Rotation Frames", default=4, min=2, max=10)
+
     icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH")
 
     def custom_id(self):

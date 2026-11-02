@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_custom_racer.h>
 
 
 void VehPhysForce_ConvertSpeedToVecOut(struct Driver *driver, Vec3 *vel)
@@ -906,7 +907,14 @@ static void VehPhysForce_TranslateMatrix_UpdateInstanceMatrix(struct Instance *i
 	}
 	else
 	{
-		struct MatrixND *entry = VehPhysForce_TranslateMatrix_GetBakedEntry(d->matrixArray, d->matrixIndex);
+		struct MatrixND *entry;
+        if (d->matrixArray == 0xFE) {
+            fprintf(stderr, "[DEBUG custom matrix] idx=%d\n", d->matrixIndex);
+            entry = NativeCustom_GetMatrixEntry(data.characterIDs[d->driverID], d->matrixIndex);
+            if (!entry) entry = VehPhysForce_TranslateMatrix_GetBakedEntry(BAKED_GTE_MATRIX_NONE, 0);
+        } else {
+            entry = VehPhysForce_TranslateMatrix_GetBakedEntry(d->matrixArray, d->matrixIndex);
+        }
 		s16 *entryVec = (s16 *)entry;
 		Vec3 rotated;
 

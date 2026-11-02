@@ -6,6 +6,9 @@
 
 #ifdef __cplusplus
 extern "C" {
+struct MatrixND;
+struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
+
 #endif
 
 /* === Phase 1: custom IDs 16..63 ===========================================
@@ -552,6 +555,9 @@ int NativeCustomRacer_GetVoiceTrackBase(int characterID);
 #if defined(CTR_DEBUG_PODIUM_JUMP)
 extern s32 g_debugForcedPodiumRank;
 void NativeDebug_ForcePodium(s32 targetRank);
+struct MatrixND;
+struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
+
 #endif
 
 /* Wrapper for Voiceline_RequestPlay call sites. Originals map to their
@@ -566,11 +572,17 @@ static inline int GET_VOICE_CHAR_ID(int id)
 
 #ifdef __cplusplus
 }
+struct MatrixND;
+struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
+
 #endif
 
 
 /* Rotation override for custom jumps (roster.txt rot=...).
  * -2=auto, -1=none, 0..12=enum Characters. Returns -2 for non-customs. */
 int NativeCustom_GetRotation(int characterID);
+
+struct MatrixND;
+struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
 
 #endif

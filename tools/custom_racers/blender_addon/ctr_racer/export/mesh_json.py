@@ -1,14 +1,8 @@
 # =========================================================================
 # MODULE: export — mesh json
 # =========================================================================
-"""Mesh → source_mesh.json export pipeline.
+"""Mesh → source_mesh.json export pipeline."""
 
-Owns:
-  - _get_blend_mode (Material "blend_mode" custom prop validator)
-  - export_mesh_json (builds the JSON dict and writes it)
-  - _do_export / _do_export_body (mode-switch wrapper + body)
-  - _racer_objects (collects meshes marked as racer)
-"""
 import bpy
 import os
 import json
@@ -28,13 +22,15 @@ def _get_blend_mode(mat):
 
 
 def export_mesh_json(obj, out_path, override_clips=None):
-    """Serialize `obj` to source_mesh.json.
-
-    If `override_clips` is provided, it replaces the clips dict in the
-    output and skips the prefs-driven bake (used by the dance export,
-    which bakes a single 'dance' clip independently of the racer's
-    anim_use_timeline / anim_frame_ranges settings).
-    """
+    """Serialize `obj` to source_mesh.json."""
+    r = obj.racer
+    
+    # Guardar delta rotacion (Live Preview) y centrar el objeto para exportar
+    prev_delta = list(obj.delta_rotation_euler)
+    if getattr(r, "jump_rot_enable", False):
+        obj.delta_rotation_euler = (0.0, 0.0, 0.0)
+        bpy.context.view_layer.update()
+        
     m = obj.data
     m.calc_loop_triangles()
 
@@ -69,9 +65,6 @@ def export_mesh_json(obj, out_path, override_clips=None):
     except Exception:
         pass
 
-    # build_character.py reads mesh['keys']['Basis'] unconditionally.
-    # Meshes without shape keys (e.g. a dance mesh imported as a
-    # standalone object) need a synthetic Basis from the rest pose.
     if m.shape_keys:
         keys_dict = {k.name: [list(v.co) for v in k.data]
                      for k in m.shape_keys.key_blocks}
@@ -79,9 +72,15 @@ def export_mesh_json(obj, out_path, override_clips=None):
         keys_dict = {"Basis": [list(v.co) for v in m.vertices]}
 
     result = {
+        "jump_rot_enable": getattr(r, "jump_rot_enable", False),
+        "jump_rot_pitch": getattr(r, "jump_rot_pitch", 0.0),
+        "jump_rot_roll": getattr(r, "jump_rot_roll", 0.0),
+        "jump_rot_yaw": getattr(r, "jump_rot_yaw", 0.0),
+        "jump_rot_pivot_z": getattr(r, "jump_rot_pivot_z", 0.35),
+        "jump_rot_frames": getattr(r, "jump_rot_frames", 4),
         "source": bpy.data.filepath,
         "source_sha256": src_hash,
-        "matrix_world": [list(r) for r in obj.matrix_world],
+        "matrix_world": [list(row) for row in obj.matrix_world],
         "vertices": [list(v.co) for v in m.vertices],
         "triangles": [{"polygon": t.polygon_index, "material": t.material_index,
                        "corners": corners(t)} for t in m.loop_triangles],
@@ -106,6 +105,11 @@ def export_mesh_json(obj, out_path, override_clips=None):
                     result["clips"] = _bake_timeline_clips(obj, ranges)
         except Exception as ex:
             print(f"[mesh_json] timeline bake skipped: {ex}")
+
+    # Restaurar la rotacion visual después de exportar
+    if getattr(r, "jump_rot_enable", False):
+        obj.delta_rotation_euler = prev_delta
+        bpy.context.view_layer.update()
 
     Path(out_path).write_text(json.dumps(result, separators=(",", ":")),
                               encoding="utf-8")
@@ -166,7 +170,8 @@ def _do_export_body(context, obj):
         cmd += ["--icon", icon_abs]
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]
-    cmd += ["--rot", r.kart_rot]
+    rot_flag = "custom" if getattr(r, "jump_rot_enable", False) else r.kart_rot
+    cmd += ["--rot", rot_flag]
 
     if prefs.sentinel_models:
         cmd.append("--sentinel")
@@ -193,17 +198,7 @@ def _racer_objects(context):
 
 
 def _bake_timeline_clips(obj, frame_ranges):
-    """Bake per-frame vertex positions from the Blender timeline.
-
-    obj.evaluated_get(depsgraph).to_mesh() applies ALL deformation:
-    shape keys, modifiers, armature, constraints, drivers — whatever
-    the artist used. We just capture the final vertex positions per
-    frame.
-
-    Returns dict[clip_name] = list of frames; each frame is a list of
-    [x, y, z] floats (object-local, matrix_world is stored separately
-    in the JSON so build_character.py can apply it).
-    """
+    """Bake per-frame vertex positions from the Blender timeline."""
     scene = bpy.context.scene
     original_frame = scene.frame_current
     depsgraph = bpy.context.evaluated_depsgraph_get()

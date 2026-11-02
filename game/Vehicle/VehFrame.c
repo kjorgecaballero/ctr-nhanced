@@ -299,6 +299,10 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			d->matrixArray = BAKED_GTE_MATRIX_NONE;
 			d->matrixIndex = 0;
 		}
+        else if (rot == -3) {
+            d->matrixArray = 0xFE;
+            d->matrixIndex = (u8)inst->animFrame;
+        }
 		else
 		{
 			d->matrixArray = BAKED_GTE_MATRIX_JUMP_BASE + rot;

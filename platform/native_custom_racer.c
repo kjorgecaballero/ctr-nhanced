@@ -1,4 +1,5 @@
 #include <common.h>
+#include <regionsEXE.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -133,6 +134,8 @@ static RosterEntry s_roster[NATIVE_ROSTER_MAX];
 static int s_rosterCount = 0;
 static int s_rosterLoaded = 0;
 
+static struct MatrixND s_customMatrices[NATIVE_CUSTOM_COUNT][6];
+static u8 s_customRotCount[NATIVE_CUSTOM_COUNT];
 static PageEntry s_pageEntries[NATIVE_ROSTER_MAX];
 static int s_pageEntryCount = 0;
 
@@ -470,6 +473,7 @@ static int Page_ParseLine(char *line, PageEntry *out)
             p += 4;
             if      (strncmp(p, "auto",      4) == 0) out->rot = -2;
             else if (strncmp(p, "none",      4) == 0) out->rot = -1;
+            else if (strncmp(p, "custom",    6) == 0) out->rot = -3;
             else if (strncmp(p, "crash",     5) == 0) out->rot = 0;
             else if (strncmp(p, "cortex",    6) == 0) out->rot = 1;
             else if (strncmp(p, "tiny",      4) == 0) out->rot = 2;
@@ -502,6 +506,16 @@ int NativeCustom_GetRotation(int characterID)
     return s_customRot[characterID - NATIVE_CUSTOM_ID_BASE];
 }
 
+
+struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index) {
+    if (characterID < NATIVE_CUSTOM_ID_BASE || characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT) return NULL;
+    int idx = characterID - NATIVE_CUSTOM_ID_BASE;
+    u8 count = s_customRotCount[idx];
+    if (count == 0) return NULL;
+    if (index < 0) index = 0;
+    if (index >= count) index = count - 1;  /* clamp al ultimo frame valido del .bin */
+    return &s_customMatrices[idx][index];
+}
 void NativeCustomRacer_ReloadRoster(void)
 {
     s_rosterCount = 0;
@@ -528,7 +542,8 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_itemIcon,           0,    sizeof(s_itemIcon));
     memset(s_itemSentinelTexMap, 0xFF, sizeof(s_itemSentinelTexMap)); /* -1 = unset */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
-    memset(s_customRot, 0xFE, sizeof(s_customRot));                 /* -2 = auto */
+    memset(s_customRot, 0xFE, sizeof(s_customRot));
+    memset(s_customRotCount, 0, sizeof(s_customRotCount));                 /* -2 = auto */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_maskSentinelTexMap,  0xFF, sizeof(s_maskSentinelTexMap));  /* -1 = unset */
@@ -610,6 +625,16 @@ void NativeCustomRacer_ReloadRoster(void)
                 s_customMaskIsCustom[idx]  = (u8)e.maskCustom;
                 s_customHasWheels[idx] = (u8)e.hasWheels;
                 s_customRot[idx] = (s8)e.rot;
+                char rotPath[256];
+                snprintf(rotPath, sizeof(rotPath), "assets/mods/racers/%s/rot.bin", folderStored);
+                FILE *rf = fopen(rotPath, "rb");
+                if (rf) {
+                    s_customRotCount[idx] = (u8)fread(s_customMatrices[idx], sizeof(struct MatrixND), 6, rf);
+                    fclose(rf);
+                    fprintf(stderr, "[DEBUG rot.bin] %s cargado OK\n", rotPath);
+                } else {
+                    fprintf(stderr, "[DEBUG rot.bin] NO ENCONTRADO: %s\n", rotPath);
+                }
                 fprintf(stderr, "[CustomRacer] rot: slug=%s idx=%d rot=%d\n",
                         e.folder, idx, e.rot);
 
