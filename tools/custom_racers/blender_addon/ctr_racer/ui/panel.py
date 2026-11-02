@@ -187,6 +187,7 @@ class NFR_PT_Racer(Panel):
         col.prop(r, "engine")
         col.prop(r, "mask")
         col.prop(r, "wheels")
+        col.prop(r, "kart_rot")
 
         col.separator()
         col.prop(r, "long_name")

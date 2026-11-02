@@ -53,6 +53,8 @@ def main():
                          "(items); the adventure talking mask stays retail.")
     ap.add_argument("--wheels", choices=["yes", "no"], default="yes",
                     help="wheels visible (default) or hidden (Oxide-style)")
+    ap.add_argument("--rot", default="auto",
+                    help="kart rotation matrices style (auto, none, crash, cortex, etc.)")
     ap.add_argument("--no-clean-stale", action="store_true",
                     help="keep same-slug entries elsewhere in the roster "
                          "(default: remove them, so moving a racer to a new page "
@@ -170,6 +172,8 @@ def main():
         new_line += f"\t{color}"
     new_line += f"\tmask={args.mask}"
     new_line += f"\twheels={args.wheels}"
+    new_line += f"\trot={args.rot}"
+    new_line += f"\trot={args.rot}"
 
     def _parse_ps(line):
         parts = line.split()

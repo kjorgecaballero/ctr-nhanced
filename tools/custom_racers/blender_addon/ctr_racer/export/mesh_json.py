@@ -166,6 +166,7 @@ def _do_export_body(context, obj):
         cmd += ["--icon", icon_abs]
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]
+    cmd += ["--rot", r.kart_rot]
 
     if prefs.sentinel_models:
         cmd.append("--sentinel")

@@ -36,6 +36,27 @@ class NFR_RacerProps(PropertyGroup):
         items=[("yes", "Visible",             ""),
                ("no",  "Hidden (Oxide-style)", "")],
         default="yes")
+    kart_rot:   EnumProperty(
+        name="Kart Rotation",
+        description="Airborne rotation matrices style",
+        items=[
+            ("auto", "Auto (By clip length)", ""),
+            ("none", "None (No baked rotation)", ""),
+            ("crash", "Crash", ""),
+            ("cortex", "Cortex", ""),
+            ("tiny", "Tiny", ""),
+            ("coco", "Coco", ""),
+            ("ngin", "N. Gin", ""),
+            ("dingodile", "Dingodile", ""),
+            ("polar", "Polar", ""),
+            ("pura", "Pura", ""),
+            ("tropy", "N. Tropy", ""),
+            ("pinstripe", "Pinstripe", ""),
+            ("ripper", "Ripper Roo", ""),
+            ("papu", "Papu Papu", ""),
+            ("joe", "Komodo Joe", "")
+        ],
+        default="auto")
     long_name:  StringProperty(name="Long Name")
     short_name: StringProperty(name="Short Name")
     color:      FloatVectorProperty(name="Minimap Color", subtype="COLOR",
