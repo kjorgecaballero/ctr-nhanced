@@ -1,5 +1,7 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+
+#define VEH_FRAME_RETAIL_JUMP_FRAMES 6
 enum
 {
 	VEH_FRAME_ANIM_DRIVE = 0,
@@ -276,10 +278,42 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			}
 		}
 
-		d->matrixArray = matrixArray;
-		d->matrixIndex = (u8)inst->animFrame;
+		/* Rotation override por roster (rot=...).
+		 * -2=auto, -1=none, 0..12=enum Characters. */
+		int rot = NativeCustom_GetRotation(data.characterIDs[d->driverID]);
+		if (rot == -2)
+		{
+			if (numFrames <= VEH_FRAME_RETAIL_JUMP_FRAMES)
+			{
+				d->matrixArray = matrixArray;
+				d->matrixIndex = (u8)inst->animFrame;
+			}
+			else
+			{
+				d->matrixArray = BAKED_GTE_MATRIX_NONE;
+				d->matrixIndex = 0;
+			}
+		}
+		else if (rot == -1)
+		{
+			d->matrixArray = BAKED_GTE_MATRIX_NONE;
+			d->matrixIndex = 0;
+		}
+		else
+		{
+			d->matrixArray = BAKED_GTE_MATRIX_JUMP_BASE + rot;
+			if (numFrames <= VEH_FRAME_RETAIL_JUMP_FRAMES)
+			{
+				d->matrixIndex = (u8)inst->animFrame;
+			}
+			else
+			{
+				int n = numFrames - 1;
+				d->matrixIndex = (u8)(((int)inst->animFrame * 5) / n);
+			}
+		}
 		return;
-	}
+                }
 
 	inst->animFrame = VehCalc_InterpBySpeed(inst->animFrame, VEH_FRAME_INTERP_SPEED_NORMAL, numFrames - 1);
 }

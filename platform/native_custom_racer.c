@@ -126,6 +126,7 @@ typedef struct
     int  maskIsGoodGuy;  /* 1 = Aku Aku, 0 = Uka Uka; default 1 */
     int  maskCustom;     /* 1 = custom mask model (<slug>/mask/mask.ctr) */
     int  hasWheels;      /* 1 = wheels visible, 0 = hidden; default 1 */
+    int  rot;            /* -2=auto, -1=none, 0..12=enum Characters */
 } PageEntry;
 
 static RosterEntry s_roster[NATIVE_ROSTER_MAX];
@@ -207,6 +208,10 @@ static struct Icon     s_itemIcon          [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COU
 static s16             s_itemSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT][NATIVE_MODEL_TEX_MAX];
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
+
+/* Per-custom rotation override (roster.txt optional rot=...).
+ * -2=auto, -1=none, 0..12=enum Characters. */
+static s8  s_customRot[NATIVE_CUSTOM_COUNT];
 
 /* Menu preview cache: one struct Model* per (custom ID, player index).
  * Each player slot has its own model_pN.ctr whose UVs are baked for slot N,
@@ -439,6 +444,7 @@ static int Page_ParseLine(char *line, PageEntry *out)
     out->maskIsGoodGuy = 1;
     out->maskCustom    = 0;
     out->hasWheels     = 1;
+    out->rot           = -2;
     while (*p == ' ' || *p == '\t') p++;
     while (*p && *p != '\n' && *p != '\r')
     {
@@ -459,6 +465,26 @@ static int Page_ParseLine(char *line, PageEntry *out)
             if (strncmp(p, "no", 2) == 0)
                 out->hasWheels = 0;
         }
+        else if (strncmp(p, "rot=", 4) == 0)
+        {
+            p += 4;
+            if      (strncmp(p, "auto",      4) == 0) out->rot = -2;
+            else if (strncmp(p, "none",      4) == 0) out->rot = -1;
+            else if (strncmp(p, "crash",     5) == 0) out->rot = 0;
+            else if (strncmp(p, "cortex",    6) == 0) out->rot = 1;
+            else if (strncmp(p, "tiny",      4) == 0) out->rot = 2;
+            else if (strncmp(p, "coco",      4) == 0) out->rot = 3;
+            else if (strncmp(p, "ngin",      4) == 0) out->rot = 4;
+            else if (strncmp(p, "dingodile", 9) == 0) out->rot = 5;
+            else if (strncmp(p, "polar",     5) == 0) out->rot = 6;
+            else if (strncmp(p, "pura",      4) == 0) out->rot = 7;
+            else if (strncmp(p, "tropy",     5) == 0) out->rot = 8;
+            else if (strncmp(p, "pinstripe", 9) == 0) out->rot = 9;
+            else if (strncmp(p, "ripper",    6) == 0) out->rot = 10;
+            else if (strncmp(p, "papu",      4) == 0) out->rot = 11;
+            else if (strncmp(p, "joe",       3) == 0) out->rot = 12;
+            else out->rot = -2;
+        }
         while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != '\r') p++;
         while (*p == ' ' || *p == '\t') p++;
     }
@@ -466,6 +492,14 @@ static int Page_ParseLine(char *line, PageEntry *out)
     out->page = (int)page;
     out->slot = (int)slot;
     return 1;
+}
+
+int NativeCustom_GetRotation(int characterID)
+{
+    if (characterID < NATIVE_CUSTOM_ID_BASE ||
+        characterID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
+        return -2;
+    return s_customRot[characterID - NATIVE_CUSTOM_ID_BASE];
 }
 
 void NativeCustomRacer_ReloadRoster(void)
@@ -494,6 +528,7 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_itemIcon,           0,    sizeof(s_itemIcon));
     memset(s_itemSentinelTexMap, 0xFF, sizeof(s_itemSentinelTexMap)); /* -1 = unset */
     memset(s_customHasWheels, 1, sizeof(s_customHasWheels));        /* 1 = wheels visible */
+    memset(s_customRot, 0xFE, sizeof(s_customRot));                 /* -2 = auto */
     memset(s_sentinelTexMap, 0xFF, sizeof(s_sentinelTexMap));       /* -1 = unset */
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_maskSentinelTexMap,  0xFF, sizeof(s_maskSentinelTexMap));  /* -1 = unset */
@@ -574,6 +609,9 @@ void NativeCustomRacer_ReloadRoster(void)
                 s_customMaskIsGoodGuy[idx] = (u8)e.maskIsGoodGuy;
                 s_customMaskIsCustom[idx]  = (u8)e.maskCustom;
                 s_customHasWheels[idx] = (u8)e.hasWheels;
+                s_customRot[idx] = (s8)e.rot;
+                fprintf(stderr, "[CustomRacer] rot: slug=%s idx=%d rot=%d\n",
+                        e.folder, idx, e.rot);
 
                 s_customMenuID[idx] = (s16)e.slot;
 

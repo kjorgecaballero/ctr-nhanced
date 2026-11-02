@@ -568,4 +568,9 @@ static inline int GET_VOICE_CHAR_ID(int id)
 }
 #endif
 
+
+/* Rotation override for custom jumps (roster.txt rot=...).
+ * -2=auto, -1=none, 0..12=enum Characters. Returns -2 for non-customs. */
+int NativeCustom_GetRotation(int characterID);
+
 #endif
