@@ -24,10 +24,11 @@ def _get_blend_mode(mat):
 def export_mesh_json(obj, out_path, override_clips=None):
     """Serialize `obj` to source_mesh.json."""
     r = obj.racer
+    is_custom = (r.kart_rot == 'custom')
     
     # Guardar delta rotacion (Live Preview) y centrar el objeto para exportar
     prev_delta = list(obj.delta_rotation_euler)
-    if getattr(r, "jump_rot_enable", False):
+    if is_custom:
         obj.delta_rotation_euler = (0.0, 0.0, 0.0)
         bpy.context.view_layer.update()
         
@@ -72,7 +73,7 @@ def export_mesh_json(obj, out_path, override_clips=None):
         keys_dict = {"Basis": [list(v.co) for v in m.vertices]}
 
     result = {
-        "jump_rot_enable": getattr(r, "jump_rot_enable", False),
+        "jump_rot_enable": is_custom,
         "jump_rot_pitch": getattr(r, "jump_rot_pitch", 0.0),
         "jump_rot_roll": getattr(r, "jump_rot_roll", 0.0),
         "jump_rot_yaw": getattr(r, "jump_rot_yaw", 0.0),
@@ -170,8 +171,7 @@ def _do_export_body(context, obj):
         cmd += ["--icon", icon_abs]
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]
-    rot_flag = "custom" if getattr(r, "jump_rot_enable", False) else r.kart_rot
-    cmd += ["--rot", rot_flag]
+    cmd += ["--rot", r.kart_rot]
 
     if prefs.sentinel_models:
         cmd.append("--sentinel")

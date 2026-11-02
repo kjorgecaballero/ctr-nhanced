@@ -365,12 +365,33 @@ class NFR_OT_GenerateTestShapeKeys(Operator):
         return {"FINISHED"}
 
 
+
+class NFR_OT_ResetJumpRot(Operator):
+    bl_idname = "nfr.reset_jump_rot"
+    bl_label = "Reset to Default"
+    bl_description = "Reset the jump rotation parameters to their default values"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj and obj.racer:
+            obj.racer.jump_rot_pitch = 45.0
+            obj.racer.jump_rot_roll = 0.0
+            obj.racer.jump_rot_yaw = 0.0
+            obj.racer.jump_rot_pivot_z = 0.35
+            obj.racer.jump_rot_frames = 4
+            from ..core.racer_props import update_rot_preview
+            update_rot_preview(obj.racer, context)
+            self.report({'INFO'}, "Jump Rotation reset to defaults")
+        return {'FINISHED'}
+
 _classes = (
     NFR_OT_JumpToClip,
     NFR_OT_ToggleTimelineMarkers,
     NFR_OT_ResetAnimRanges,
     NFR_OT_MarkKartVertices,
     NFR_OT_GenerateTestShapeKeys,
+    NFR_OT_ResetJumpRot,
 )
 
 

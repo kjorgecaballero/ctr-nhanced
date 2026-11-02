@@ -21,7 +21,7 @@ def update_rot_preview(self, context):
     obj = context.active_object
     if obj and obj.type == 'MESH' and obj.racer.is_racer:
         import math
-        if obj.racer.jump_rot_enable:
+        if obj.racer.kart_rot == 'custom' and getattr(obj.racer, 'jump_rot_preview', True):
             obj.delta_rotation_euler[0] = math.radians(obj.racer.jump_rot_pitch)
             obj.delta_rotation_euler[1] = math.radians(obj.racer.jump_rot_yaw)
             obj.delta_rotation_euler[2] = math.radians(obj.racer.jump_rot_roll)
@@ -66,15 +66,16 @@ class NFR_RacerProps(PropertyGroup):
             ("pinstripe", "Pinstripe", ""),
             ("ripper", "Ripper Roo", ""),
             ("papu", "Papu Papu", ""),
-            ("joe", "Komodo Joe", "")
+            ("joe", "Komodo Joe", ""),
+            ("custom", "Custom", "")
         ],
-        default="auto")
+        default="auto", update=update_rot_preview)
     long_name:  StringProperty(name="Long Name")
     short_name: StringProperty(name="Short Name")
     color:      FloatVectorProperty(name="Minimap Color", subtype="COLOR",
                                     default=(1.0, 1.0, 1.0), min=0.0, max=1.0)
 
-    jump_rot_enable: BoolProperty(name="Enable Custom Jump Rotation", default=False, update=update_rot_preview)
+    jump_rot_preview: BoolProperty(name="Preview in Viewport", default=True, update=update_rot_preview)
     jump_rot_pitch: FloatProperty(name="Pitch (Up/Down)", default=45.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)
     jump_rot_roll: FloatProperty(name="Roll (Sideways)", default=0.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)
     jump_rot_yaw: FloatProperty(name="Yaw (Spin)", default=0.0, min=-90.0, max=90.0, subtype='FACTOR', update=update_rot_preview)

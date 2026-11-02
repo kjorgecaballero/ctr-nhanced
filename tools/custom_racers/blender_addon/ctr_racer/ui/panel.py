@@ -187,8 +187,22 @@ class NFR_PT_Racer(Panel):
         col.prop(r, "engine")
         col.prop(r, "mask")
         col.prop(r, "wheels")
-        if not r.jump_rot_enable:
-            col.prop(r, "kart_rot")
+        col.prop(r, "kart_rot")
+        
+        # Box de rotacion custom (aparece solo si se elige Custom)
+        if r.kart_rot == 'custom':
+            box = col.box()
+            box.label(text="Custom Parameters", icon="FILE_3D")
+            box.prop(r, "jump_rot_preview")
+            box.separator()
+            box.prop(r, "jump_rot_pitch", slider=True)
+            box.prop(r, "jump_rot_roll", slider=True)
+            box.prop(r, "jump_rot_yaw", slider=True)
+            box.prop(r, "jump_rot_pivot_z")
+            box.prop(r, "jump_rot_frames")
+            
+            box.separator()
+            box.operator("nfr.reset_jump_rot", text="Reset Defaults", icon="LOOP_BACK")
 
         col.separator()
         col.prop(r, "long_name")
@@ -201,23 +215,7 @@ class NFR_PT_Racer(Panel):
         col.prop(r, "icon_path")
 
 
-        # Jump Rotation
-        layout.separator()
-        box = layout.box()
-        box.label(text="Jump Rotation (Custom .bin)", icon="FILE_3D")
-        box.prop(r, "jump_rot_enable")
-        if r.jump_rot_enable:
-            col = box.column(align=True)
-            col.prop(r, "jump_rot_pitch", slider=True)
-            col.prop(r, "jump_rot_roll", slider=True)
-            col.prop(r, "jump_rot_yaw", slider=True)
-            col.prop(r, "jump_rot_pivot_z")
-            col.prop(r, "jump_rot_frames")
-            
-            box.separator()
-            row = box.row(align=True)
-            row.scale_y = 1.5
-            row.operator("nfr.export", text="Export with Rotation", icon="EXPORT")
+
 
         layout.separator()
         layout.label(text="Dev Tools:", icon="TOOL_SETTINGS")
