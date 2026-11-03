@@ -909,7 +909,6 @@ static void VehPhysForce_TranslateMatrix_UpdateInstanceMatrix(struct Instance *i
 	{
 		struct MatrixND *entry;
         if (d->matrixArray == 0xFE) {
-            fprintf(stderr, "[DEBUG custom matrix] idx=%d\n", d->matrixIndex);
             entry = NativeCustom_GetMatrixEntry(data.characterIDs[d->driverID], d->matrixIndex);
             if (!entry) entry = VehPhysForce_TranslateMatrix_GetBakedEntry(BAKED_GTE_MATRIX_NONE, 0);
         } else {

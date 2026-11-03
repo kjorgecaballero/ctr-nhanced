@@ -1,4 +1,5 @@
 #include <common.h>
+#include <stdio.h>
 #include <platform/native_custom_racer.h>
 
 #define VEH_FRAME_RETAIL_JUMP_FRAMES 6
@@ -102,6 +103,7 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 	struct Instance *inst = t->inst;
 	u8 desiredAnim = VEH_FRAME_ANIM_DRIVE;
 
+
 	if ((d->instTntRecv == NULL) && (d->kartState != KS_WARP_PAD))
 	{
 		if (d->fireSpeed < 0)
@@ -161,6 +163,14 @@ void VehFrameProc_Driving(struct Thread *t, struct Driver *d)
 			{
 				speed = VEH_FRAME_TRANSITION_MATRIX_SPEED;
 				d->matrixIndex = inst->animFrame;
+			}
+			else if (currAnim == VEH_FRAME_ANIM_AIRBORNE &&
+			         data.characterIDs[d->driverID] >= NATIVE_CUSTOM_ID_BASE)
+			{
+				/* Ralentizar el reverse-play del aterrizaje para customs.
+				 * Retail: speed 2 = 2-3 ticks, invisible a 60fps.
+				 * Custom: speed 1 = 4-5 ticks, descend visible. */
+				speed = VEH_FRAME_INTERP_SPEED_NORMAL;
 			}
 
 			inst->animFrame = VehCalc_InterpBySpeed(inst->animFrame, speed, startFrame);
