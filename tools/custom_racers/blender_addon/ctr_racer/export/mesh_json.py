@@ -37,7 +37,32 @@ def export_mesh_json(obj, out_path, override_clips=None):
 
     materials = []
     images = {}
-    for mat in m.materials:
+    for slot_idx, mat in enumerate(m.materials):
+        # Empty slot: m.materials can contain None when the user
+        # deleted a material but left the slot. Polygon
+        # material_index still points here, so we append a
+        # placeholder -- a `continue` would shift every later
+        # material one slot left and remap every face.
+        if mat is None:
+            materials.append({
+                "name": f"__empty_slot_{slot_idx}__",
+                "image": None,
+                "double_sided": False,
+                "blend_mode": "half",
+            })
+            continue
+        # Material with use_nodes off or purged node_tree: keep the
+        # real name but no image. The polygon material_index stays
+        # valid.
+        if not mat.use_nodes or mat.node_tree is None:
+            materials.append({
+                "name": mat.name,
+                "image": None,
+                "double_sided": not mat.use_backface_culling,
+                "blend_mode": "half",
+            })
+            continue
+
         imgs = list({n.image for n in mat.node_tree.nodes
                      if n.type == "TEX_IMAGE" and n.image})
         im = imgs[0] if imgs else None

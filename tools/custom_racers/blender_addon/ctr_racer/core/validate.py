@@ -285,10 +285,16 @@ def validate_racer(obj):
 
     unpacked = []  # names of images not packed into the .blend
 
-    for mat in m.materials:
+    for _mi, mat in enumerate(m.materials):
         if mat is None:
+            errors.append((
+                "Empty material slot",
+                f"Slot {_mi} has material=None. The export uses a "
+                f"placeholder; faces pointing here render untextured. "
+                f"Assign a material or remove the slot."
+            ))
             continue
-        if not mat.use_nodes:
+        if not mat.use_nodes or mat.node_tree is None:
             warnings.append((
                 f"Material w/o nodes: {mat.name}",
                 f"Material '{mat.name}' has no nodes. It will export as "
