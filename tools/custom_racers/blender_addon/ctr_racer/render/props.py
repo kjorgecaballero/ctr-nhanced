@@ -17,9 +17,9 @@ Note: Scene.nfr_ui_tab is semantically UI, but lives here for now to
 avoid a circular import. It may move to ui/ in a later batch.
 """
 import bpy
-from bpy.props import BoolProperty, EnumProperty
+from bpy.props import BoolProperty, EnumProperty, StringProperty
 
-from ..constants import BLEND_MODES, _BLEND_MODE_SET
+from ..constants import BLEND_MODES, _BLEND_MODE_SET, UI_MODES, UI_TABS_BY_MODE
 from .material_setup import NFR_PS1MaterialFactory
 
 
@@ -48,6 +48,56 @@ def _nfr_mat_blend_mode_update(self, context):
         self["blend_mode"] = v
 
 
+# NFR_UI_SINGLE_BAR_V1
+def _nfr_ui_mode_update(self, context):
+    """Jump nfr_ui_tab to the first sub-tab of the clicked mode."""
+    tabs = UI_TABS_BY_MODE.get(self.nfr_ui_mode, [])
+    if not tabs:
+        return
+    valid_ids = [t[0] for t in tabs]
+    if self.nfr_ui_tab not in valid_ids:
+        self.nfr_ui_tab = valid_ids[0]
+
+
+# NFR_UI_SINGLE_DROPDOWN_V1
+class NFR_MT_ui_tab(bpy.types.Menu):
+    bl_label = "Select Tab"
+    bl_idname = "NFR_MT_ui_tab"
+
+    def draw(self, context):
+        try:
+            scene = context.scene
+            for mode_id, mode_label, _mode_desc in UI_MODES:
+                self.layout.label(text=mode_label, icon='DOT')
+                for tab_id, label, _desc in UI_TABS_BY_MODE.get(mode_id, []):
+                    op = self.layout.operator(
+                        "nfr.set_ui_tab",
+                        text="    " + label,
+                        icon='CHECKMARK' if scene.nfr_ui_tab == tab_id else 'NONE',
+                    )
+                    op.tab_id = tab_id
+                self.layout.separator()
+        except Exception as e:
+            print(f"[NFR] menu draw failed: {e}")
+            self.layout.label(text="(menu error)")
+
+
+class NFR_OT_set_ui_tab(bpy.types.Operator):
+    bl_idname = "nfr.set_ui_tab"
+    bl_label = "Set UI Tab"
+    bl_options = {'INTERNAL'}
+
+    tab_id: bpy.props.StringProperty()
+
+    def execute(self, context):
+        if self.tab_id:
+            context.scene.nfr_ui_tab = self.tab_id
+        return {'FINISHED'}
+
+
+_UI_MENU_CLASSES = (NFR_MT_ui_tab, NFR_OT_set_ui_tab)
+
+
 def register():
     # UI sub-tab
     bpy.types.Scene.nfr_ui_tab = EnumProperty(
@@ -68,6 +118,31 @@ def register():
         ],
         default='SETTINGS',
     )
+
+    bpy.types.Scene.nfr_ui_mode = EnumProperty(
+        name="Mode",
+        description="Top-level panel section",
+        items=[(mid, label, desc) for mid, label, desc in UI_MODES],
+        default='SETUP',
+        update=_nfr_ui_mode_update,
+    )
+    for _cls in _UI_MENU_CLASSES:
+        bpy.utils.register_class(_cls)
+
+    # Kart UX # NFR_KART_UX_V1
+    bpy.types.Scene.nfr_mat_search = StringProperty(name="Search", default="")
+    bpy.types.Scene.nfr_kart_show_editor = BoolProperty(name="Show Editor", default=True)
+    bpy.types.Scene.nfr_kart_show_colors = BoolProperty(name="Show Colors", default=True)
+    bpy.types.Scene.nfr_kart_show_preset = BoolProperty(name="Show Preset", default=True)
+    bpy.types.Scene.nfr_dance_show_timelines = BoolProperty(name="Show Timelines", default=True)
+    bpy.types.Scene.nfr_dance_show_music = BoolProperty(name="Show Music", default=False)
+    bpy.types.Scene.nfr_dance_show_sfx = BoolProperty(name="Show SFX", default=False)
+    bpy.types.Scene.nfr_items_show_icon = BoolProperty(name="Show Icon", default=True)
+    bpy.types.Scene.nfr_items_show_music = BoolProperty(name="Show Music", default=True)
+    bpy.types.Scene.nfr_items_show_object = BoolProperty(name="Show Object", default=True)
+    bpy.types.Scene.nfr_voices_show_source = BoolProperty(name="Show Source", default=True)
+    bpy.types.Scene.nfr_voices_show_gameplay = BoolProperty(name="Show Gameplay", default=True)
+    bpy.types.Scene.nfr_voices_show_menu = BoolProperty(name="Show Menu", default=True)
 
     # Scene
     bpy.types.Scene.nfr_ps1_render_state = BoolProperty(default=False)
@@ -138,7 +213,23 @@ def register():
 
 
 def unregister():
+    for _cls in reversed(_UI_MENU_CLASSES):
+        bpy.utils.unregister_class(_cls)
+    del bpy.types.Scene.nfr_ui_mode
     del bpy.types.Scene.nfr_ui_tab
+    del bpy.types.Scene.nfr_mat_search
+    del bpy.types.Scene.nfr_kart_show_editor
+    del bpy.types.Scene.nfr_kart_show_colors
+    del bpy.types.Scene.nfr_kart_show_preset
+    del bpy.types.Scene.nfr_dance_show_timelines
+    del bpy.types.Scene.nfr_dance_show_music
+    del bpy.types.Scene.nfr_dance_show_sfx
+    del bpy.types.Scene.nfr_items_show_icon
+    del bpy.types.Scene.nfr_items_show_music
+    del bpy.types.Scene.nfr_items_show_object
+    del bpy.types.Scene.nfr_voices_show_source
+    del bpy.types.Scene.nfr_voices_show_gameplay
+    del bpy.types.Scene.nfr_voices_show_menu
     del bpy.types.Scene.nfr_ps1_render_state
     del bpy.types.Scene.nfr_ps1_render_active
     del bpy.types.Scene.nfr_ps1_prev_shadow_state

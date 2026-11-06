@@ -10,6 +10,7 @@ from .. import state
 from ..constants import (
     ADDON_ID, DEFAULT_REPO,
     MAX_PAGES, MAX_MATS_PER_PAGE, MAX_PRESETS_PER_PAGE, _BLEND_MODE_SET,
+    UI_MODES, UI_TABS_BY_MODE, UI_MODE_OF_TAB,
 )
 from ..prefs import _get_prefs
 from ..core.helpers import _find_object_by_slug, _active_racer
@@ -35,20 +36,21 @@ class NFR_PT_Racer(Panel):
         layout = self.layout
         scene = context.scene
 
-        row_items = [
-            [('SETTINGS', 'Settings'), ('SLOTS', 'Slots'), ('MATERIALS', 'Materials')],
-            [('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')],
-            [('DANCE', 'Dance'), ('ITEMS', 'Items'), ('SFX', 'SFX')],
-            [('VOICES', 'Voices')],
-            [('LEVELS', 'Levels')],
-        ]
-        
-        for row_data in row_items:
-            row = layout.row(align=True)
-            row.scale_y = 1.3
-            for item in row_data:
-                tab_id, label = item[0], item[1]
-                row.prop_enum(scene, "nfr_ui_tab", tab_id, text=label)
+        # Auto-sync mode from tab (handles old .blend files)
+        # NFR_UI_SINGLE_BAR_V1
+        try:
+            current = UI_MODE_OF_TAB.get(scene.nfr_ui_tab, 'SETUP')
+            if scene.nfr_ui_mode != current:
+                scene.nfr_ui_mode = current
+        except Exception:
+            pass
+
+        try:
+            self._draw_nav_bar(context, layout)
+        except Exception as e:
+            print(f"[NFR] nav bar failed: {e}")
+            print(f"[NFR] falling back to legacy 11-tab layout")
+            self._draw_legacy_tabs(context, layout)
 
         layout.separator()
 
@@ -69,12 +71,45 @@ class NFR_PT_Racer(Panel):
             self._draw_dance(context, layout)
         elif tab == 'ITEMS':
             self._draw_items(context, layout)
-        elif context.scene.nfr_ui_tab == 'SFX':
+        elif tab == 'SFX':
             self._draw_sfx(context, layout)
         elif tab == 'LEVELS':
             self._draw_levels(context, layout)
-        elif context.scene.nfr_ui_tab == 'VOICES':
+        elif tab == 'VOICES':
             self._draw_voices(context, layout)
+
+    def _draw_nav_bar(self, context, layout):
+        """Single dropdown bar: all tabs grouped by mode."""
+        # NFR_UI_SINGLE_DROPDOWN_V1
+        scene = context.scene
+
+        # Find the label of the current tab
+        label = 'Select Tab'
+        for mode_id, _mlabel, _mdesc in UI_MODES:
+            for tid, lb, _d in UI_TABS_BY_MODE.get(mode_id, []):
+                if tid == scene.nfr_ui_tab:
+                    label = lb
+                    break
+
+        row = layout.row(align=True)
+        row.scale_y = 1.3
+        row.menu("NFR_MT_ui_tab", text=label, icon='TRIA_DOWN')
+
+    def _draw_legacy_tabs(self, context, layout):
+        """Fallback: old 11-tab layout."""
+        scene = context.scene
+        row_items = [
+            [('SETTINGS', 'Settings'), ('SLOTS', 'Slots'), ('MATERIALS', 'Materials')],
+            [('KART', 'Kart'), ('PRESETS', 'Presets'), ('ANIM', 'Anim')],
+            [('DANCE', 'Dance'), ('ITEMS', 'Items'), ('SFX', 'SFX')],
+            [('VOICES', 'Voices')],
+            [('LEVELS', 'Levels')],
+        ]
+        for row_data in row_items:
+            row = layout.row(align=True)
+            row.scale_y = 1.3
+            for tab_id, label in row_data:
+                row.prop_enum(scene, "nfr_ui_tab", tab_id, text=label)
 
     def _draw_settings(self, context, layout):
         obj = context.active_object
@@ -384,16 +419,20 @@ class NFR_PT_Racer(Panel):
             text="Render: ON" if scene.nfr_ps1_render_state else "Render: OFF",
             icon=toggle_icon,
         )
+        
+        row = layout.row()
+        row.prop(scene, "nfr_mat_search", icon="VIEWZOOM", text="Search Material")
         layout.separator()
 
         if not m.materials:
             layout.label(text="No materials on this mesh", icon="INFO")
             return
 
-        mats = [mat for mat in m.materials if mat is not None]
+        search_term = scene.nfr_mat_search.lower().strip()
+        mats = [mat for mat in m.materials if mat is not None and (not search_term or search_term in mat.name.lower())]
         total = len(mats)
         if total == 0:
-            layout.label(text="No materials on this mesh", icon="INFO")
+            layout.label(text="No materials matched search", icon="INFO")
             return
 
         total_pages = max(1, (total + MAX_MATS_PER_PAGE - 1) // MAX_MATS_PER_PAGE)
@@ -472,116 +511,107 @@ class NFR_PT_Racer(Panel):
 
     def _draw_kart(self, context, layout):
         st = context.scene.kart_state
+        scene = context.scene
         obj = context.active_object
 
+        # 1. EDITOR SECTION
         box = layout.box()
-        box.label(text="Kart Editor", icon="MESH_DATA")
+        row = box.row()
+        row.prop(scene, "nfr_kart_show_editor", text="", icon='TRIA_DOWN' if scene.nfr_kart_show_editor else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Kart Editor", icon="MESH_DATA")
 
-        col = box.column(align=True)
-        col.prop(st, "template_mode", text="Mode")
-        col.prop(st, "template_option", text="Template")
-        if st.template_mode == 'EDIT' and st.template_option in ('KART', 'KART_HI'):
-            col.prop(st, "variant", text="Variant")
+        if scene.nfr_kart_show_editor:
+            col = box.column(align=True)
+            col.prop(st, "template_mode", text="Mode")
+            col.prop(st, "template_option", text="Template")
+            if st.template_mode == 'EDIT' and st.template_option in ('KART', 'KART_HI'):
+                col.prop(st, "variant", text="Variant")
 
-        col.separator()
-        col.operator("nfr.kart_import_template", icon="IMPORT", text="Import Template")
+            col.separator()
+            col.operator("nfr.kart_import_template", icon="IMPORT", text="Import Template")
 
         # Si es modo USER, terminamos el dibujo aquí (solo importar)
         if st.template_mode == 'USER':
             return
 
-        # El resto es solo para modo EDIT
+        # 2. COLORS SECTION (El resto es solo para modo EDIT)
         if st.is_imported:
             layout.separator()
-            # Si es Hovercraft, mostramos el Color Picker
+            
+            # Header
+            hdr = layout.row()
+            hdr.prop(scene, "nfr_kart_show_colors", text="", icon='TRIA_DOWN' if scene.nfr_kart_show_colors else 'TRIA_RIGHT', emboss=False)
+            
             if st.template_option == 'HOVERCRAFT':
-                layout.label(text="Hovercraft Color (HSV)", icon="COLOR")
-                col = layout.column(align=True)
-                col.prop(st, "hover_hue", slider=True)
-                col.prop(st, "hover_saturation", slider=True)
-                col.prop(st, "hover_value", slider=True)
+                hdr.label(text="Hovercraft Color (HSV)", icon="COLOR")
+                if scene.nfr_kart_show_colors:
+                    col = layout.column(align=True)
+                    col.prop(st, "hover_hue", slider=True)
+                    col.prop(st, "hover_saturation", slider=True)
+                    col.prop(st, "hover_value", slider=True)
             else:
-                # Si son las otras plantillas, mostramos sus zonas
-                layout.label(text="Color Zones", icon="COLOR")
-                col = layout.column(align=True)
-                for z in st.zones:
-                    col.prop(z, "color", text=z.display_name)
+                hdr.label(text="Color Zones", icon="COLOR")
+                if scene.nfr_kart_show_colors:
+                    col = layout.column(align=True)
+                    for z in st.zones:
+                        col.prop(z, "color", text=z.display_name)
 
-            layout.separator()
-            layout.operator("nfr.kart_reset_colors", icon="LOOP_BACK")
+            if scene.nfr_kart_show_colors:
+                layout.separator()
+                layout.operator("nfr.kart_reset_colors", icon="LOOP_BACK")
 
+            # 3. PRESET SECTION
             layout.separator()
             box = layout.box()
-            box.label(text="Export Preset", icon="FILE_TICK")
-            col = box.column(align=True)
-            col.prop(st, "preset_name", text="Name")
-            col.prop(st, "output_mode", text="Format")
-            col.operator("nfr.kart_bake_and_export", icon="EXPORT")
+            row = box.row()
+            row.prop(scene, "nfr_kart_show_preset", text="", icon='TRIA_DOWN' if scene.nfr_kart_show_preset else 'TRIA_RIGHT', emboss=False)
+            row.label(text="Export Preset", icon="FILE_TICK")
+            
+            if scene.nfr_kart_show_preset:
+                col = box.column(align=True)
+                col.prop(st, "preset_name", text="Name")
+                col.prop(st, "output_mode", text="Format")
+                col.operator("nfr.kart_bake_and_export", icon="EXPORT")
 
     def _draw_presets(self, context, layout):
+        scene = context.scene
+        st = scene.kart_state
+        obj = context.active_object
+
         prefs = _get_prefs(context)
-        st = context.scene.kart_state
-
         root_str = getattr(prefs, "kart_presets_root", "") or ""
-        if not root_str:
-            warn = layout.box()
-            warn.label(text="Set 'Kart presets folder' in", icon="ERROR")
-            warn.label(text="addon preferences first")
-            return
-
         root = Path(root_str)
-        if not root.is_dir():
-            warn = layout.box()
-            warn.label(text="Folder not found:", icon="ERROR")
-            warn.label(text=root_str)
-            return
 
         row = layout.row(align=True)
         row.label(text="Preset Browser", icon="FILE_FOLDER")
-        row.operator("nfr.kart_open_presets_folder", text="", icon="FILEBROWSER")
 
-        obj = context.active_object
-        can_apply = (obj is not None and obj.type == 'MESH' and obj.racer.is_racer)
-        if can_apply:
+        if obj and obj.type == 'MESH':
             layout.label(text=f"Target: {obj.name}", icon="OBJECT_DATA")
-            layout.label(text=f"slug: {obj.racer.slug}")
         else:
             layout.label(text="Select a racer mesh to enable Apply", icon="INFO")
 
         layout.separator()
+
         box = layout.box()
         box.label(text="Filter Presets:", icon="FILTER")
         box.prop(st, "template_filter", text="Template")
         if st.template_filter in ('KART', 'KART_HI'):
             box.prop(st, "variant_filter", text="Variant")
+
         layout.separator()
 
-        # LÓGICA DINÁMICA (Lee directamente de templates.py)
-        from ..kart.templates import KART_TEMPLATES
-        tpl_obj = KART_TEMPLATES.get(st.template_filter)
-        
-        if tpl_obj:
-            # Convierte 'SILVER' a 'SILVER_PIPES' para que coincida con templates.py
-            var_key = st.variant_filter
-            if var_key == 'GOLD': var_key = 'GOLD_PIPES'
-            elif var_key == 'SILVER': var_key = 'SILVER_PIPES'
-            elif var_key == 'DEFAULT': var_key = 'DEFAULT'
-            
-            variant_dir = tpl_obj["variant_dirs"].get(var_key, "")
-        else:
-            variant_dir = ""
-
-        all_presets = scan_presets(root)
-        items = all_presets.get(variant_dir, [])
-
-        if not items:
-            layout.label(text=f"No presets in '{variant_dir}/' yet.", icon="INFO")
+        if not root.is_dir():
+            layout.label(text="Presets folder not set or not found", icon="ERROR")
             return
 
-        total = len(items)
-        total_pages = max(1, (total + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
+        all_presets = scan_presets(root)
+        items = all_presets.get(st.variant_filter, [])
         
-        # Calcular la pagina localmente SIN escribir en st.preset_page (evita el error de Blender)
+        if not items:
+            layout.label(text=f"No presets in '{st.variant_filter}/' yet.", icon="INFO")
+            return
+
+        total_pages = max(1, (len(items) + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
         current_page = max(1, min(st.preset_page, total_pages))
 
         if total_pages > 1:
@@ -589,344 +619,207 @@ class NFR_PT_Racer(Panel):
             left = prow.row(align=True)
             left.enabled = current_page > 1
             left.operator("nfr.kart_preset_prev_page", text="", icon="TRIA_LEFT")
-            prow.label(text=f"Page {current_page} / {total_pages}  ({total} total)")
+            prow.label(text=f"Page {current_page} / {total_pages}")
             right = prow.row(align=True)
             right.enabled = current_page < total_pages
             right.operator("nfr.kart_preset_next_page", text="", icon="TRIA_RIGHT")
+            layout.separator()
 
         start = (current_page - 1) * MAX_PRESETS_PER_PAGE
-        end = min(start + MAX_PRESETS_PER_PAGE, total)
-        page_items = items[start:end]
+        end = min(start + MAX_PRESETS_PER_PAGE, len(items))
 
-        for name, path in page_items:
+        for name, path in items[start:end]:
             row = layout.row(align=True)
-
-            icon_key = f"__preset__{variant_dir}__{name}"
-            png_files = list(path.glob("*.png"))
-            icon = _get_icon(icon_key, png_files[0]) if png_files else None
+            icon_key = f"__preset__{st.variant_filter}__{name}"
+            icon_id = _get_icon(icon_key)
             
-            if icon is not None:
-                row.template_icon(icon_value=icon.icon_id, scale=1.4)
+            if icon_id:
+                row.template_icon(icon_value=icon_id, scale=1.0)
             else:
                 row.label(text="", icon="IMAGE_DATA")
 
             row.label(text=name)
-
-            sub = row.row(align=True)
-            sub.enabled = can_apply
-            op = sub.operator("nfr.kart_apply_preset", text="Apply", icon="CHECKMARK")
+            op = row.operator("nfr.kart_apply_preset", text="Apply", icon="CHECKMARK")
             op.preset_dir = str(path)
 
     def _draw_anim(self, context, layout):
-        scene = context.scene
-        st = scene.nfr_anim
-
-        request_sync_from_prefs(scene)
-
-        layout.label(text="Animation clips", icon="ACTION")
-
-        clip = st.selected_clip
-
-        row = layout.row(align=True)
-        row.scale_y = 1.4
+        # Trata de obtener el estado, sea anim_state o nfr_anim
+        st = getattr(context.scene, "anim_state", None) or getattr(context.scene, "nfr_anim", None)
+        
+        if st is None:
+            layout.label(text="Animation state not found", icon="ERROR")
+            return
+            
+        box = layout.box()
+        box.label(text="Animation clips", icon="ACTION")
+        
+        row = box.row(align=True)
         row.prop(st, "selected_clip", text="")
-        row.prop(st, f"{clip}_start", text="Start:")
-        row.prop(st, f"{clip}_end", text="End:")
         row.operator("nfr.anim_jump_to_clip", text="", icon="PLAY")
         row.operator("nfr.anim_toggle_markers", text="", icon="MARKER")
-
-        # Test setup (both on one row)
+        
+        clip = st.selected_clip.lower()
+        if clip:
+            row = box.row(align=True)
+            row.prop(st, f"{clip}_start", text="Start:")
+            row.prop(st, f"{clip}_end", text="End:")
+        
         layout.separator()
-        row = layout.row(align=True)
-        row.operator("nfr.anim_mark_kart",
-                     text="Mark Kart",
-                     icon="GROUP_VERTEX")
-        row.operator("nfr.anim_generate_test_shape_keys",
-                     text="Generate ShapeKeys",
-                     icon="SHAPEKEY_DATA")
+        
+        box2 = layout.box()
+        box2.label(text="Advanced Tools", icon="TOOL_SETTINGS")
+        
+        row = box2.row(align=True)
+        row.operator("nfr.anim_mark_kart", text="Mark Kart", icon="OUTLINER_DATA_MESH")
+        row.operator("nfr.anim_generate_test_shape_keys", text="Generate ShapeKeys", icon="SHAPEKEY_DATA")
 
     def _draw_dance(self, context, layout):
-        st = context.scene.nfr_dance
+        scene = context.scene
+        st = scene.nfr_dance
+        obj = context.active_object
 
         layout.label(text="Custom Podium Dance", icon="ARMATURE_DATA")
-        layout.label(text="Same mesh, two timelines: Win (rank 0) and",
-                     icon="INFO")
-        layout.label(text="Loose (rank 1-2). Shared Sentinel textures.")
-
-        layout.separator()
-
-        obj = context.active_object
-        if obj is None or obj.type != "MESH":
-            layout.label(text="Select the dance mesh first", icon="ERROR")
+        
+        if obj and obj.type == 'MESH':
+            layout.label(text=f"Mesh: {obj.name} ({len(obj.data.vertices)} verts)", icon="MESH_DATA")
         else:
-            layout.label(text=f"Mesh: {obj.name} "
-                              f"({len(obj.data.vertices)} verts)",
-                         icon="MESH_DATA")
+            layout.label(text="Select the dance mesh first", icon="ERROR")
+            return
 
         col = layout.column(align=True)
         col.prop(st, "slug", text="Slug")
 
-        # --- Win (rank 0) ---
+        # --- TIMELINES ---
         layout.separator()
-        win_box = layout.box()
-        win_box.label(text="Win (rank 0)", icon="TRIA_RIGHT")
-        row = win_box.row(align=True)
-        row.prop(st, "win_start", text="Start")
-        row.prop(st, "win_end",   text="End")
+        row = layout.row()
+        row.prop(scene, "nfr_dance_show_timelines", text="", icon='TRIA_DOWN' if scene.nfr_dance_show_timelines else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Timelines", icon="ARMATURE_DATA")
+        
+        if scene.nfr_dance_show_timelines:
+            win_box = layout.box()
+            win_box.label(text="Win (rank 0)", icon="TRIA_RIGHT")
+            row = win_box.row()
+            row.prop(st, "win_start", text="Start")
+            row.prop(st, "win_end",   text="End")
 
-        # --- Loose (rank 1-2) ---
-        loose_box = layout.box()
-        loose_box.label(text="Loose (rank 1-2)", icon="TRIA_RIGHT")
-        row = loose_box.row(align=True)
-        row.prop(st, "loose_start", text="Start")
-        row.prop(st, "loose_end",   text="End")
+            loose_box = layout.box()
+            loose_box.label(text="Loose (rank 1-2)", icon="TRIA_RIGHT")
+            row = loose_box.row()
+            row.prop(st, "loose_start", text="Start")
+            row.prop(st, "loose_end",   text="End")
 
-        # --- Podium Music (rank 0) ---
-        music_box = layout.box()
-        music_box.label(text="Podium Music (rank 0)", icon="SOUND")
-        music_box.prop(st, "podium_music_path", text="WAV")
-        row = music_box.row(align=True)
-        row.scale_y = 1.3
-        row.enabled = bool(st.slug)
-        row.operator("nfr.dance_build_music",
-                     text="Build Music Bank", icon="PLAY")
+        # --- PODIUM MUSIC ---
+        layout.separator()
+        row = layout.row()
+        row.prop(scene, "nfr_dance_show_music", text="", icon='TRIA_DOWN' if scene.nfr_dance_show_music else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Podium Music", icon="SOUND")
+        
+        if scene.nfr_dance_show_music:
+            music_box = layout.box()
+            music_box.prop(st, "podium_music_path", text="WAV")
+            row = music_box.row()
+            row.operator("nfr.dance_build_music", text="Build Music Bank", icon="PLAY")
 
-        # --- Dance SFX (per-frame) ---
-        sfx_box = layout.box()
-        sfx_box.label(text="Dance SFX (per-frame)", icon="SPEAKER")
-        sfx_box.label(text="Fires a WAV when the dance hits a frame.",
-                      icon="INFO")
-        sfx_box.label(text="Frames are 0-based within the dance clip.")
-
-        if len(st.sfx_entries) == 0:
-            sfx_box.label(text="(none — click Add SFX to create one)",
-                          icon="INFO")
-        else:
+        # --- DANCE SFX ---
+        layout.separator()
+        row = layout.row()
+        row.prop(scene, "nfr_dance_show_sfx", text="", icon='TRIA_DOWN' if scene.nfr_dance_show_sfx else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Dance SFX", icon="SPEAKER")
+        
+        if scene.nfr_dance_show_sfx:
+            sfx_box = layout.box()
+            sfx_box.label(text="Fires a WAV when the dance hits a frame.", icon="INFO")
+            if not st.sfx_entries:
+                sfx_box.label(text="(none — click Add SFX to create one)", icon="INFO")
+            
+            # FIX: Usar enumerate para el index, no find()
             for i, e in enumerate(st.sfx_entries):
-                row = sfx_box.row(align=True)
+                row = sfx_box.row()
                 row.prop(e, "frame", text="")
                 row.prop(e, "wav_path", text="")
-                op = row.operator("nfr.dance_sfx_remove",
-                                  text="", icon="X")
+                op = row.operator("nfr.dance_sfx_remove", text="", icon="X")
                 op.index = i
+            
+            row = sfx_box.row()
+            row.operator("nfr.dance_sfx_add", text="Add SFX", icon="ADD")
+            row.operator("nfr.dance_build_sfx", text="Build Dance SFX", icon="PLAY")
 
-        row = sfx_box.row(align=True)
-        row.scale_y = 1.2
-        row.enabled = bool(st.slug)
-        row.operator("nfr.dance_sfx_add", text="Add SFX", icon="ADD")
-        row.operator("nfr.dance_build_sfx",
-                     text="Build Dance SFX", icon="PLAY")
-
-        # --- Actions ---
+        # --- EXPORTS ---
         layout.separator()
         row = layout.row(align=True)
-        row.scale_y = 1.3
         op = row.operator("nfr.dance_export", text="Export Win", icon="EXPORT")
         op.variant = 'WIN'
-        op = row.operator("nfr.dance_export", text="Export Loose")
+        op = row.operator("nfr.dance_export", text="Export Loose", icon="EXPORT")
         op.variant = 'LOOSE'
-
-        row = layout.row(align=True)
-        row.scale_y = 1.4
-        op = row.operator("nfr.dance_export",
-                          text="Export Both", icon="DUPLICATE")
-        op.variant = 'BOTH'
-
+        
     def _draw_items(self, context, layout):
-        st = context.scene.nfr_mask
-        item_type = st.item_type
-
-        # Per-item config: (folder_name, has_3d_model, blurb_lines, button_label)
-        # folder_name must match ItemNameFromID in platform/native_custom_racer.c.
-        _ITEM_INFO = {
-            'MASK': (
-                None, True,
-                ["Exports <slug>/mask/mask.ctr (shield) and/or",
-                 "<slug>/mask/beam.ctr (light beam). Both are",
-                 "static — retail rotates them per-tick.",
-                 "Roster must say mask=custom_good | custom_bad."],
-                "Mask",
-            ),
-            'MISSILE': (
-                "missile", True,
-                ["Exports <slug>/items/missile/model.ctr and",
-                 "<slug>/items/missile/sentinel_NN.bin.",
-                 "Overrides the missile model for this custom.",
-                 "No roster flag needed."],
-                "Missile",
-            ),
-            'BOMB': (
-                "bomb", True,
-                ["Exports <slug>/items/bomb/model.ctr and",
-                 "<slug>/items/bomb/sentinel_NN.bin.",
-                 "Overrides the bomb model for this custom.",
-                 "No roster flag needed."],
-                "Bomb",
-            ),
-            'MINE': (
-                "mine", True,
-                ["Exports <slug>/items/mine/model.ctr + sentinel_NN.bin.",
-                 "Overrides the TNT crate model (green, <10 wumpas).",
-                 "For juiced Nitro, use Item Type = Nitro.",
-                 "No roster flag needed."],
-                "Mine",
-            ),
-            'NITRO': (
-                "nitro", True,
-                ["Exports <slug>/items/nitro/model.ctr + sentinel_NN.bin.",
-                 "Overrides the Nitro crate model (juiced, >=10 wumpas).",
-                 "Explodes on contact; distinct from TNT.",
-                 "No roster flag needed."],
-                "Nitro",
-            ),
-            'BEAKER': (
-                "beaker", True,
-                ["Exports <slug>/items/beaker/model.ctr + sentinel_NN.bin.",
-                 "Overrides the GREEN potion model (<10 wumpas).",
-                 "For juiced red potion, use Item Type = Beaker Red.",
-                 "No roster flag needed."],
-                "Beaker",
-            ),
-            'BEAKER_RED': (
-                "beaker_red", True,
-                ["Exports <slug>/items/beaker_red/model.ctr + sentinel_NN.bin.",
-                 "Overrides the RED (juiced) potion model.",
-                 "No roster flag needed."],
-                "Beaker Red",
-            ),
-            'SHIELD': (
-                "shield", True,
-                ["Exports <slug>/items/shield/model.ctr + sentinel_NN.bin.",
-                 "Overrides the GREEN shield color layer.",
-                 "Retail dark shell + highlight are hidden automatically.",
-                 "For juiced blue shield, use Item Type = Shield Blue.",
-                 "No roster flag needed."],
-                "Shield",
-            ),
-            'SHIELD_BLUE': (
-                "shield_blue", True,
-                ["Exports <slug>/items/shield_blue/model.ctr + sentinel_NN.bin.",
-                 "Overrides the BLUE (juiced) shield color layer.",
-                 "Retail dark shell + highlight are hidden automatically.",
-                 "No roster flag needed."],
-                "Shield Blue",
-            ),
-            'WARPBALL': (
-                "warpball", True,
-                ["Exports <slug>/items/warpball/model.ctr + sentinel_NN.bin.",
-                 "Overrides the warpball tracker model.",
-                 "No roster flag needed."],
-                "Warpball",
-            ),
-            'CLOCK': (
-                "clock", False,
-                ["HUD icon only — the clock weapon has no 3D model",
-                 "instance in retail. Provide only the HUD icon PNG.",
-                 "No roster flag needed."],
-                None,   # no Export Model button
-            ),
-            'INVIS': (
-                "invisibility", False,
-                ["HUD icon only — invisibility has no 3D model",
-                 "instance in retail. Provide only the HUD icon PNG.",
-                 "No roster flag needed."],
-                None,   # no Export Model button
-            ),
-        }
-
-        folder_name, has_model, blurb, button_label = _ITEM_INFO[item_type]
+        scene = context.scene
+        st = scene.nfr_mask
+        obj = context.active_object
 
         layout.label(text="Custom Item Model", icon="MESH_DATA")
-        col = layout.column(align=True)
-        col.prop(st, "item_type", text="Item Type")
+        layout.prop(st, "item_type", text="Item Type")
+        
+        if st.item_type == 'MASK':
+            layout.label(text="Roster must say mask=custom_good | custom_bad.", icon="ERROR")
 
-        for line in blurb:
-            layout.label(text=line, icon="INFO")
+        is_icon_only = st.item_type in ('CLOCK', 'INVISIBILITY')
 
-        layout.separator()
-
-        obj = context.active_object
-        if has_model:
-            if obj is None or obj.type != "MESH":
-                layout.label(text="Select the mesh first", icon="ERROR")
+        if not is_icon_only:
+            if obj and obj.type == 'MESH':
+                layout.label(text=f"Mesh: {obj.name} ({len(obj.data.vertices)} verts)", icon="MESH_DATA")
             else:
-                layout.label(text=f"Mesh: {obj.name} "
-                                  f"({len(obj.data.vertices)} verts)",
-                             icon="MESH_DATA")
-        else:
-            layout.label(text="(no 3D model — icon only)", icon="INFO")
+                layout.label(text="Select the mesh first", icon="ERROR")
+                return
 
         col = layout.column(align=True)
         col.prop(st, "slug", text="Slug")
 
-        slug = (st.slug or "").strip()
-        if slug:
-            prefs = _get_prefs(context)
-            slug_dir = prefs.racers_dir() / slug
-            if slug_dir.is_dir():
-                existing = []
-                if item_type == 'MASK':
-                    mask_dir = slug_dir / "mask"
-                    if (mask_dir / "mask.ctr").is_file():
-                        existing.append("mask.ctr")
-                    if (mask_dir / "beam.ctr").is_file():
-                        existing.append("beam.ctr")
-                elif folder_name is not None:
-                    item_dir = slug_dir / "items" / folder_name
-                    if (item_dir / "model.ctr").is_file():
-                        existing.append(f"items/{folder_name}/model.ctr")
-                if existing:
-                    layout.label(text="Existing: " + ", ".join(existing),
-                                 icon="CHECKMARK")
-                layout.label(text=f"Racer folder: {slug}", icon="CHECKMARK")
-            else:
-                layout.label(text=f"Racer folder not found: {slug}",
-                             icon="ERROR")
-
-        # --- HUD Icon (optional) ---
-        icon_box = layout.box()
-        icon_box.label(text="HUD Icon (optional)", icon="IMAGE_DATA")
-        if item_type == 'MASK':
-            icon_box.label(text="Replaces the retail Aku/Uka face while")
-            icon_box.label(text="the mask is held. ~32x32 PNG.")
-        else:
-            icon_box.label(text="Replaces the retail icon while the")
-            icon_box.label(text=f"{item_type.lower()} is held. ~32x32 PNG.")
-        icon_box.prop(st, "icon_path", text="PNG")
-        row = icon_box.row(align=True)
-        row.scale_y = 1.3
-        row.enabled = bool(slug) and bool((st.icon_path or "").strip())
-        row.operator("nfr.mask_export_icon",
-                     text="Export Icon", icon="PLAY")
-
-        # --- Mask Music (optional): only for MASK ---
-        if item_type == 'MASK':
-            music_box = layout.box()
-            music_box.label(text="Mask Music (optional)", icon="SOUND")
-            music_box.label(text="WAV loop that plays while the mask is")
-            music_box.label(text="active. Encoded to VAG @ 11025 Hz.")
-            music_box.prop(st, "mask_music_path", text="WAV")
-            row = music_box.row(align=True)
-            row.scale_y = 1.3
-            row.enabled = bool(slug) and bool((st.mask_music_path or "").strip())
-            row.operator("nfr.mask_build_music",
-                         text="Build Mask Music", icon="PLAY")
-
-        # --- Actions ---
+        # --- HUD ICON ---
         layout.separator()
-        row = layout.row(align=True)
-        row.scale_y = 1.3
-        if item_type == 'MASK':
-            op = row.operator("nfr.mask_export",
-                              text="Export Mask", icon="EXPORT")
-            op.variant = 'MASK'
-            op = row.operator("nfr.mask_export", text="Export Beam")
-            op.variant = 'BEAM'
-        elif has_model and button_label:
-            op = row.operator("nfr.mask_export",
-                              text=f"Export {button_label}", icon="EXPORT")
-            op.variant = 'MASK'   # ignored for non-MASK items; see _export_one
+        row = layout.row()
+        row.prop(scene, "nfr_items_show_icon", text="", icon='TRIA_DOWN' if scene.nfr_items_show_icon else 'TRIA_RIGHT', emboss=False)
+        row.label(text="HUD Icon", icon="IMAGE_DATA")
+        
+        if scene.nfr_items_show_icon:
+            icon_box = layout.box()
+            if st.item_type == 'MASK':
+                icon_box.label(text="Replaces the Aku/Uka face.", icon="INFO")
+            elif is_icon_only:
+                icon_box.label(text="Replaces the HUD icon.", icon="INFO")
+            else:
+                icon_box.label(text="Replaces the item's HUD icon.", icon="INFO")
+            
+            icon_box.prop(st, "icon_path", text="PNG")
+            icon_box.operator("nfr.mask_export_icon", text="Export Icon", icon="PLAY")
 
+        # --- MASK MUSIC ---
+        if st.item_type == 'MASK':
+            layout.separator()
+            row = layout.row()
+            row.prop(scene, "nfr_items_show_music", text="", icon='TRIA_DOWN' if scene.nfr_items_show_music else 'TRIA_RIGHT', emboss=False)
+            row.label(text="Music", icon="SOUND")
+            
+            if scene.nfr_items_show_music:
+                music_box = layout.box()
+                music_box.label(text="WAV loop that plays while the mask is active.", icon="INFO")
+                music_box.prop(st, "mask_music_path", text="WAV")
+                music_box.operator("nfr.mask_build_music", text="Build Mask Music", icon="PLAY")
+
+        # --- OBJECT ---
+        layout.separator()
+        row = layout.row()
+        row.prop(scene, "nfr_items_show_object", text="", icon='TRIA_DOWN' if scene.nfr_items_show_object else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Object", icon="OBJECT_DATA")
+        
+        if scene.nfr_items_show_object:
+            box = layout.box()
+            if st.item_type == 'MASK':
+                row = box.row(align=True)
+                row.operator("nfr.mask_export", text="Export Mask", icon="FILE_TICK")
+                row.operator("nfr.mask_export", text="Export Beam", icon="FILE_TICK")
+            else:
+                box.operator("nfr.mask_export", text="Export Item", icon="FILE_TICK")
     def _draw_sfx(self, context, layout):
         st = context.scene.nfr_sfx
 
@@ -954,102 +847,64 @@ class NFR_PT_Racer(Panel):
                      text="Clear SFX", icon="TRASH")
 
     def _draw_voices(self, context, layout):
-        st = context.scene.nfr_voices
-        prefs = _get_prefs(context)
+        scene = context.scene
+        st = scene.nfr_voices
+        obj = context.active_object
 
         layout.label(text="Custom Voicelines", icon="SPEAKER")
-        layout.label(text="Pick WAVs per event. They are copied to",
-                     icon="INFO")
-        layout.label(text="<slug>/voices/<event>.wav, then the pipeline")
-        layout.label(text="regenerates ENG.XNF + S18.XA+ sidecars.")
-
-        layout.separator()
-
-        # --- Voice bank freshness (VOICELINES-ROSTER-FINGERPRINT) ---
-        repo_root = Path(DEFAULT_REPO)
-        pstatus, pdata = _pipeline_status(repo_root)
-        if pstatus == "missing":
-            warn = layout.row()
-            warn.alert = True
-            warn.label(text="Voice banks never built.", icon="ERROR")
-            layout.label(text="Click Build Voice Banks to generate them.")
-        elif pstatus == "stale":
-            warn = layout.row()
-            warn.alert = True
-            warn.label(text="Voice banks are STALE (roster changed).",
-                       icon="ERROR")
-            layout.label(text="Click Build Voice Banks to regenerate.")
-        elif pstatus == "stale_layout":
-            warn = layout.row()
-            warn.alert = True
-            warn.label(text="Voice banks use the OLD event layout.",
-                       icon="ERROR")
-            layout.label(text="Click Build Voice Banks to regenerate.")
-        elif pstatus == "fresh" and pdata is not None:
-            n_banks = pdata.get("banks_written", "?")
-            gen = pdata.get("generated_at", "?")
-            layout.label(text=f"Voice banks up to date "
-                              f"({n_banks} banks, {gen}).",
-                         icon="CHECKMARK")
-        # 'no_roster' -> silent
-
-        layout.separator()
-
-        active_racer = _active_racer(context)
-        active_slug = active_racer.slug if active_racer else None
-
+        
         col = layout.column(align=True)
         col.prop(st, "slug", text="Slug")
-
-        slug = (st.slug or "").strip()
-        if slug:
-            slug_dir = prefs.racers_dir() / slug
+        
+        if st.slug:
+            slug_dir = _get_prefs(context).racers_dir() / st.slug
             if slug_dir.is_dir():
-                layout.label(text=f"Racer folder exists: {slug}",
-                             icon="CHECKMARK")
+                layout.label(text=f"Racer folder exists: {st.slug}", icon="CHECKMARK")
             else:
-                layout.label(text=f"Racer folder not found: {slug}",
-                             icon="ERROR")
-        elif active_slug:
-            layout.label(text=f"Active racer: {active_slug}",
-                         icon="INFO")
+                layout.label(text=f"Racer folder not found: {st.slug}", icon="ERROR")
 
-        # Source folder: pick any folder on disk with the source WAVs.
-        src_box = layout.box()
-        src_box.label(text="Source Folder", icon="FILE_FOLDER")
-        src_box.prop(st, "source_dir", text="")
-        row = src_box.row(align=True)
-        row.scale_y = 1.3
-        src_str = (st.source_dir or "").strip()
-        row.enabled = bool(src_str) and Path(bpy.path.abspath(src_str)).is_dir()
-        row.operator("nfr.voices_auto_detect",
-                     text="Auto-detect from folder", icon="FILE_REFRESH")
-
+        # --- SOURCE FOLDER ---
         layout.separator()
+        row = layout.row()
+        row.prop(scene, "nfr_voices_show_source", text="", icon='TRIA_DOWN' if scene.nfr_voices_show_source else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Source Folder (Auto-detect)", icon="FILE_FOLDER")
+        
+        if scene.nfr_voices_show_source:
+            src_box = layout.box()
+            src_box.prop(st, "source_dir", text="")
+            src_box.operator("nfr.voices_auto_detect", text="Auto-detect from folder", icon="FILE_REFRESH")
 
-        box = layout.box()
-        box.label(text="Gameplay Events", icon="SOUND")
-        for event, label, _desc in VOICE_EVENTS[:MENU_SPLIT_INDEX]:
-            row = box.row(align=True)
-            row.label(text=f"{label}:")
-            row.prop(st, event, text="")
-
-        box = layout.box()
-        box.label(text="Menu Events", icon="SOUND")
-        for event, label, _desc in VOICE_EVENTS[MENU_SPLIT_INDEX:]:
-            row = box.row(align=True)
-            row.label(text=f"{label}:")
-            row.prop(st, event, text="")
-
+        # --- GAMEPLAY EVENTS ---
         layout.separator()
-        row = layout.row(align=True)
-        row.scale_y = 1.4
-        row.enabled = bool(slug)
-        row.operator("nfr.voices_build",
-                     text="Build Voice Banks", icon="PLAY")
+        row = layout.row()
+        row.prop(scene, "nfr_voices_show_gameplay", text="", icon='TRIA_DOWN' if scene.nfr_voices_show_gameplay else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Gameplay Events", icon="SOUND")
+        
+        if scene.nfr_voices_show_gameplay:
+            box = layout.box()
+            # Bucle robusto que no rompe si VOICE_EVENTS cambió de formato
+            for i, item in enumerate(VOICE_EVENTS):
+                if i >= MENU_SPLIT_INDEX: break
+                event = item[0] if isinstance(item, tuple) else item
+                box.prop(st, event, text="")
 
+        # --- MENU EVENTS ---
+        layout.separator()
+        row = layout.row()
+        row.prop(scene, "nfr_voices_show_menu", text="", icon='TRIA_DOWN' if scene.nfr_voices_show_menu else 'TRIA_RIGHT', emboss=False)
+        row.label(text="Menu Events", icon="SOUND")
+        
+        if scene.nfr_voices_show_menu:
+            box = layout.box()
+            # Bucle robusto
+            for i, item in enumerate(VOICE_EVENTS):
+                if i < MENU_SPLIT_INDEX: continue
+                event = item[0] if isinstance(item, tuple) else item
+                box.prop(st, event, text="")
 
-
+        # --- BUILD BUTTON ---
+        layout.separator()
+        layout.operator("nfr.voices_build", text="Build Voice Banks", icon="PLAY")
     def _draw_levels(self, context, layout):
         st = context.scene.nfr_levels
         

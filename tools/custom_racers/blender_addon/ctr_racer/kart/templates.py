@@ -11,7 +11,7 @@ KART_TEMPLATES = {
             "GOLD_PIPES": {"atlas": "template05.png", "pipes": "template03.png", "extra1": "template06.png", "extra2": "template07.png"},
             "SILVER_PIPES": {"atlas": "template05.png", "pipes": "template04.png", "extra1": "template06.png", "extra2": "template07.png"},
         },
-        "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2")],
+        "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Motor", "extra1"), ("Exhaust Pipe", "extra2")],
         "bake_size": (112, 107),
         "cutter": [
             ("kart_00", (3, 3, 35, 19)), ("kart_01", (38, 3, 70, 19)), ("kart_02", (82, 3, 98, 19)),
@@ -31,7 +31,7 @@ KART_TEMPLATES = {
             "GOLD_PIPES": {"atlas": "template08.png", "pipes": "template09.png", "extra1": "template011.png"},
             "SILVER_PIPES": {"atlas": "template08.png", "pipes": "template09.png", "extra1": "template012.png"},
         },
-        "zones": [("Body", "atlas"), ("Pipes", "pipes"), ("Extra", "extra1")],
+        "zones": [("Body", "atlas"), ("Exhaust Pipes", "pipes"), ("Pipes", "extra1")],
         "bake_size": (474, 192),
         "cutter": [
             ("hi_kart_00", (301, 47, 365, 111)), ("hi_kart_01", (112, 87, 176, 119)), ("hi_kart_02", (318, 10, 350, 14)),
@@ -52,7 +52,7 @@ KART_TEMPLATES = {
         "variant_textures": {
             "DEFAULT": {"atlas": "template013.png", "pipes": "template014.png", "extra1": "template015.png", "extra2": "template016.png", "extra3": "template017.png", "extra4": "template018.png"},
         },
-        "zones": [("Atlas", "atlas"), ("Pipes", "pipes"), ("Extra 1", "extra1"), ("Extra 2", "extra2"), ("Extra 3", "extra3"), ("Extra 4", "extra4")],
+        "zones": [("Details", "atlas"), ("Fire", "pipes"), ("Propulsor", "extra1"), ("Seat", "extra2"), ("Exhaust Pipes", "extra3"), ("Body", "extra4")],
         "bake_size": (195, 128),
         "cutter": [
             ("chopper_00", (8, 4, 28, 19)), ("chopper_01", (67, 59, 79, 69)), ("chopper_02", (11, 71, 18, 95)),
