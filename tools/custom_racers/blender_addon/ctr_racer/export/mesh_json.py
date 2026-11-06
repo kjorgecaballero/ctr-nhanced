@@ -1,3 +1,9 @@
+
+def _linear_to_srgb(c):
+    if c <= 0.0031308:
+        return 12.92 * c
+    return 1.055 * (c ** (1.0 / 2.4)) - 0.055
+
 # =========================================================================
 # MODULE: export — mesh json
 # =========================================================================
@@ -203,7 +209,9 @@ def _do_export_body(context, obj):
 
     if tuple(r.color[:3]) != (1.0, 1.0, 1.0):
         hexcol = "#{:02X}{:02X}{:02X}".format(
-            int(r.color[0] * 255), int(r.color[1] * 255), int(r.color[2] * 255))
+            int(_linear_to_srgb(r.color[0]) * 255), 
+            int(_linear_to_srgb(r.color[1]) * 255), 
+            int(_linear_to_srgb(r.color[2]) * 255))
         cmd += ["--color", hexcol]
 
     res = subprocess.run(cmd, cwd=str(prefs.repo_path),
