@@ -121,68 +121,105 @@ class NFR_OT_ExportAll(Operator):
 
 
 class NFR_OT_SaveSettings(Operator):
-    bl_description = "Save the current racer settings to a JSON file"
+    bl_description = "Save all project settings (racers, levels, karts, matrices) to a JSON file"
     bl_idname = "nfr.save_settings"
-    bl_label = "Save Settings JSON"
+    bl_label = "Save Project Settings"
     filepath: StringProperty(subtype="FILE_PATH")
     filter_glob: StringProperty(default="*.json")
 
     def invoke(self, context, event):
         if not self.filepath:
-            self.filepath = str(Path(_get_prefs(context).repo_path) / "racer_settings.json")
+            self.filepath = str(Path(_get_prefs(context).repo_path) / "project_settings.json")
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        data = {}
+        data = {"racers": {}, "scene": {}}
+        
+        # 1. Guardar todos los Racer Props (SIN RUTAS DE ARCHIVOS)
         for obj in bpy.data.objects:
-            if obj.type != "MESH" or not obj.racer.is_racer:
+            if obj.type != "MESH" or not obj.racer.is_racer:      
                 continue
             r = obj.racer
-            data[obj.name] = {
+            data["racers"][obj.name] = {
                 "slug": r.slug, "page": r.page, "slot": r.slot, "engine": r.engine,
                 "long_name": r.long_name, "short_name": r.short_name,
-                "color": list(r.color), "icon_path": r.icon_path,
-                "mask": r.mask, "wheels": r.wheels,
+                "color": list(r.color), "mask": r.mask, "wheels": r.wheels,
+                "kart_rot": r.kart_rot,
+                "jump_rot_pitch": r.jump_rot_pitch,
+                "jump_rot_roll": r.jump_rot_roll,
+                "jump_rot_yaw": r.jump_rot_yaw,
+                "jump_rot_pivot_z": r.jump_rot_pivot_z,
+                "jump_rot_frames": r.jump_rot_frames,
             }
+            
+        # 2. Guardar escena (SIN RUTAS DE ARCHIVOS)
+        scene = context.scene
+        data["scene"]["levels"] = {
+            "level_name": scene.nfr_levels.level_name,
+            "action_type": scene.nfr_levels.action_type,
+            "replace_target": scene.nfr_levels.replace_target,
+        }
+        data["scene"]["dance"] = {
+            "slug": scene.nfr_dance.slug,
+            "win_start": scene.nfr_dance.win_start,
+            "win_end": scene.nfr_dance.win_end,
+            "loose_start": scene.nfr_dance.loose_start,
+            "loose_end": scene.nfr_dance.loose_end,
+        }
+        data["scene"]["kart"] = {
+            "template_filter": scene.kart_state.template_filter,
+            "variant_filter": scene.kart_state.variant_filter,
+        }
+            
         Path(self.filepath).write_text(json.dumps(data, indent=2), encoding="utf-8")
-        self.report({"INFO"}, f"Saved {len(data)} racers to {self.filepath}")
+        self.report({"INFO"}, f"Saved {len(data['racers'])} racers and scene settings.")
         return {"FINISHED"}
 
 
 class NFR_OT_LoadSettings(Operator):
-    bl_description = "Load racer settings from a JSON file"
+    bl_description = "Load project settings (racers, levels, karts, matrices) from a JSON file"
     bl_idname = "nfr.load_settings"
-    bl_label = "Load Settings JSON"
+    bl_label = "Load Project Settings"
     filepath: StringProperty(subtype="FILE_PATH")
     filter_glob: StringProperty(default="*.json")
 
     def invoke(self, context, event):
+        if not self.filepath:
+            self.filepath = str(Path(_get_prefs(context).repo_path) / "project_settings.json")
         context.window_manager.fileselect_add(self)
         return {"RUNNING_MODAL"}
 
     def execute(self, context):
-        data = json.loads(Path(self.filepath).read_text(encoding="utf-8"))
-        loaded = 0
-        for name, d in data.items():
-            obj = bpy.data.objects.get(name)
-            if obj is None or obj.type != "MESH":
-                continue
+        try:
+            data = json.loads(Path(self.filepath).read_text(encoding="utf-8"))
+        except Exception as e:
+            self.report({"ERROR"}, f"Failed to load JSON: {e}")
+            return {"CANCELLED"}
+            
+        # 1. Cargar Racer Props
+        racers = data.get("racers", {})
+        for obj_name, r_data in racers.items():
+            obj = bpy.data.objects.get(obj_name)
+            if not obj or obj.type != "MESH": continue
             r = obj.racer
-            r.is_racer = True
-            r.slug = d.get("slug", "")
-            r.page = int(d.get("page", 1))
-            r.slot = int(d.get("slot", 0))
-            r.engine = d.get("engine", "BALANCED")
-            r.long_name = d.get("long_name", "")
-            r.short_name = d.get("short_name", "")
-            c = d.get("color", [1.0, 1.0, 1.0, 1.0])
-            r.color = tuple(c[:4]) if len(c) >= 3 else (1.0, 1.0, 1.0, 1.0)
-            r.icon_path = d.get("icon_path", "")
-            r.mask      = d.get("mask",   "good")
-            r.wheels    = d.get("wheels", "yes")
-            loaded += 1
-        self.report({"INFO"}, f"Loaded {loaded} racers from {self.filepath}")
+            for k, v in r_data.items():
+                if hasattr(r, k): setattr(r, k, v)
+                
+        # 2. Cargar Escena
+        scene = context.scene
+        sc_data = data.get("scene", {})
+        if "levels" in sc_data:
+            for k, v in sc_data["levels"].items():
+                if hasattr(scene.nfr_levels, k): setattr(scene.nfr_levels, k, v)
+        if "dance" in sc_data:
+            for k, v in sc_data["dance"].items():
+                if hasattr(scene.nfr_dance, k): setattr(scene.nfr_dance, k, v)
+        if "kart" in sc_data:
+            for k, v in sc_data["kart"].items():
+                if hasattr(scene.kart_state, k): setattr(scene.kart_state, k, v)
+                
+        self.report({"INFO"}, "Project settings loaded successfully.")
         return {"FINISHED"}
 
 

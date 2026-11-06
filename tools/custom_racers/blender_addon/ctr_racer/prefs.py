@@ -25,7 +25,7 @@ DEFAULT_ANIM_FRAME_RANGES = (
 class NFR_Preferences(AddonPreferences):
     bl_idname = ADDON_ID
 
-    repo_path:  StringProperty(name="Game Folder", default=DEFAULT_REPO, subtype="DIR_PATH")
+    repo_path:  StringProperty(name="Project Path", default=DEFAULT_REPO, subtype="DIR_PATH")
     python_exe: StringProperty(name="Python Exe", default=DEFAULT_PYTHON, subtype="FILE_PATH")
     build_dir:  StringProperty(
         name="Build Dir",
