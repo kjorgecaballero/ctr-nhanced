@@ -507,7 +507,7 @@ void GhostReplay_ThTick(struct Thread *t)
 
 	if (ReplayDbg() && d->ghostID == 0 && s_dbgF < 120)
 	{
-		fprintf(stderr, "[GDBG-E] f=%d tl=%d ms=%d tir=%d t01=%d t32=%d pid=%d n=%d t=(%d,%d,%d)\n",
+		if(0) fprintf(stderr, "[GDBG-E] f=%d tl=%d ms=%d tir=%d t01=%d t32=%d pid=%d n=%d t=(%d,%d,%d)\n",
 			s_dbgF, (int)gGT->trafficLightsTimer, (int)gGT->elapsedTimeMS,
 			(int)tape->timeElapsedInRace, (int)tape->timeInPacket01, (int)tape->timeInPacket32,
 			(int)tape->packetID, (int)tape->numPacketsInArray,
@@ -535,10 +535,10 @@ void GhostReplay_Init1(void)
 	sdata->GhostRecording.ptrGhost = gh;
 	sdata->GhostRecording.ptrStartOffset = &recordBuffer[0];
 	if (ReplayDbg())
-		fprintf(stderr, "[GDBG-G] Init1 gh=%p end=%p size=0x3e00\n", (void*)gh, (void*)((u8*)gh + 0x3e00));
+		if(0) fprintf(stderr, "[GDBG-G] Init1 gh=%p end=%p size=0x3e00\n", (void*)gh, (void*)((u8*)gh + 0x3e00));
 	sdata->GhostRecording.ptrEndOffset = &recordBuffer[0x3DD4];
 if (ReplayDbg())
-	fprintf(stderr, "[GDBG-T] Init1 gh=%p start=%p cur=%p end=%p start-gh=%d\n",
+	if(0) fprintf(stderr, "[GDBG-T] Init1 gh=%p start=%p cur=%p end=%p start-gh=%d\n",
         (void*)sdata->GhostRecording.ptrGhost,
         (void*)sdata->GhostRecording.ptrStartOffset,
         (void*)sdata->GhostRecording.ptrCurrOffset,
@@ -573,7 +573,7 @@ if (ReplayDbg())
 		{
 			if (Ghost_IsCustomLevel(gGT))
 			{
-				fprintf(stderr, "[GHOST] Init1 guard: lod=%d active=%p repl=%p\n",
+				if(0) fprintf(stderr, "[GHOST] Init1 guard: lod=%d active=%p repl=%p\n",
 				        (int)sdata->levelLOD, (void*)LevelRegistry_GetActive(),
 				        (void*)LevelRegistry_GetReplacement(gGT->levelID));
 				continue;
@@ -633,7 +633,7 @@ if (ReplayDbg())
 			s32 charID = data.characterIDs[i + 1];
 			if (charID < 0 || charID >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
 			{
-				fprintf(stderr, "[SANITY] Init1 thread i=%d charID=%d invalid, forcing 0\n", (int)i, charID);
+				if(0) fprintf(stderr, "[SANITY] Init1 thread i=%d charID=%d invalid, forcing 0\n", (int)i, charID);
 				charID = 0;
 				data.characterIDs[i + 1] = 0;
 			}
@@ -736,7 +736,7 @@ void GhostReplay_Init2(void)
 
 			if (Ghost_IsCustomLevel(gGT))
 			{
-				fprintf(stderr, "[GHOST] Init2 guard: lod=%d active=%p repl=%p\n",
+				if(0) fprintf(stderr, "[GHOST] Init2 guard: lod=%d active=%p repl=%p\n",
 				        (int)sdata->levelLOD, (void*)LevelRegistry_GetActive(),
 				        (void*)LevelRegistry_GetReplacement(gGT->levelID));
 				continue;
@@ -757,7 +757,7 @@ void GhostReplay_Init2(void)
 		if (ghostID == 0 && ReplayDbg())
 		{
 			u8 *rb = (u8 *)tape->ptrStart;
-			fprintf(stderr, "[GDBG-D] tape=%p gh=%p ptrStart=%p size=%d ptrPlaying=%p rb=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+			if(0) fprintf(stderr, "[GDBG-D] tape=%p gh=%p ptrStart=%p size=%d ptrPlaying=%p rb=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
 				(void*)tape, (void*)tape->gh, (void*)tape->ptrStart,
 				(int)((u8*)tape->ptrEnd - (u8*)tape->ptrStart),
 				(void*)sdata->ptrGhostTapePlaying,
@@ -810,7 +810,7 @@ void GhostReplay_Init2(void)
 		INSTANCE_Birth(inst, model, name, inst->thread, 7);
 		if (ghostID == 0 && ReplayDbg())
 		{
-			fprintf(stderr, "[GDBG-I] size=%d char=%d start=%p len=%d first32=",
+			if(0) fprintf(stderr, "[GDBG-I] size=%d char=%d start=%p len=%d first32=",
 				(int)tape->gh->size, (int)tape->gh->characterID,
 				(void *)tape->ptrStart,
 				(int)((char *)tape->ptrEnd - (char *)tape->ptrStart));

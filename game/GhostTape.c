@@ -19,7 +19,7 @@ static int s_ghostDbgPaddingWarned = 0;
 void GhostTape_Start(void)
 {
 	if (GhostDbg())
-		fprintf(stderr, "[GDBG-PM] prim start=%p cap=%u cursor=%p ghost=%p\n",
+		if(0) fprintf(stderr, "[GDBG-PM] prim start=%p cap=%u cursor=%p ghost=%p\n",
 			(void *)sdata->gGT->backBuffer->primMem.start, (unsigned)sdata->gGT->backBuffer->primMem.capacityBytes,
 			(void *)sdata->gGT->backBuffer->primMem.cursor, (void *)sdata->GhostRecording.ptrGhost);
 	struct GhostHeader *gh;
@@ -58,7 +58,7 @@ void GhostTape_Start(void)
 	s_ghostDbgPaddingWarned = 0;
 
 	if (GhostDbg())
-		fprintf(stderr, "[GDBG-S] Start called tl=%d timer=%d cur-start=%d\n",
+		if(0) fprintf(stderr, "[GDBG-S] Start called tl=%d timer=%d cur-start=%d\n",
 			(int)gGT->trafficLightsTimer, (int)gGT->timer,
 			(int)((char*)sdata->GhostRecording.ptrCurrOffset - (char*)sdata->GhostRecording.ptrStartOffset));
 	sdata->GhostRecording.ptrCurrOffset = sdata->GhostRecording.ptrStartOffset;
@@ -78,7 +78,7 @@ void GhostTape_Start(void)
 	{
 		u8 *h14 = (u8 *)gh + 0x14;
 		u8 *rb = (u8 *)sdata->GhostRecording.ptrStartOffset;
-		fprintf(stderr, "[GDBG-A] gh=%p ptrStart=%p h14=%02X %02X %02X %02X %02X %02X %02X %02X rb=%02X %02X %02X %02X %02X %02X %02X %02X\n",
+		if(0) fprintf(stderr, "[GDBG-A] gh=%p ptrStart=%p h14=%02X %02X %02X %02X %02X %02X %02X %02X rb=%02X %02X %02X %02X %02X %02X %02X %02X\n",
 			(void*)gh, (void*)rb,
 			h14[0], h14[1], h14[2], h14[3], h14[4], h14[5], h14[6], h14[7],
 			rb[0], rb[1], rb[2], rb[3], rb[4], rb[5], rb[6], rb[7]);
@@ -95,7 +95,7 @@ void GhostTape_Start(void)
 
 	s_ghostDbgN = 0;
 	if (GhostDbg())
-		fprintf(stderr, "[GDBG-T] Start gh=%p start=%p cur=%p end=%p start-gh=%d\n",
+		if(0) fprintf(stderr, "[GDBG-T] Start gh=%p start=%p cur=%p end=%p start-gh=%d\n",
         (void*)sdata->GhostRecording.ptrGhost,
         (void*)sdata->GhostRecording.ptrStartOffset,
         (void*)sdata->GhostRecording.ptrCurrOffset,
@@ -103,7 +103,7 @@ void GhostTape_Start(void)
         (int)((char*)sdata->GhostRecording.ptrStartOffset - (char*)sdata->GhostRecording.ptrGhost));
 
 if (GhostDbg())
-	fprintf(stderr, "[GDBG] Start#%d tl=%d canSave=%d Vel=(%d,%d,%d) cur=%p start=%p b0..3=%02X %02X %02X %02X\n",
+	if(0) fprintf(stderr, "[GDBG] Start#%d tl=%d canSave=%d Vel=(%d,%d,%d) cur=%p start=%p b0..3=%02X %02X %02X %02X\n",
 	    ++s_ghostDbgStartCount, (int)gGT->trafficLightsTimer, (int)sdata->boolCanSaveGhost,
 	    (int)sdata->GhostRecording.VelX, (int)sdata->GhostRecording.VelY, (int)sdata->GhostRecording.VelZ,
 	    (void*)sdata->GhostRecording.ptrCurrOffset, (void*)sdata->GhostRecording.ptrStartOffset,
@@ -130,12 +130,12 @@ void GhostTape_End(void)
 	sdata->boolCanSaveGhost = 0;
 
 	if (GhostDbg())
-		fprintf(stderr, "[GDBG] End#%d off=%d\n", ++s_ghostDbgEndCount,
+		if(0) fprintf(stderr, "[GDBG] End#%d off=%d\n", ++s_ghostDbgEndCount,
 	    (int)((char*)sdata->GhostRecording.ptrCurrOffset - (char*)sdata->GhostRecording.ptrStartOffset));
 
 	// Write the last chunk of ghost data
 	if (GhostDbg())
-		fprintf(stderr, "[GDBG-T] End gh=%p start=%p cur=%p end=%p start-gh=%d\n",
+		if(0) fprintf(stderr, "[GDBG-T] End gh=%p start=%p cur=%p end=%p start-gh=%d\n",
         (void*)sdata->GhostRecording.ptrGhost,
         (void*)sdata->GhostRecording.ptrStartOffset,
         (void*)sdata->GhostRecording.ptrCurrOffset,
@@ -167,13 +167,13 @@ GhostTape_WriteMoves(1);
 	if (GhostDbg())
 	{
 		unsigned char *b = (unsigned char *)sdata->GhostRecording.ptrStartOffset;
-		fprintf(stderr, "[GDBG] End: size=%d first40:", (int)gh->size);
+		if(0) fprintf(stderr, "[GDBG] End: size=%d first40:", (int)gh->size);
 		for (int i = 0; i < 40; i++) fprintf(stderr, " %02X", b[i]);
 		fprintf(stderr, "\n");
 	}
 
 	if (GhostDbg())
-		fprintf(stderr, "[GHOST-DBG] End:   ptr=%p charID=%d lvlID=%d size=%d\n",
+		if(0) fprintf(stderr, "[GHOST-DBG] End:   ptr=%p charID=%d lvlID=%d size=%d\n",
 		        (void *)gh, (int)gh->characterID,
 		        (int)gh->levelID, (int)gh->size);
 
@@ -181,7 +181,7 @@ GhostTape_WriteMoves(1);
 	{
 		u8 *h14 = (u8 *)gh + 0x14;
 		u8 *rb = (u8 *)sdata->GhostRecording.ptrStartOffset;
-		fprintf(stderr, "[GDBG-B] gh=%p ptrStart=%p ptrCurr=%p size=%d h14=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X rb=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+		if(0) fprintf(stderr, "[GDBG-B] gh=%p ptrStart=%p ptrCurr=%p size=%d h14=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X rb=%02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
 			(void*)gh, (void*)rb, (void*)sdata->GhostRecording.ptrCurrOffset, (int)gh->size,
 			h14[0], h14[1], h14[2], h14[3], h14[4], h14[5], h14[6], h14[7],
 			h14[8], h14[9], h14[10], h14[11], h14[12], h14[13], h14[14], h14[15],
@@ -190,7 +190,7 @@ GhostTape_WriteMoves(1);
 	}
 
 	if (GhostDbg())
-		fprintf(stderr, "[GHOST-DBG] EndBuf: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+		if(0) fprintf(stderr, "[GHOST-DBG] EndBuf: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
 		        ((u8 *)sdata->GhostRecording.ptrStartOffset)[0],
 		        ((u8 *)sdata->GhostRecording.ptrStartOffset)[1],
 		        ((u8 *)sdata->GhostRecording.ptrStartOffset)[2],
@@ -252,7 +252,7 @@ void GhostTape_WriteMoves(s16 raceFinished)
 		s_wdFired = 1;
 		if (GhostDbg())
 		{
-			fprintf(stderr, "[GDBG-W2] DIRTY timer=%d tl=%d frame=%d cur-start=%d first20=",
+			if(0) fprintf(stderr, "[GDBG-W2] DIRTY timer=%d tl=%d frame=%d cur-start=%d first20=",
 				(int)gGT->timer, (int)gGT->trafficLightsTimer, (int)sdata->frameCounter,
 				(int)((char *)sdata->GhostRecording.ptrCurrOffset - (char *)sdata->GhostRecording.ptrStartOffset));
 			for (int i = 0; i < 20; i++) fprintf(stderr, "%02X ", p[i]);
@@ -271,7 +271,7 @@ s_ghostDbgFrame++;
 		if (sum != 0)
 		{
 			if (GhostDbg())
-				fprintf(stderr, "[GDBG-W] padding dirty: frame=%d tl=%d off=%d\n", s_ghostDbgFrame, (int)gGT->trafficLightsTimer, (int)((char*)sdata->GhostRecording.ptrCurrOffset - (char*)sdata->GhostRecording.ptrStartOffset));
+				if(0) fprintf(stderr, "[GDBG-W] padding dirty: frame=%d tl=%d off=%d\n", s_ghostDbgFrame, (int)gGT->trafficLightsTimer, (int)((char*)sdata->GhostRecording.ptrCurrOffset - (char*)sdata->GhostRecording.ptrStartOffset));
 			s_ghostDbgPaddingWarned = 1;
 		}
 	}
@@ -291,7 +291,7 @@ s_ghostDbgFrame++;
 
 		if (s_ghostDbgN < 4 && GhostDbg())
 		{
-			fprintf(stderr, "[GDBG] WM#%d tl=%d cur=%p same=%d Vel=(%d,%d,%d) c16=%d off=%d\n",
+			if(0) fprintf(stderr, "[GDBG] WM#%d tl=%d cur=%p same=%d Vel=(%d,%d,%d) c16=%d off=%d\n",
 				s_ghostDbgN, (int)gGT->trafficLightsTimer,
 				(void*)sdata->GhostRecording.ptrCurrOffset, (int)(driver == gGT->drivers[0]),
 				(int)sdata->GhostRecording.VelX, (int)sdata->GhostRecording.VelY, (int)sdata->GhostRecording.VelZ,
@@ -463,7 +463,7 @@ s_ghostDbgFrame++;
 		if (s_ghostDbgN < 4)
 		{
 			if (GhostDbg())
-				fprintf(stderr, "[GDBG]   wrote %d bytes, first=%02X\n",
+				if(0) fprintf(stderr, "[GDBG]   wrote %d bytes, first=%02X\n",
 					(int)(writeCursor - (char*)sdata->GhostRecording.ptrCurrOffset),
 					(u8)((char*)sdata->GhostRecording.ptrCurrOffset)[0]);
 			s_ghostDbgN++;
@@ -480,7 +480,7 @@ s_ghostDbgFrame++;
 	sdata->GhostRecording.timeElapsedInRace += gGT->elapsedTimeMS;
 
 	if (GhostDbg() && s_ghostDbgFrame % 300 == 0) {
-		fprintf(stderr, "[GDBG-PM] frame=%d cursor-start=%d cap=%u\n", s_ghostDbgFrame, 
+		if(0) fprintf(stderr, "[GDBG-PM] frame=%d cursor-start=%d cap=%u\n", s_ghostDbgFrame, 
 			(int)((u8*)sdata->gGT->backBuffer->primMem.cursor - (u8*)sdata->gGT->backBuffer->primMem.start), 
 			(unsigned)sdata->gGT->backBuffer->primMem.capacityBytes);
 	}
@@ -502,7 +502,7 @@ void GhostTape_WriteBoosts(int addReserve, u8 type, int speedCap)
 	writeCursor = sdata->GhostRecording.ptrCurrOffset;
 
 	if (GhostDbg())
-		fprintf(stderr, "[GHOST-DBG] WriteBoosts: ptr=%p off=%d\n",
+		if(0) fprintf(stderr, "[GHOST-DBG] WriteBoosts: ptr=%p off=%d\n",
 		        (void *)writeCursor,
 		        (int)(writeCursor - (char *)sdata->GhostRecording.ptrStartOffset));
 

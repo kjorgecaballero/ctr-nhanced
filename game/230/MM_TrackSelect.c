@@ -107,7 +107,7 @@ static void MM_TrackSelect_PopulateCustomTracks(void)
 		    realloc(s_combinedArcadeTracks, (size_t)needed * sizeof(struct MainMenu_LevelRow));
 		if (newBuf == NULL)
 		{
-			fprintf(stderr, "[TrackSelect] ERROR: realloc %d arcade rows failed, customs disabled\n", needed);
+			if(0) fprintf(stderr, "[TrackSelect] ERROR: realloc %d arcade rows failed, customs disabled\n", needed);
 			n = 0;
 		}
 		else
@@ -161,7 +161,7 @@ static void MM_TrackSelect_PopulateCustomBattleTracks(void)
 		    realloc(s_combinedBattleTracks, (size_t)needed * sizeof(struct MainMenu_LevelRow));
 		if (newBuf == NULL)
 		{
-			fprintf(stderr, "[TrackSelect] ERROR: realloc %d battle rows failed, customs disabled\n", needed);
+			if(0) fprintf(stderr, "[TrackSelect] ERROR: realloc %d battle rows failed, customs disabled\n", needed);
 			n = 0;
 		}
 		else
@@ -631,7 +631,7 @@ void MM_TrackSelect_MenuProc(struct RectMenu *menu)
 					// allocate room at the end of RAM for ghosts
 					sdata->ptrGhostTapePlaying = MEMPACK_AllocHighMem(MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE /*, R230.s_loaded_ghost_data*/);
 					if (TrackSelDbg())
-						fprintf(stderr, "[GDBG-F] ptrGhostTapePlaying=%p size=0x%X\n", (void*)sdata->ptrGhostTapePlaying, MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE);
+						if(0) fprintf(stderr, "[GDBG-F] ptrGhostTapePlaying=%p size=0x%X\n", (void*)sdata->ptrGhostTapePlaying, MM_TRACK_SELECT_GHOST_TAPE_ALLOC_SIZE);
 
 					memset(sdata->ptrGhostTapePlaying, 0, MM_TRACK_SELECT_GHOST_TAPE_CLEAR_SIZE);
 

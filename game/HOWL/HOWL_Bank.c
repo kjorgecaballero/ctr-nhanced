@@ -149,8 +149,8 @@ int Bank_AssignSpuAddrs()
 		struct SpuAddrEntry *sae;
 
 #if 0
-		printf("New\n");
-		printf("%08x\n", sdata->audioAllocPtr);
+		if(0) printf("New\n");
+		if(0) printf("%08x\n", sdata->audioAllocPtr);
 #endif
 
 		for (i = 0; i < sdata->ptrSampleBlock1->numSamples; i++)
@@ -165,7 +165,7 @@ int Bank_AssignSpuAddrs()
 			audioAllocPtr += sae->spuSize;
 
 #if 0
-			printf("%08x\n", audioAllocPtr);
+			if(0) printf("%08x\n", audioAllocPtr);
 #endif
 		}
 

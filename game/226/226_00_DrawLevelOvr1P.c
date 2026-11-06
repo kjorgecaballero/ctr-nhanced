@@ -113,7 +113,7 @@ static void DrawLevelOvr1P_WritePackedWord(void *dst, u32 value)
 	if (gs != NULL && d >= gs && d < gs + 0x3e00)
 	{
 		if (Ghost226Dbg())
-			fprintf(stderr, "[GDBG-R] render writes into ghost buf dst=%p off=%d\n", dst, (int)(d - gs));
+			if(0) fprintf(stderr, "[GDBG-R] render writes into ghost buf dst=%p off=%d\n", dst, (int)(d - gs));
 		return;
 	}
 #endif
@@ -2403,7 +2403,7 @@ static void DrawLevelOvr1P_CopyClipRecordVertex(struct DrawLevelOvr1PClipRecordV
 			{
 				static int n = 0;
 				if (n++ < 20)
-					fprintf(stderr, "[GDBG-CV] dst=%p off=%d\n", (void *)dst, (int)((u8 *)dst - gs));
+					if(0) fprintf(stderr, "[GDBG-CV] dst=%p off=%d\n", (void *)dst, (int)((u8 *)dst - gs));
 			}
 			return;
 		}
@@ -6687,7 +6687,7 @@ static int Ovr226_800a861c_DynamicRenderedNearOrDirect(struct PushBuffer *pb, st
 			if (depth > s_maxDepth) {
 				s_maxDepth = depth;
 				if (Ghost226Dbg())
-					fprintf(stderr, "[GDBG-DEPTH] new max depth=%d hits=%d projected=%p\n", depth, s_hits, (void*)projected);
+					if(0) fprintf(stderr, "[GDBG-DEPTH] new max depth=%d hits=%d projected=%p\n", depth, s_hits, (void*)projected);
 			}
 		}
 	}
