@@ -15,7 +15,7 @@ extern int  gNativeDitheringEnabled;
  *     indistinguishable from HIGH on modern hardware. Forced HIGH
  *     via NativeSettings (see native_settings.c). */
 static const char *const s_labels[4] = {
-    "DISPLAY MODE", "RESOLUTION", "DITHERING", "ASPECT RATIO"
+    "DISPLAY MODE", "UPSCALING", "DITHERING", "ASPECT RATIO"
 };
 
 #define NGFX_ROW_COUNT  4

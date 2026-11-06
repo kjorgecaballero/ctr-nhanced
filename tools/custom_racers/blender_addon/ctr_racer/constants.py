@@ -63,7 +63,7 @@ UI_TABS_BY_MODE = {
         ('VOICES', 'Voices', 'Custom voiceline WAVs'),
     ],
     'LEVELS': [
-        ('LEVELS', 'Levels', 'Custom level builder'),
+        ('LEVELS', 'Tracks', 'Custom track builder'),
     ],
 }
 

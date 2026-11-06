@@ -85,6 +85,7 @@ add_subdirectory(externals/SDL)
 # CTR Native
 add_executable(ctr_native
     main.c
+    resources/icon.rc
     externals/stb_vorbis.c
 )
 set_target_properties(ctr_native PROPERTIES
