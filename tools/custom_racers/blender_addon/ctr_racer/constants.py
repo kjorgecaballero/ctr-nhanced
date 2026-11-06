@@ -26,8 +26,8 @@ BLEND_MODES = [
 ]
 _BLEND_MODE_SET = {m[0] for m in BLEND_MODES}
 
-DEFAULT_REPO   = r"C:\Users\Kevin\Desktop\Kevin\CTR\native_fork\nhanced"
-DEFAULT_PYTHON = r"C:\Users\Kevin\AppData\Local\Programs\Python\Python312\python.exe"
+DEFAULT_REPO   = ""
+DEFAULT_PYTHON = ""
 
 MAX_PAGES = 8
 MAX_MATS_PER_PAGE = 10

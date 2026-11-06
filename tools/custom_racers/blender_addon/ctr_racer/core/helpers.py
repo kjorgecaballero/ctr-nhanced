@@ -56,3 +56,31 @@ def _resolve_blender_path(p):
         # is unsaved; there is no way to resolve it.
         return None
     return Path(p)
+
+def get_python_exe():
+    """Find the internal Python executable shipped with Blender."""
+    import bpy
+    from pathlib import Path
+    
+    # 1. Check if the user configured it
+    try:
+        prefs = bpy.context.preferences.addons["ctr_racer"].preferences
+        if getattr(prefs, "python_exe", ""):
+            return prefs.python_exe
+    except Exception:
+        pass
+
+    # 2. Find Blender's internal Python
+    blender_dir = Path(bpy.app.binary_path).parent
+    ver = ".".join(bpy.app.version_string.split(".")[:2])
+    
+    for c in [
+        blender_dir / ver / "python" / "bin" / "python.exe",
+        blender_dir / "python" / "bin" / "python.exe",
+        blender_dir / ver / "python" / "bin" / "python3",
+        blender_dir / "python" / "bin" / "python3"
+    ]:
+        if c.exists():
+            return str(c)
+            
+    return "python"

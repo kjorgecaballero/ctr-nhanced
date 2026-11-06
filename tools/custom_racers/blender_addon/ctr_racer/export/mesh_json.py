@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ..constants import _BLEND_MODE_SET
 from ..prefs import _get_prefs
+from ..core.helpers import get_python_exe
 
 
 def _get_blend_mode(mat):
@@ -190,7 +191,7 @@ def _do_export_body(context, obj):
         raise RuntimeError(f"add_racer.py not found at {add_racer}")
 
     cmd = [
-        prefs.python_exe, str(add_racer),
+        get_python_exe(), str(add_racer),
         r.slug, str(json_path),
         str(r.page), str(r.slot), r.engine, r.long_name,
     ]

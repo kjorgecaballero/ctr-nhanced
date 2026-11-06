@@ -11,6 +11,7 @@ from bpy.types import Operator
 
 from ..constants import DEFAULT_REPO
 from ..prefs import _get_prefs
+from ..core.helpers import get_python_exe
 from .state import VOICE_EVENTS, _auto_detect_wavs
 
 
@@ -82,7 +83,7 @@ class NFR_OT_VoicesBuild(Operator):
             self.report({'ERROR'}, f"Pipeline not found: {pipeline}")
             return {'CANCELLED'}
 
-        python_exe = sys.executable or "python"
+        python_exe = get_python_exe()
         try:
             result = subprocess.run(
                 [python_exe, str(pipeline), "-v"],

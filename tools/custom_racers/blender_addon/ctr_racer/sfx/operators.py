@@ -15,7 +15,7 @@ import bpy
 from bpy.types import Operator
 
 from ..prefs import _get_prefs
-from ..core.helpers import _redraw_view3d
+from ..core.helpers import get_python_exe,  _redraw_view3d
 from ..core.helpers import _resolve_blender_path
 from .state import SFX_EVENTS
 
@@ -78,7 +78,7 @@ class NFR_OT_SfxBuild(Operator):
             return {"CANCELLED"}
 
         res = subprocess.run(
-            [prefs.python_exe, str(pipeline), "-v"],
+            [get_python_exe(), str(pipeline), "-v"],
             cwd=str(prefs.repo_path),
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",

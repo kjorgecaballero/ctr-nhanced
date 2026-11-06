@@ -3,6 +3,7 @@ import os, subprocess, sys, shutil, json, json
 import bpy
 from bpy.types import Operator
 from ..prefs import _get_prefs
+from ..core.helpers import get_python_exe
 from ..constants import DEFAULT_REPO
 
 def _root():
@@ -20,19 +21,12 @@ def _root():
 def _script():
     return os.path.join(_root(), "tools", "custom_racers", "add_level.py")
 
-def _python_exe():
-    p = shutil.which("python")
-    if p: return p
-    p = shutil.which("python3")
-    if p: return p
-    return sys.executable
-
 def _run(args):
     sc = _script()
     if not os.path.isfile(sc):
         return -1, f"add_level.py not found. Revisa la ruta del repo.\nBuscado en: {sc}"
     try:
-        p = subprocess.run([_python_exe(), sc] + args, cwd=_root(), capture_output=True, text=True, timeout=600)
+        p = subprocess.run([get_python_exe(), sc] + args, cwd=_root(), capture_output=True, text=True, timeout=600)
     except Exception as e:
         return -1, str(e)
     if p.stdout: print("--- stdout ---\n" + p.stdout)

@@ -17,7 +17,7 @@ from bpy.props import EnumProperty, IntProperty
 from bpy.types import Operator
 
 from ..prefs import _get_prefs
-from ..core.helpers import _redraw_view3d, _resolve_blender_path
+from ..core.helpers import get_python_exe,  _redraw_view3d, _resolve_blender_path
 from ..export.mesh_json import export_mesh_json, _bake_timeline_clips
 
 
@@ -87,7 +87,7 @@ class NFR_OT_DanceExport(Operator):
 
         out_ctr = dance_dir / f"{stem}.ctr"
         cmd = [
-            prefs.python_exe, str(build_py),
+            get_python_exe(), str(build_py),
             str(json_path), slug, str(out_ctr),
             "--sentinel", "--dance",
         ]
@@ -210,7 +210,7 @@ class NFR_OT_DanceBuildMusic(Operator):
         build_py = (Path(prefs.repo_path) / "tools" / "custom_racers"
                     / "build_voice_pipeline.py")
         res = subprocess.run(
-            [prefs.python_exe, str(build_py), "-v"],
+            [get_python_exe(), str(build_py), "-v"],
             cwd=str(prefs.repo_path),
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
@@ -353,7 +353,7 @@ class NFR_OT_DanceBuildSfx(Operator):
                         f"build_voice_pipeline.py not found: {build_py}")
             return {"CANCELLED"}
         res = subprocess.run(
-            [prefs.python_exe, str(build_py), "-v"],
+            [get_python_exe(), str(build_py), "-v"],
             cwd=str(prefs.repo_path),
             capture_output=True, text=True,
             encoding="utf-8", errors="replace",
