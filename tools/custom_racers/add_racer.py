@@ -113,7 +113,7 @@ def main():
     if icon and not icon.exists():
         sys.exit(f"ERROR: icon not found: {icon}")
 
-    # Cargar el JSON para obtener los datos de rotacion
+    # Load JSON to get rotation data
     try:
         mesh_data = json.loads(src.read_text(encoding="utf-8"))
     except Exception as e:

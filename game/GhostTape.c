@@ -14,7 +14,7 @@ static int s_ghostDbgEndCount = 0;
 static int s_ghostDbgFrame = 0;
 static int s_ghostDbgPaddingWarned = 0;
 
-/* (vacío) */
+/* (empty) */
 
 void GhostTape_Start(void)
 {

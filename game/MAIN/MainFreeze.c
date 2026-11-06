@@ -611,7 +611,7 @@ static void DISPLAYRECTMENU_MainFreeze_MenuPtrOptions(struct RectMenu *menu, GAM
 	DecalFont_DrawLine(sdata->lngStrings[LNG_OPTIONS_TITLE], Widescreen_ScaleAboutX(256, 256), 26 + (menuRowsNegativePadding / 2), FONT_BIG, (JUSTIFY_CENTER | ORANGE));
 
 		// Todo en espacio comprimido. volumeSliderTriangleLeftMargin ya viene comprimido
-	// (DecalFont_GetLineWidth), así que NO se vuelve a escalar.
+	// (DecalFont_GetLineWidth), so it is NOT scaled again.
 	int sliderLeft  = Widescreen_ScaleAboutX(86, 256) + volumeSliderTriangleLeftMargin;
 	int sliderRight = Widescreen_ScaleAboutX(436, 256);
 	int volumeSliderWidth = sliderRight - sliderLeft;

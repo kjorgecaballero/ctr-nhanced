@@ -308,7 +308,7 @@ void VB_EndEvent_DrawMenu(void)
 			}
 			else if (view->rect.w > winnerMaxW)
 			{
-				// 3P/4P: el cuarto de pantalla retail mide 256 lógico, que en widescreen es demasiado ancho
+				// 3P/4P: the retail screen quarter is 256 logical, which is too wide in widescreen
 				view->rect.w = winnerMaxW;
 			}
 

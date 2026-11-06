@@ -158,7 +158,7 @@ void MM_CupSelect_MenuProc(struct RectMenu *menu)
 			int comp_width = CTR_WIDESCREEN_SCALE_X(scaled_width);
 			
 			int baseX = startX + (trackIndex & 1) * MM_CUP_SELECT_TRACK_X_STEP;
-			// DecalHUD sumará (scaled_width - comp_width)/2. Nosotros lo restamos para compensar.
+			// DecalHUD will add (scaled_width - comp_width)/2. We subtract it to compensate.
 			int posX = Widescreen_ScaleAboutX(baseX, 256) - (scaled_width - comp_width) / 2;
 			int posY = startY + (trackIndex >> 1) * MM_CUP_SELECT_TRACK_Y_STEP;
 

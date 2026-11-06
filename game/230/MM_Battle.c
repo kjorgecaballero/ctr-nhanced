@@ -147,7 +147,7 @@ void MM_Battle_DrawIcon_Weapon(struct Icon *icon, u32 posX, int posY, struct Pri
         s32 scaledHeight = (((s32)((u8)icon->texLayout.v2 - (u8)icon->texLayout.v0)) * scale) >> 0xc;
 
         	// WIDESCREEN: posX llega en coords retail. CompressFT4 (al final) comprime
-	// alrededor del centro del quad, asÃ­ que ponemos ese centro en S(centro retail).
+	// around the center of the quad, so we set that center to S(retail center).
 	// El ancho en X es scaledHeight cuando el icono va rotado (rotation & 1).
 	{
 		int xExtent = ((rotation & 1) != 0) ? scaledHeight : scaledWidth;
@@ -791,7 +791,7 @@ void MM_Battle_MenuProc(struct RectMenu *unused)
 					D230.menuBattleLengthLifeTime.state |= HIDE_ROW_HIGHLIGHT;
 				}
 
-/* WIDESCREEN: LENGTH dual menu (time) —
+/* WIDESCREEN: LENGTH dual menu (time) ï¿½
  * match the LifeLife sibling below. */
 RECTMENU_DrawSelf(&D230.menuBattleLengthLifeTime,
                   Widescreen_ScaleAboutX(tmbattle[BATTLE_ROW_LENGTH_MENU_META_INDEX].currX + BATTLE_MENU_X_OFFSET, 256),

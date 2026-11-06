@@ -1,7 +1,7 @@
 #ifndef WIDESCREEN_H
 #define WIDESCREEN_H
 
-/* Factor en milésimas: 1000 = 4:3 (no-op), 750 = 16:9, 833 = 16:10, 563 = 21:9 */
+/* Factor in thousandths: 1000 = 4:3 (no-op), 750 = 16:9, 833 = 16:10, 563 = 21:9 */
 int Widescreen_GetFactor(void);
 
 int Widescreen_ScaleX(int value);

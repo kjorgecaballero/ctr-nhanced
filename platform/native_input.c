@@ -582,7 +582,7 @@ internal void NativeInput_ApplyKeyboard(s32 slot, u16 keyboardButtons)
 		return;
 	}
 
-	// Forzar conexión para P2 (slot 1) siempre, para que el motor no haga fallback.
+	// Force connection for P2 (slot 1) always, so the engine doesn't fallback.
 	// Para P3 y P4, solo conectar si se presiona una tecla (para no activar multitap innecesariamente).
 	if (slot == 1)
 	{

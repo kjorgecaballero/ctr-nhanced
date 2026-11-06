@@ -92,7 +92,7 @@ void Audio_SetState(u32 state)
 
 #ifdef CTR_NATIVE
 		/* Duck (bajar volumen) en vez de pausar: retail mantiene la
-		 * música de fondo debajo del jingle FINAL LAP. */
+		 * background music under the FINAL LAP jingle. */
 		NativeCustomMusic_SetVolume((sdata->vol_Music * 40) / 100);
 #endif
 
@@ -109,7 +109,7 @@ void Audio_SetState(u32 state)
 		Music_RaiseVolume();
 
 #ifdef CTR_NATIVE
-		/* Restaurar el volumen normal (el jingle ya terminó). */
+		/* Restore normal volume (the jingle is over). */
 		NativeCustomMusic_SetVolume(sdata->vol_Music);
 #endif
 

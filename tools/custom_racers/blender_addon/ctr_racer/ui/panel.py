@@ -527,11 +527,11 @@ class NFR_PT_Racer(Panel):
             col.separator()
             col.operator("nfr.kart_import_template", icon="IMPORT", text="Import Template")
 
-        # Si es modo USER, terminamos el dibujo aquí (solo importar)
+        # If USER mode, end drawing here (just import)
         if st.template_mode == 'USER':
             return
 
-        # 2. COLORS SECTION (El resto es solo para modo EDIT)
+        # 2. COLORS SECTION (The rest is only for EDIT mode)
         if st.is_imported:
             layout.separator()
             
@@ -906,7 +906,7 @@ class NFR_PT_Racer(Panel):
         
         if scene.nfr_voices_show_gameplay:
             box = layout.box()
-            # Bucle robusto que no rompe si VOICE_EVENTS cambió de formato
+            # Robust loop that doesn't break if VOICE_EVENTS changes format
             for i, item in enumerate(VOICE_EVENTS):
                 if i >= MENU_SPLIT_INDEX: break
                 event = item[0] if isinstance(item, tuple) else item
@@ -920,7 +920,7 @@ class NFR_PT_Racer(Panel):
         
         if scene.nfr_voices_show_menu:
             box = layout.box()
-            # Bucle robusto
+            # Robust loop
             for i, item in enumerate(VOICE_EVENTS):
                 if i < MENU_SPLIT_INDEX: continue
                 event = item[0] if isinstance(item, tuple) else item
@@ -956,7 +956,7 @@ class NFR_PT_Racer(Panel):
         row.operator("nfr.levels_list", icon="FILE_REFRESH", text="List Tracks")
         row.operator("nfr.levels_delete", icon="TRASH", text="Delete")
         
-        # LISTA COLAPSABLE
+        # COLLAPSIBLE LIST
         row = layout.row()
         icon = 'TRIA_DOWN' if st.show_tracks else 'TRIA_RIGHT'
         row.prop(st, "show_tracks", text="Installed Tracks", icon=icon, emboss=False)

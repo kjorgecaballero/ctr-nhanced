@@ -9840,7 +9840,7 @@ static int Ovr226_800a0e78_DispatchBucketHandler(u32 handlerAddress, void *bucke
 #if defined(CTR_NATIVE)
 	// Mirror del patch highLOD.s del SDK. Retail escribe 0x800a6f40
 	// en el slot del handler FULL_DYNAMIC_LIST. Eso retargetea los
-	// leaves lejanos a renderizar con el handler DYNAMIC (topología
+	// distant leaves to render with the DYNAMIC handler (topology
 	// HI LOD 4-slot) sin mover el leaf de su bucket natural. Los
 	// triblocks mantienen su path natural → UVs correctas.
 	if (bucket->role == DRAW_LEVEL_OVR1P_BUCKET_FULL_DYNAMIC_LIST &&

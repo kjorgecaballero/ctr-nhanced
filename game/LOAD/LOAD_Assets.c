@@ -297,7 +297,7 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 						if (cid >= NATIVE_CUSTOM_ID_BASE) {
 							// Try to load the custom model. If it fails, fallback to retail!
 							if (!NativeCustomRacer_LoadBotModel(i, cid)) {
-								data.characterIDs[i] = (u8)i; // Fallback a un ID retail válido
+								data.characterIDs[i] = (u8)i; // Fallback to a valid retail ID
 							} else {
 								data.characterIDs[i] = (u8)cid;
 							}

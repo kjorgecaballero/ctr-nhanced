@@ -32,7 +32,7 @@ def export_mesh_json(obj, out_path, override_clips=None):
     r = obj.racer
     is_custom = (r.kart_rot == 'custom')
     
-    # Guardar delta rotacion (Live Preview) y centrar el objeto para exportar
+    # Save rotation delta (Live Preview) and center object for export
     prev_delta = list(obj.delta_rotation_euler)
     if is_custom:
         obj.delta_rotation_euler = (0.0, 0.0, 0.0)
@@ -138,7 +138,7 @@ def export_mesh_json(obj, out_path, override_clips=None):
         except Exception as ex:
             print(f"[mesh_json] timeline bake skipped: {ex}")
 
-    # Restaurar la rotacion visual después de exportar
+    # Restore visual rotation after export
     if getattr(r, "jump_rot_enable", False):
         obj.delta_rotation_euler = prev_delta
         bpy.context.view_layer.update()

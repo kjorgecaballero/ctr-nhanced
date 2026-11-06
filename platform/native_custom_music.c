@@ -4,7 +4,7 @@
 #include <platform/native_audio.h>
 
 /* stb_vorbis es un solo archivo. Con STB_VORBIS_HEADER_ONLY solo
- * traemos los prototypes; la implementación se compila una sola vez
+ * we bring the prototypes; the implementation is compiled only once
  * desde externals/stb_vorbis.c (ver CMakeLists.txt). */
 #define STB_VORBIS_HEADER_ONLY
 #include <stb_vorbis.c>
@@ -236,9 +236,9 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
                 s_customMusic.active = 1;
                 s_customMusic.paused = 0;
                 s_customMusic.maskMuted = 0;
-                /* Retail reinicia la pista al terminar la máscara; el
+                /* Retail restarts the track when the mask ends; the
                  * jugador no nota el reinicio porque el jingle tapa
-                 * la transición. */
+                 * the transition. */
                 s_customMusic.positionFp = 0;
                 if (preservePosition)
                         s_customMusic.hubFallback = 0;
@@ -265,7 +265,7 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
                                        &newChannels, &newSampleRate))
         {
                 fprintf(stderr,
-                        "[CustomMusic] Level %d: fallo al cargar %s; uso CSEQ original.\n",
+                        "[CustomMusic] Level %d: failed to load %s; using original CSEQ.\n",
                         levelID, relativePath);
                 if (s_hubClockActive) NativeCustomMusic_StopTrackKeepHub();
                 else                  NativeCustomMusic_Stop();

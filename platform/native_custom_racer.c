@@ -282,13 +282,13 @@ static u32 s_danceSfxSpuAddr[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
 static u16 s_danceSfxSpuPitch[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
 static u32 s_danceSfxSpuNext;
 
-/* Anti-rebote: después de disparar un slot, bloquearlo N ticks.
+/* Anti-bounce: after firing a slot, block it for N ticks.
  * El CS thread del dance oscila alrededor del frame target (48 → 47
- * → 48 → ...), así que un filtro "rising edge" solo no alcanza. El
- * valor se calcula al cargar el VAG (ver PreloadDanceSfxVags) desde
- * el tamaño y rate del sample. */
+ * → 48 → ...), so a "rising edge" filter alone is not enough. The
+ * value is calculated when loading the VAG (see PreloadDanceSfxVags) from
+ * the sample size and rate. */
 static u8 s_danceSfxCooldown[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
-static u32 s_danceSfxCooldownLen;    /* ticks, común a todos los slots */
+static u32 s_danceSfxCooldownLen;    /* ticks, common to all slots */
 
 /* === Custom kart SFX (Fase 4, VAG) ===
  * Per-custom one-shot SFX for kart events. Same allocation pattern
@@ -1849,10 +1849,10 @@ int NativeCustomRacer_UpdateMaskMusic(void)
     if (gGT == NULL)
         return 0;
 
-    /* --- CASO 1: ya está corriendo. Solo chequeamos que el driver
+    /* --- CASE 1: already running. We only check that the driver
      *             original conserve ACTION_MASK_WEAPON. heldItemID
-     *             ya cambió en el frame que usó el botón, por eso
-     *             no lo chequeamos acá. --------------------------- */
+     *             already changed on the frame the button was used, that's why
+     *             we don't check it here. ---------------------------- */
     if (s_maskMusicPlaying)
     {
         struct Driver *d = NULL;
@@ -1868,7 +1868,7 @@ int NativeCustomRacer_UpdateMaskMusic(void)
             return 1;
         }
 
-        /* Máscara expiró. Parar VAG y restaurar OGG (si hay). */
+        /* Mask expired. Stop VAG and restore OGG (if any). */
         NativeVag_Stop(NATIVE_MASK_MUSIC_VOICE);
         s_maskMusicPlaying = 0;
         s_maskMusicCharIdx = -1;
@@ -1881,7 +1881,7 @@ int NativeCustomRacer_UpdateMaskMusic(void)
         return 0;
     }
 
-    /* --- CASO 2: nadie la usa. Buscar quién acaba de recibir el
+    /* --- CASE 2: no one is using it. Find who just received the
      *             item MASK (heldItemID == HELD_ITEM_MASK) --------- */
     int charIdx = -1;
     int driverID = -1;
@@ -1892,8 +1892,8 @@ int NativeCustomRacer_UpdateMaskMusic(void)
         if (d == NULL)
             continue;
 
-        /* Solo el frame exacto en que el item está en mano y todavía
-         * no se apretó el botón. En OOB, ACTION_MASK_WEAPON se setea
+        /* Only the exact frame when the item is in hand and not yet
+         * the button was not pressed. In OOB, ACTION_MASK_WEAPON is set
          * pero heldItemID != MASK. */
         if ((d->actionsFlagSet & ACTION_MASK_WEAPON) == 0)
             continue;
@@ -1932,10 +1932,10 @@ int NativeCustomRacer_UpdateMaskMusic(void)
 
         NativeCustomMusic_SetPaused(1);
 
-        /* Parar el pool CSEQ del NIVEL y resetear el índice. Esto hace
-         * que cuando la máscara expire, el próximo Music_Adjust(0)
+        /* Stop the LEVEL CSEQ pool and reset the index. This makes
+         * it so that when the mask expires, the next Music_Adjust(0)
          * desde retail vea -1 != 0 y arranque la pista desde 0
-         * (comportamiento retail: la música reinicia tras la máscara). */
+         * (retail behavior: music restarts after the mask). */
         CseqMusic_StopAll();
         sdata->cseqHighestIndex = -1;
         sdata->cseqBoolPlay = 0;

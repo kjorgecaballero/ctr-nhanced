@@ -159,7 +159,7 @@ void UI_JumpMeter_Draw(s16 posX, s16 posY, struct Driver *driver)
 	                          0x10,
 	                      posXInt + UI_JUMP_METER_HUNDREDTHS_X_OFFSET, numbersY);
 
-	// Sin Widescreen: El tamaño original de 4:3 calza perfecto con los números sin escalar
+	// Without Widescreen: The original 4:3 size fits perfectly with unscaled numbers
 	numberBoxX = posX + UI_JUMP_METER_NUMBER_BOX_X_OFFSET;
 	box.w = UI_JUMP_METER_NUMBER_BOX_W;
 	box.h = UI_JUMP_METER_NUMBER_BOX_H;

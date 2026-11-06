@@ -145,9 +145,9 @@ static int RenderLists_Select1P2PSlot(const struct BSP *bsp, struct PushBuffer *
 
 #if defined(CTR_NATIVE)
 	// force_hi_lod: skip the distance check. Retail manda leaves lejanos
-	// a FULL_DYNAMIC (LOW LOD). Custom tracks no tienen LOW LOD válido,
+	// to FULL_DYNAMIC (LOW LOD). Custom tracks do not have a valid LOW LOD,
 	// y el vistree descarta esos leaves basado en el bounding box
-	// "chico" del HI LOD. Cada leaf va a su bucket natural según flags.
+	// "small" of the HI LOD. Each leaf goes to its natural bucket based on flags.
 	// Los triblocks (4X1) NO se ven afectados: van a su bucket propio.
 	if (!LevelRegistry_ShouldForceHiLod() && !s_forceMaxLod)
 #endif

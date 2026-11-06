@@ -36,7 +36,7 @@ def _zone_color_update(self, context):
     node = mat.node_tree.nodes.get(self.node_name)
     if node is None or node.type != 'RGB':
         return
-    # Clampeamos los valores para evitar que el nodo se vaya a NaN o Infinito
+    # Clamp values to prevent node from going to NaN or Infinity
     r = min(1.0, max(0.0, self.color[0]))
     g = min(1.0, max(0.0, self.color[1]))
     b = min(1.0, max(0.0, self.color[2]))
@@ -78,9 +78,9 @@ def _hover_hsv_update(self, context):
     # 3. Apply HSV math
     is_byte_color = (color_layer.data_type == 'BYTE_COLOR')
     
-    # Evitar bucle si los valores están en su estado neutro
+    # Avoid loop if values are in neutral state
     if self.hover_hue == 0.5 and self.hover_saturation == 1.0 and self.hover_value == 1.0:
-        pass # Aún así lo aplicamos para restaurar si el usuario movió el slider
+        pass # Still apply to restore if the user moved the slider
     else:
         for poly in obj.data.polygons:
             if poly.material_index == target_slot_idx:

@@ -58,7 +58,7 @@ void RB_Explosion_InitPotion(struct Instance *inst)
 	// copy position and rotation from one instance to the other
 	CTR_MatrixCopyRot(&shatterInst->matrix, &inst->matrix);
 
-        // WIDESCREEN: Comprimir la matriz de la explosión (eje X global)
+        // WIDESCREEN: Compress the explosion matrix (global X axis)
         shatterInst->matrix.m[0][0] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][0]);
         shatterInst->matrix.m[0][1] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][1]);
         shatterInst->matrix.m[0][2] = CTR_WIDESCREEN_SCALE_X(shatterInst->matrix.m[0][2]);

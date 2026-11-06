@@ -60,7 +60,7 @@ class NFR_OT_LevelsBuild(Operator):
         # Siempre usamos el track seleccionado como base de datos (SFX, IA, etc.)
         cmd += ["--base", st.replace_target]
         
-        # Si el modo es reemplazo, además ocupamos su lugar en el menú
+        # If mode is replace, we also take its place in the menu
         if st.action_type == 'REPLACE': 
             cmd += ["--replace", st.replace_target]
 
