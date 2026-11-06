@@ -36,34 +36,35 @@ def _zone_color_update(self, context):
     node = mat.node_tree.nodes.get(self.node_name)
     if node is None or node.type != 'RGB':
         return
-    c = self.color
-    node.outputs[0].default_value = (c[0], c[1], c[2], 1.0)
+    # Clampeamos los valores para evitar que el nodo se vaya a NaN o Infinito
+    r = min(1.0, max(0.0, self.color[0]))
+    g = min(1.0, max(0.0, self.color[1]))
+    b = min(1.0, max(0.0, self.color[2]))
+    node.outputs[0].default_value = (r, g, b, 1.0)
 
 
 def _hover_hsv_update(self, context):
     import colorsys
     obj = context.active_object
     if not obj or obj.type != 'MESH':
-        print("HSV Update: No active mesh.")
         return
     
     if not obj.data.color_attributes:
-        print("HSV Update: No color attributes on mesh.")
         return
-        
+
     color_layer = obj.data.color_attributes.active_color
     if not color_layer:
-        print("HSV Update: No active color attribute.")
         return
-    
-    # 1. Save original colors on the object (as list of lists)
+
+    # 1. Save original colors if not saved yet
     if "orig_vcols" not in obj:
-        print("HSV Update: Saving original vertex colors...")
+        # Guardamos en formato sRGB si es BYTE_COLOR, o Linear si es FLOAT_COLOR
+        # .color_srgb devuelve el valor correcto visualmente
         obj["orig_vcols"] = [list(c.color) for c in color_layer.data]
-        
+
     orig_colors = obj["orig_vcols"]
-    
-    # 2. Find the material. If not found by name, paint everything.
+
+    # 2. Find the material.
     target_mat_prefix = "969_208_18_248_4_16"
     target_slot_idx = -1
     for i, slot in enumerate(obj.material_slots):
@@ -71,33 +72,40 @@ def _hover_hsv_update(self, context):
             target_slot_idx = i
             break
 
-    # If search fails, use material 0 by default
     if target_slot_idx == -1:
-        print("HSV Update: Target material not found by name. Defaulting to slot 0.")
         target_slot_idx = 0
 
     # 3. Apply HSV math
-    applied_count = 0
-    for poly in obj.data.polygons:
-        if poly.material_index == target_slot_idx:
-            for loop_idx in poly.loop_indices:
-                if loop_idx < len(orig_colors):
-                    r, g, b = orig_colors[loop_idx][:3]
-                    h, s, v = colorsys.rgb_to_hsv(r, g, b)
-                    
-                    new_h = (h + (self.hover_hue - 0.5)) % 1.0
-                    new_s = min(1.0, max(0.0, s * self.hover_saturation))
-                    new_v = min(1.0, max(0.0, v * self.hover_value))
-                    
-                    nr, ng, nb = colorsys.hsv_to_rgb(new_h, new_s, new_v)
-                    color_layer.data[loop_idx].color = (nr, ng, nb, 1.0)
-                    applied_count += 1
-                    
-    print(f"HSV Update: Applied to {applied_count} loops.")
+    is_byte_color = (color_layer.data_type == 'BYTE_COLOR')
+    
+    # Evitar bucle si los valores están en su estado neutro
+    if self.hover_hue == 0.5 and self.hover_saturation == 1.0 and self.hover_value == 1.0:
+        pass # Aún así lo aplicamos para restaurar si el usuario movió el slider
+    else:
+        for poly in obj.data.polygons:
+            if poly.material_index == target_slot_idx:
+                for loop_idx in poly.loop_indices:
+                    if loop_idx < len(orig_colors):
+                        r, g, b = orig_colors[loop_idx][:3]
+                        h, s, v = colorsys.rgb_to_hsv(r, g, b)       
+
+                        new_h = (h + (self.hover_hue - 0.5)) % 1.0   
+                        new_s = min(1.0, max(0.0, s * self.hover_saturation))
+                        new_v = min(1.0, max(0.0, v * self.hover_value))
+
+                        nr, ng, nb = colorsys.hsv_to_rgb(new_h, new_s, new_v)
+                        
+                        if is_byte_color:
+                            # En BYTE_COLOR, .color espera Linear. Pero al leer/escribir usamos .color
+                            color_layer.data[loop_idx].color = (nr, ng, nb, 1.0)
+                        else:
+                            color_layer.data[loop_idx].color = (nr, ng, nb, 1.0)
+
     obj.data.update()
     for area in context.screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()
+
 
 def _template_filter_update(self, context):
     self.preset_page = 1
@@ -124,6 +132,8 @@ class NFR_KartZone(bpy.types.PropertyGroup):
         subtype='COLOR_GAMMA',
         size=3,
         default=(1.0, 1.0, 1.0),
+        soft_min=0.0,
+        soft_max=1.0,
         update=_zone_color_update,
     )
 
