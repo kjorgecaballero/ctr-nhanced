@@ -434,7 +434,7 @@ static int Page_ParseLine(char *line, PageEntry *out)
         if (sscanf(p, "%2x%2x%2x", &r, &g, &b) == 3)
         {
             /* PS1 packed: byte0=r, byte1=g, byte2=b, byte3=code */
-            u32 packed = (r & 0xff) | ((g & 0xff) << 8) | ((b & 0xff) << 16) | (0x20u << 24);
+            u32 packed = (r & 0xff) | ((g & 0xff) << 8) | ((b & 0xff) << 16) | (0x80u << 24);
             out->color[0] = out->color[1] = out->color[2] = out->color[3] = packed;
             out->hasColor = 1;
             p += 6;  /* advance past the 6 hex digits sscanf read */
