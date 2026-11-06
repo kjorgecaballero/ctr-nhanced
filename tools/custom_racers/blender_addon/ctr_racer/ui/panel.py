@@ -249,11 +249,8 @@ class NFR_PT_Racer(Panel):
         color_row.prop(r, "color", text="")
         col.prop(r, "icon_path")
 
-
-
-
         layout.separator()
-        layout.label(text="Dev Tools:", icon="TOOL_SETTINGS")
+        layout.label(text="Tools:", icon="TOOL_SETTINGS")
 
         row = layout.row(align=True)
         row.scale_y = 1.3
@@ -574,73 +571,99 @@ class NFR_PT_Racer(Panel):
                 col.operator("nfr.kart_bake_and_export", icon="EXPORT")
 
     def _draw_presets(self, context, layout):
-        scene = context.scene
-        st = scene.kart_state
-        obj = context.active_object
-
         prefs = _get_prefs(context)
+        st = context.scene.kart_state
+
         root_str = getattr(prefs, "kart_presets_root", "") or ""
+        if not root_str:
+            warn = layout.box()
+            warn.label(text="Set 'Kart presets folder' in", icon="ERROR")
+            warn.label(text="addon preferences first")
+            return
+
         root = Path(root_str)
+        if not root.is_dir():
+            warn = layout.box()
+            warn.label(text="Folder not found:", icon="ERROR")    
+            warn.label(text=root_str)
+            return
 
         row = layout.row(align=True)
-        row.label(text="Preset Browser", icon="FILE_FOLDER")
+        row.label(text="Preset Browser", icon="FILE_FOLDER")      
 
-        if obj and obj.type == 'MESH':
+        obj = context.active_object
+        can_apply = (obj is not None and obj.type == 'MESH' and obj.racer.is_racer)
+        if can_apply:
             layout.label(text=f"Target: {obj.name}", icon="OBJECT_DATA")
+            layout.label(text=f"slug: {obj.racer.slug}")
         else:
             layout.label(text="Select a racer mesh to enable Apply", icon="INFO")
 
         layout.separator()
-
         box = layout.box()
         box.label(text="Filter Presets:", icon="FILTER")
         box.prop(st, "template_filter", text="Template")
         if st.template_filter in ('KART', 'KART_HI'):
-            box.prop(st, "variant_filter", text="Variant")
-
+            box.prop(st, "variant_filter", text="Variant")        
         layout.separator()
 
-        if not root.is_dir():
-            layout.label(text="Presets folder not set or not found", icon="ERROR")
-            return
+        from ..kart.templates import KART_TEMPLATES
+        tpl_obj = KART_TEMPLATES.get(st.template_filter)
+
+        if tpl_obj:
+            var_key = st.variant_filter
+            if var_key == 'GOLD': var_key = 'GOLD_PIPES'
+            elif var_key == 'SILVER': var_key = 'SILVER_PIPES'    
+            elif var_key == 'DEFAULT': var_key = 'DEFAULT'        
+
+            variant_dir = tpl_obj["variant_dirs"].get(var_key, "")
+        else:
+            variant_dir = ""
 
         all_presets = scan_presets(root)
-        items = all_presets.get(st.variant_filter, [])
-        
+        items = all_presets.get(variant_dir, [])
+
         if not items:
-            layout.label(text=f"No presets in '{st.variant_filter}/' yet.", icon="INFO")
+            layout.label(text=f"No presets in '{variant_dir}/' yet.", icon="INFO")
             return
 
-        total_pages = max(1, (len(items) + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
-        current_page = max(1, min(st.preset_page, total_pages))
+        total = len(items)
+        total_pages = max(1, (total + MAX_PRESETS_PER_PAGE - 1) // MAX_PRESETS_PER_PAGE)
+        current_page = max(1, min(st.preset_page, total_pages))   
 
         if total_pages > 1:
             prow = layout.row(align=True)
             left = prow.row(align=True)
             left.enabled = current_page > 1
             left.operator("nfr.kart_preset_prev_page", text="", icon="TRIA_LEFT")
-            prow.label(text=f"Page {current_page} / {total_pages}")
+            prow.label(text=f"Page {current_page} / {total_pages}  ({total} total)")
             right = prow.row(align=True)
             right.enabled = current_page < total_pages
             right.operator("nfr.kart_preset_next_page", text="", icon="TRIA_RIGHT")
-            layout.separator()
 
         start = (current_page - 1) * MAX_PRESETS_PER_PAGE
-        end = min(start + MAX_PRESETS_PER_PAGE, len(items))
+        end = min(start + MAX_PRESETS_PER_PAGE, total)
+        page_items = items[start:end]
 
-        for name, path in items[start:end]:
+        for name, path in page_items:
             row = layout.row(align=True)
-            icon_key = f"__preset__{st.variant_filter}__{name}"
-            icon_id = _get_icon(icon_key)
-            
-            if icon_id:
-                row.template_icon(icon_value=icon_id, scale=1.0)
+
+            icon_key = f"__preset__{variant_dir}__{name}"
+            png_files = list(path.glob("*.png"))
+            icon = _get_icon(icon_key, png_files[0]) if png_files else None
+
+            if icon is not None:
+                row.template_icon(icon_value=icon.icon_id, scale=1.4)
             else:
                 row.label(text="", icon="IMAGE_DATA")
 
             row.label(text=name)
-            op = row.operator("nfr.kart_apply_preset", text="Apply", icon="CHECKMARK")
+
+            sub = row.row(align=True)
+            sub.enabled = can_apply
+            op = sub.operator("nfr.kart_apply_preset", text="Apply", icon="CHECKMARK")
             op.preset_dir = str(path)
+
 
     def _draw_anim(self, context, layout):
         # Trata de obtener el estado, sea anim_state o nfr_anim
@@ -667,7 +690,7 @@ class NFR_PT_Racer(Panel):
         layout.separator()
         
         box2 = layout.box()
-        box2.label(text="Advanced Tools", icon="TOOL_SETTINGS")
+        box2.label(text="Tools", icon="TOOL_SETTINGS")
         
         row = box2.row(align=True)
         row.operator("nfr.anim_mark_kart", text="Mark Kart", icon="OUTLINER_DATA_MESH")
@@ -820,6 +843,7 @@ class NFR_PT_Racer(Panel):
                 row.operator("nfr.mask_export", text="Export Beam", icon="FILE_TICK")
             else:
                 box.operator("nfr.mask_export", text="Export Item", icon="FILE_TICK")
+                
     def _draw_sfx(self, context, layout):
         st = context.scene.nfr_sfx
 
@@ -905,6 +929,7 @@ class NFR_PT_Racer(Panel):
         # --- BUILD BUTTON ---
         layout.separator()
         layout.operator("nfr.voices_build", text="Build Voice Banks", icon="PLAY")
+
     def _draw_levels(self, context, layout):
         st = context.scene.nfr_levels
         
@@ -921,15 +946,15 @@ class NFR_PT_Racer(Panel):
         col.prop(st, "replace_target", text="Base / Target Track")
         
         layout.separator()
-        row = layout.row()
-        row.scale_y = 1.5
-        row.operator("nfr.levels_build", icon="PLAY", text="Build Track")
-        
         box = layout.box()
         box.label(text="Manage", icon="FILE_FOLDER")
+        
         row = box.row(align=True)
-        row.operator("nfr.levels_list", icon="FILE_REFRESH")
-        row.operator("nfr.levels_delete", icon="TRASH")
+        row.operator("nfr.levels_build", icon="PLAY", text="Build Track")
+        
+        row = box.row(align=True)
+        row.operator("nfr.levels_list", icon="FILE_REFRESH", text="List Tracks")
+        row.operator("nfr.levels_delete", icon="TRASH", text="Delete")
         
         # LISTA COLAPSABLE
         row = layout.row()
@@ -949,6 +974,7 @@ class NFR_PT_Racer(Panel):
             layout.separator()
             icon = "ERROR" if "FAILED" in st.last_status else "CHECKMARK"
             layout.label(text=f"Status: {st.last_status}", icon=icon)
+
 
 _CLASSES = (
     NFR_PT_Racer,

@@ -131,6 +131,7 @@ class NFR_OT_SlotRefresh(Operator):
 
 
 class NFR_OT_SlotPrevPage(Operator):
+    bl_description = "Go to the previous roster page"
     bl_idname = "nfr.slot_prev_page"
     bl_label = "Previous page"
 
@@ -142,6 +143,7 @@ class NFR_OT_SlotPrevPage(Operator):
 
 
 class NFR_OT_SlotNextPage(Operator):
+    bl_description = "Go to the next roster page"
     bl_idname = "nfr.slot_next_page"
     bl_label = "Next page"
 

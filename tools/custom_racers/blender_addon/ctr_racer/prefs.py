@@ -45,7 +45,7 @@ class NFR_Preferences(AddonPreferences):
                     "the VRAM atlas + textures.vrm. Textures are full-res "
                     "up to 256x256 (u8 UV limit). Requires the C-side "
                     "runtime to support sentinel_00.bin (commit 95cf1cf70+)",
-        default=False)
+        default=True)
     kart_presets_root: StringProperty(
         name="Kart presets folder",
         description="Where baked kart presets are written. The addon creates "
@@ -59,7 +59,7 @@ class NFR_Preferences(AddonPreferences):
                     "timeline (shape keys, armature, drivers — anything "
                     "the depsgraph evaluates) as multi-frame clips in the "
                     ".ctr. Ignored if there is no animation.",
-        default=False)
+        default=True)
     anim_frame_ranges: StringProperty(
         name="Animation frame ranges",
         description="JSON mapping clip name -> [start, end] frame in the "

@@ -23,6 +23,7 @@ from .native_build import _build_exe, _run_game
 
 
 class NFR_OT_Validate(Operator):
+    bl_description = "Check the racer mesh for errors before exporting"
     bl_idname = "nfr.validate"
     bl_label = "Validate"
 
@@ -53,6 +54,7 @@ class NFR_OT_Validate(Operator):
 
 
 class NFR_OT_Export(Operator):
+    bl_description = "Export the selected racer and generate textures"
     bl_idname = "nfr.export"
     bl_label = "Export"
 
@@ -85,6 +87,7 @@ class NFR_OT_Export(Operator):
 
 
 class NFR_OT_ExportAll(Operator):
+    bl_description = "Export all valid racers in the scene"
     bl_idname = "nfr.export_all"
     bl_label = "Export All"
 
@@ -118,6 +121,7 @@ class NFR_OT_ExportAll(Operator):
 
 
 class NFR_OT_SaveSettings(Operator):
+    bl_description = "Save the current racer settings to a JSON file"
     bl_idname = "nfr.save_settings"
     bl_label = "Save Settings JSON"
     filepath: StringProperty(subtype="FILE_PATH")
@@ -147,6 +151,7 @@ class NFR_OT_SaveSettings(Operator):
 
 
 class NFR_OT_LoadSettings(Operator):
+    bl_description = "Load racer settings from a JSON file"
     bl_idname = "nfr.load_settings"
     bl_label = "Load Settings JSON"
     filepath: StringProperty(subtype="FILE_PATH")
@@ -243,6 +248,7 @@ class NFR_OT_FixSlug(Operator):
 
 
 class NFR_OT_FixVertexColors(Operator):
+    bl_description = "Reduce vertex colors to fit the PS1 color palette limit"
     """Reduce vertex colors to 128 unique values so the .ctr builder
     fits under its `assert len(palettes) <= 128`
     (build_character.py:670).

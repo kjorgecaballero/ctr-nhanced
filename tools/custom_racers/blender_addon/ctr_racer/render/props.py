@@ -83,6 +83,7 @@ class NFR_MT_ui_tab(bpy.types.Menu):
 
 
 class NFR_OT_set_ui_tab(bpy.types.Operator):
+    bl_description = "Change the current UI tab"
     bl_idname = "nfr.set_ui_tab"
     bl_label = "Set UI Tab"
     bl_options = {'INTERNAL'}

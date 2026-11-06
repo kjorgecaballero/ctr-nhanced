@@ -235,6 +235,7 @@ class NFR_OT_KartApplyPreset(bpy.types.Operator):
 
 
 class NFR_OT_KartOpenPresetsFolder(bpy.types.Operator):
+    bl_description = "Open the folder containing baked kart presets"
     bl_idname = "nfr.kart_open_presets_folder"
     bl_label = "Open Presets Folder"
 
@@ -258,6 +259,7 @@ class NFR_OT_KartOpenPresetsFolder(bpy.types.Operator):
 
 
 class NFR_OT_KartPresetPrevPage(bpy.types.Operator):
+    bl_description = "Go to the previous page of presets"
     bl_idname = "nfr.kart_preset_prev_page"
     bl_label = "Previous Preset Page"
 
@@ -269,6 +271,7 @@ class NFR_OT_KartPresetPrevPage(bpy.types.Operator):
 
 
 class NFR_OT_KartPresetNextPage(bpy.types.Operator):
+    bl_description = "Go to the next page of presets"
     bl_idname = "nfr.kart_preset_next_page"
     bl_label = "Next Preset Page"
 
