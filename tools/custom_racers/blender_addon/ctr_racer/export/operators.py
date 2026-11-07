@@ -362,7 +362,52 @@ class NFR_OT_ShowIssue(Operator):
         return {"FINISHED"}
 
 
+
+class NFR_OT_LoadIconImage(Operator):
+    """Load an image from disk and pack it into the blend file"""
+    bl_idname = "nfr.load_icon_image"
+    bl_label = "Load Icon Image"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    filepath: StringProperty(subtype="FILE_PATH")
+    filter_glob: StringProperty(default="*.png;*.jpg;*.jpeg", options={'HIDDEN'})
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self, context):
+        if not self.filepath:
+            return {'CANCELLED'}
+        try:
+            img = bpy.data.images.load(self.filepath, check_existing=True)
+            if not img.packed_file:
+                img.pack()
+            obj = context.active_object
+            if obj and obj.type == 'MESH':
+                obj.racer.icon_image = img
+                obj.racer.icon_path = self.filepath # Guardamos la ruta en background, pero no la mostramos
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to load image: {e}")
+            return {'CANCELLED'}
+
+class NFR_OT_ClearIconImage(Operator):
+    """Remove the icon image from this racer"""
+    bl_idname = "nfr.clear_icon_image"
+    bl_label = "Clear Icon Image"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj and obj.type == 'MESH':
+            obj.racer.icon_image = None
+            obj.racer.icon_path = ""
+        return {'FINISHED'}
+
 _classes = (
+    NFR_OT_LoadIconImage,
+    NFR_OT_ClearIconImage,
     NFR_OT_Validate,
     NFR_OT_Export,
     NFR_OT_ExportAll,

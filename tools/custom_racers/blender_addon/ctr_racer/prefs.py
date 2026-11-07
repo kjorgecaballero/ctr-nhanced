@@ -67,6 +67,11 @@ class NFR_Preferences(AddonPreferences):
                     'jump. Example: {"turn": [0, 22], "reverse": [23, 35]}',
         default=DEFAULT_ANIM_FRAME_RANGES)
 
+    save_paths_in_json: BoolProperty(
+        name="Save Paths in JSON",
+        description="Include absolute file paths in the exported JSON. Leave unchecked to make the JSON portable to other PCs",
+        default=False)
+
     def racers_dir(self):
         return Path(self.repo_path) / "assets" / "mods" / "racers"
 
@@ -102,6 +107,7 @@ class NFR_Preferences(AddonPreferences):
         layout.label(text="Export target (derived from Repo Path):", icon="INFO")
         layout.label(text=str(self.racers_dir()))
         layout.separator()
+        layout.prop(self, "save_paths_in_json")
         row = layout.row(align=True)
         row.operator("nfr.save_settings", text="Save Settings JSON")
         row.operator("nfr.load_settings", text="Load Settings JSON")

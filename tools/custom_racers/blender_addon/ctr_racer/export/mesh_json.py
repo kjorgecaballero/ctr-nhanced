@@ -196,10 +196,20 @@ def _do_export_body(context, obj):
         str(r.page), str(r.slot), r.engine, r.long_name,
     ]
 
-    if r.icon_path:
+    icon_abs = None
+    if r.icon_image:
+        import tempfile
+        temp_dir = tempfile.mkdtemp()
+        icon_abs = os.path.join(temp_dir, "icon.png")
+        r.icon_image.filepath_raw = icon_abs
+        r.icon_image.file_format = 'PNG'
+        r.icon_image.save()
+    elif r.icon_path:
         icon_abs = bpy.path.abspath(r.icon_path)
+        
+    if icon_abs:
         if not os.path.isfile(icon_abs):
-            raise RuntimeError(f"Icon not found: {r.icon_path} -> {icon_abs}")
+            raise RuntimeError(f"Icon not found: {icon_abs}")
         cmd += ["--icon", icon_abs]
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]

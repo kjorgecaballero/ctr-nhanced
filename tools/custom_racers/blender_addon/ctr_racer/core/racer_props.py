@@ -28,6 +28,23 @@ def update_rot_preview(self, context):
         else:
             obj.delta_rotation_euler = (0, 0, 0)
 
+
+def update_icon_path(self, context):
+    import bpy
+    import os
+    if not self.icon_path:
+        self.icon_image = None
+        return
+    abs_path = bpy.path.abspath(self.icon_path)
+    if os.path.isfile(abs_path):
+        try:
+            img = bpy.data.images.load(abs_path, check_existing=True)
+            if not img.packed_file:
+                img.pack() # Empaqueta en memoria
+            self.icon_image = img
+        except Exception as e:
+            print(f"[NFR] Failed to pack icon: {e}")
+
 class NFR_RacerProps(PropertyGroup):
     is_racer:   BoolProperty(name="Is Racer", default=False)
     slug:       StringProperty(name="Slug", description="Folder name and internal .ctr name")
@@ -82,7 +99,8 @@ class NFR_RacerProps(PropertyGroup):
     jump_rot_pivot_z: FloatProperty(name="Pivot Height (Z)", default=0.35, min=0.0, max=2.0)
     jump_rot_frames: IntProperty(name="Rotation Frames", default=4, min=2, max=10)
 
-    icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH")
+    icon_path:  StringProperty(name="Icon PNG", subtype="FILE_PATH", update=update_icon_path)
+    icon_image: PointerProperty(type=bpy.types.Image, name="Icon Image")
 
     def custom_id(self):
         # Page 0,     slots 16-23 -> 144 + (slot - 16)

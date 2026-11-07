@@ -247,7 +247,10 @@ class NFR_PT_Racer(Panel):
         color_row = col.row(align=True)
         color_row.label(text="Minimap Color:")
         color_row.prop(r, "color", text="")
-        col.prop(r, "icon_path")
+        icon_row = col.row(align=True)
+        icon_row.prop(r, "icon_path", text="Icon PNG")
+        if r.icon_image:
+            icon_row.label(text="", icon="PACKAGE")
 
         layout.separator()
         layout.label(text="Tools:", icon="TOOL_SETTINGS")

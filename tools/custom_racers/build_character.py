@@ -85,7 +85,15 @@ from ctr_animation_codec import encode_animation, pack_delta
 try:
     from PIL import Image as PIL_Image
 except ImportError:
-    PIL_Image = None
+    import subprocess
+    import sys
+    print("Pillow is required. Installing automatically...")
+    try:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
+        from PIL import Image as PIL_Image
+    except Exception as e:
+        print(f"Failed to install Pillow: {e}")
+        PIL_Image = None
 
 ROOT = Path(__file__).parent
 
