@@ -89,6 +89,14 @@ except ImportError:
     import sys
     print("Pillow is required. Installing automatically...")
     try:
+        try:
+
+            subprocess.check_call([sys.executable, "-m", "ensurepip", "--default-pip"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        except Exception:
+
+            pass
+
         subprocess.check_call([sys.executable, "-m", "pip", "install", "Pillow"])
         from PIL import Image as PIL_Image
     except Exception as e:
