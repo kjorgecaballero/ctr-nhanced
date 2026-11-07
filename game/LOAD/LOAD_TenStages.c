@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_adventure_pack.h>
 #ifdef CTR_NATIVE
 #include <LevelRegistry.h>
 #include <platform/native_renderer.h>
@@ -431,6 +432,10 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		}
 #endif
 		LOAD_DriverMPK(bigfile, driverLOD, LOAD_Callback_DriverModels);
+#ifdef CTR_NATIVE
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
+			NativeAdventurePack_StartLoadingModels(bigfile);
+#endif
 		break;
 	}
 	case 5:
@@ -669,6 +674,10 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		if (lev != 0)
 		{
 			LibraryOfModels_Store(gGT, lev->numModels, lev->ptrModelsPtrArray);
+#ifdef CTR_NATIVE
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
+			NativeAdventurePack_OverrideModelPtrs(gGT);
+#endif
 
 			gGT->ptrCircle = (u32)DecalGlobal_FindInLEV(lev, rdata.s_circle);
 			gGT->ptrClod = (u32)DecalGlobal_FindInLEV(lev, rdata.s_clod);
@@ -898,6 +907,9 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 
 		NativeCustomRacer_DumpVRAMIfRequested();
 		/* === End Custom Racer === */
+
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
+			NativeAdventurePack_SpawnCharacters(gGT);
 
 		return -2;
 	}
