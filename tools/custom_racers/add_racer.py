@@ -172,7 +172,10 @@ def main():
 
     # 4. roster.txt
     roster_path = RACERS / "roster.txt"
-    lines = roster_path.read_text().splitlines()
+    if roster_path.exists():
+        lines = roster_path.read_text().splitlines()
+    else:
+        lines = []
     new_line = f"{args.page}\t{args.slot}\t{slug}\t{args.engine}\t\"{args.display_name}\""
     if color is not None:
         new_line += f"\t{color}"

@@ -7,6 +7,7 @@ Lazily creates a preview collection. The collection is torn down by
 the addon's top-level unregister().
 """
 import bpy
+import bpy.utils.previews
 from pathlib import Path
 
 

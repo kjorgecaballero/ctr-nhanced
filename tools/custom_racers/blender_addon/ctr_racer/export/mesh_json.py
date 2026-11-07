@@ -1,4 +1,3 @@
-
 def _linear_to_srgb(c):
     if c <= 0.0031308:
         return 12.92 * c
@@ -45,11 +44,6 @@ def export_mesh_json(obj, out_path, override_clips=None):
     materials = []
     images = {}
     for slot_idx, mat in enumerate(m.materials):
-        # Empty slot: m.materials can contain None when the user
-        # deleted a material but left the slot. Polygon
-        # material_index still points here, so we append a
-        # placeholder -- a `continue` would shift every later
-        # material one slot left and remap every face.
         if mat is None:
             materials.append({
                 "name": f"__empty_slot_{slot_idx}__",
@@ -58,9 +52,7 @@ def export_mesh_json(obj, out_path, override_clips=None):
                 "blend_mode": "half",
             })
             continue
-        # Material with use_nodes off or purged node_tree: keep the
-        # real name but no image. The polygon material_index stays
-        # valid.
+
         if not mat.use_nodes or mat.node_tree is None:
             materials.append({
                 "name": mat.name,
@@ -196,21 +188,14 @@ def _do_export_body(context, obj):
         str(r.page), str(r.slot), r.engine, r.long_name,
     ]
 
-    icon_abs = None
-    if r.icon_image:
-        import tempfile
-        temp_dir = tempfile.mkdtemp()
-        icon_abs = os.path.join(temp_dir, "icon.png")
-        r.icon_image.filepath_raw = icon_abs
-        r.icon_image.file_format = 'PNG'
-        r.icon_image.save()
-    elif r.icon_path:
+    # Safe icon handling (ignores missing files instead of crashing)
+    if r.icon_path:
         icon_abs = bpy.path.abspath(r.icon_path)
-        
-    if icon_abs:
-        if not os.path.isfile(icon_abs):
-            raise RuntimeError(f"Icon not found: {icon_abs}")
-        cmd += ["--icon", icon_abs]
+        if os.path.isfile(icon_abs):
+            cmd += ["--icon", icon_abs]
+        else:
+            print(f"[NFR] Icon not found at {icon_abs}. Exporting without icon.")
+            r.icon_path = ""
 
     cmd += ["--mask", r.mask, "--wheels", r.wheels]
     cmd += ["--rot", r.kart_rot]
@@ -228,8 +213,11 @@ def _do_export_body(context, obj):
     res = subprocess.run(cmd, cwd=str(prefs.repo_path),
                          capture_output=True, text=True)
     if res.returncode != 0:
-        raise RuntimeError(
-            f"add_racer failed ({res.returncode}):\n{res.stderr[-400:]}")
+        print("=== STDOUT ===")
+        print(res.stdout)
+        print("=== STDERR ===")
+        print(res.stderr)
+        raise RuntimeError(f"add_racer failed ({res.returncode}). See Console for full error.")
 
 
 def _racer_objects(context):
