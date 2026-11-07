@@ -87,6 +87,7 @@ int NativeCustomRacer_HasSlot(int characterID);
 
 /* Returns the folder name for the given character ID, or NULL. */
 const char *NativeCustomRacer_GetFolder(int characterID);
+int NativeCustomRacer_GetCharacterIDFromFolder(const char *folder);
 
 /* Returns a pointer to the custom's packed vertex-color code array
  * (same format as data.ptrColor[][0..3]), or NULL if the custom has

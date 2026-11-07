@@ -743,6 +743,62 @@ const char *NativeCustomRacer_GetFolder(int characterID)
     return NULL;
 }
 
+static int RetailSlugToCharID(const char *slug)
+{
+    static const struct { const char *s; int id; } map[] = {
+        {"crash",       CRASH_BANDICOOT},
+        {"coco",        COCO_BANDICOOT},
+        {"cortex",      NEO_CORTEX},
+        {"tiny",        TINY_TIGER},
+        {"polar",       POLAR},
+        {"pura",        PURA},
+        {"dingodile",   DINGODILE},
+        {"ngin",        N_GIN},
+        {"n_gin",       N_GIN},
+        {"ntropy",      N_TROPY},
+        {"n_tropy",     N_TROPY},
+        {"pinstripe",   PINSTRIPE},
+        {"ripper_roo",  RIPPER_ROO},
+        {"ripperroo",   RIPPER_ROO},
+        {"papu_papu",   PAPU_PAPU},
+        {"papupapu",    PAPU_PAPU},
+        {"komodo_joe",  KOMODO_JOE},
+        {"komodojoe",   KOMODO_JOE},
+        {"penta",       PENTA_PENGUIN},
+        {"penta_penguin", PENTA_PENGUIN},
+        {"fake_crash",  FAKE_CRASH},
+        {"fakecrash",   FAKE_CRASH},
+        {"oxide",       NITROS_OXIDE},
+        {"nitros_oxide", NITROS_OXIDE},
+    };
+    for (size_t i = 0; i < sizeof(map) / sizeof(map[0]); i++)
+        if (strcmp(slug, map[i].s) == 0) return map[i].id;
+    return -1;
+}
+
+int NativeCustomRacer_GetCharacterIDFromFolder(const char *folder)
+{
+    NativeCustomRacer_Init();
+    if (folder == NULL) return -1;
+    for (int i = 0; i < s_pageEntryCount; i++)
+    {
+        if (strcmp(s_pageEntries[i].folder, folder) != 0) continue;
+        int page = s_pageEntries[i].page;
+        int slot = s_pageEntries[i].slot;
+        if (page > 0)
+        {
+            if (slot < NATIVE_PAGE_SIZE)
+                return NATIVE_CUSTOM_ID_BASE + (page - 1) * NATIVE_PAGE_SIZE + slot;
+            if (slot < NATIVE_PAGE_SIZE + NATIVE_PAGE0_CUSTOM_COUNT)
+                return NATIVE_EXT_CUSTOM_BASE + (page - 1) * NATIVE_PAGE0_CUSTOM_COUNT + (slot - NATIVE_PAGE_SIZE);
+        }
+        else if (page == 0 && slot >= NATIVE_PAGE_SIZE)
+            return NATIVE_PAGE0_CUSTOM_BASE + (slot - NATIVE_PAGE_SIZE);
+        return -1;
+    }
+    return RetailSlugToCharID(folder);
+}
+
 const u32 *NativeCustomRacer_GetColorPtr(int characterID)
 {
     if (characterID < NATIVE_CUSTOM_ID_BASE ||

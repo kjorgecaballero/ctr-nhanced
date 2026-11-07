@@ -487,6 +487,34 @@ static int LevelJson_SkipValue(struct LevelJson *json)
 	return 1;
 }
 
+static int LevelJson_ReadStringArray(struct LevelJson *json,
+                                      char out[][LEVEL_REGISTRY_ADV_CHAR_NAME],
+                                      int maxCount)
+{
+	LevelJson_SkipWhitespace(json);
+	if ((json->cursor >= json->end) || (*json->cursor++ != '['))
+		return 0;
+	LevelJson_SkipWhitespace(json);
+
+	int count = 0;
+	while (json->cursor < json->end && *json->cursor != ']')
+	{
+		if (count >= maxCount) return 0;
+		if (!LevelJson_ReadString(json, out[count], LEVEL_REGISTRY_ADV_CHAR_NAME))
+			return 0;
+		count++;
+		LevelJson_SkipWhitespace(json);
+		if (json->cursor < json->end && *json->cursor == ',')
+		{
+			json->cursor++;
+			LevelJson_SkipWhitespace(json);
+		}
+	}
+	if (json->cursor >= json->end || *json->cursor++ != ']')
+		return 0;
+	return count;
+}
+
 static int LevelJson_ReadInt(struct LevelJson *json, int *value)
 {
 	char *numberEnd;
@@ -621,7 +649,7 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 	char replacement[LEVEL_REGISTRY_ID_LENGTH] = "";
 	char base[LEVEL_REGISTRY_ID_LENGTH] = "";
 	char musicFile[LEVEL_REGISTRY_PATH_LENGTH] = "";
-	char type[16] = "";
+	char type[32] = "";
 	int hasID = 0;
 	int hasName = 0;
 	int hasMusic = 0;
@@ -717,6 +745,17 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 				return 0;
 			}
 		}
+		else if (strcmp(key, "characters") == 0)
+		{
+			int n = LevelJson_ReadStringArray(&json, level->adventureCharSlugs,
+			                                  LEVEL_REGISTRY_ADV_CHAR_COUNT);
+			if (n < 0)
+			{
+				fprintf(stderr, "[LevelRegistry] Parse fail: bad 'characters' value\n");
+				return 0;
+			}
+			level->adventureCharCount = n;
+		}
 		else if (!LevelJson_SkipValue(&json))
 		{
 			fprintf(stderr, "[LevelRegistry] Parse fail: bad value for key '%s'\n", key);
@@ -764,6 +803,13 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 		else
 			level->isBattle = inferredBattle;
 
+		if (strcmp(type, "adventure_garage") == 0)
+		{
+			level->isAdventureGarage = 1;
+			level->replaceLevelID = ADVENTURE_GARAGE;
+			level->baseLevelID = ADVENTURE_GARAGE;
+		}
+
 		if (level->isBattle &&
 		    (level->baseLevelID < NITRO_COURT || level->baseLevelID > LAB_BASEMENT))
 		{
@@ -798,7 +844,7 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 	fprintf(stderr, "[LevelRegistry] primMemSize=%d (0x%x) forceHiLod=%d\n",
 		level->primMemSize, level->primMemSize, level->forceHiLod);
 
-	if (level->baseLevelID == MAIN_MENU_LEVEL)
+	if (level->isAdventureGarage || level->baseLevelID == MAIN_MENU_LEVEL)
 	{
 		if (!LevelRegistry_HasAsset(level->assetName, NULL, "lev") ||
 		    !LevelRegistry_HasAsset(level->assetName, NULL, "vrm"))
@@ -845,11 +891,13 @@ static int LevelRegistry_ValidateAndMeasure(struct LevelDef *level)
 	u32 meshInfoOff, meshInfoPtr, numQuadBlock, qbArrayOff, qbArrayPtr;
 	u32 i;
 	int len;
+	const char *mode_prefix;
 
 	if (level == NULL)
 		return 0;
 
-	len = snprintf(path, sizeof(path), "%s/1p/data.lev", level->assetName);
+	mode_prefix = (level->isAdventureGarage || level->baseLevelID == MAIN_MENU_LEVEL) ? "" : "1p/";
+	len = snprintf(path, sizeof(path), "%s/%sdata.lev", level->assetName, mode_prefix);
 	if ((len <= 0) || ((size_t)len >= sizeof(path)))
 		return 0;
 
@@ -1381,6 +1429,22 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 		if (snprintf(path, sizeof(path), "%s/data.%s", level->assetName, extension) >= (int)sizeof(path))
 			return NULL;
 		fprintf(stderr, "[LevelRegistry] OVERRIDE main_menu subfile=%d -> %s\n", subfileIndex, path);
+		return path;
+	}
+
+	if (levelID == ADVENTURE_GARAGE && level->isAdventureGarage)
+	{
+		int expectedBase = BI_MAINMENUFILE + LOAD_MAIN_MENU_GARAGE_FILE_OFFSET;
+		if (subfileIndex == expectedBase + LVI_VRAM)
+			extension = "vrm";
+		else if (subfileIndex == expectedBase + LVI_LEV)
+			extension = "lev";
+		else
+			return NULL;
+
+		if (snprintf(path, sizeof(path), "%s/data.%s", level->assetName, extension) >= (int)sizeof(path))
+			return NULL;
+		fprintf(stderr, "[LevelRegistry] OVERRIDE adventure_garage subfile=%d -> %s\n", subfileIndex, path);
 		return path;
 	}
 

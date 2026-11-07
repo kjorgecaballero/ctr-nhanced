@@ -5,6 +5,8 @@
 #define LEVEL_REGISTRY_NAME_LENGTH 128
 #define LEVEL_REGISTRY_PATH_LENGTH 256
 #define LEVEL_REGISTRY_RACER_COUNT 8
+#define LEVEL_REGISTRY_ADV_CHAR_COUNT 8
+#define LEVEL_REGISTRY_ADV_CHAR_NAME  64
 
 struct LevelDef
 {
@@ -27,6 +29,9 @@ struct LevelDef
 	 * they don't consume the 16 high-score / ghost slots reserved for
 	 * track additions. */
 	int isBattle;
+        int isAdventureGarage;
+        int adventureCharCount;
+        char adventureCharSlugs[LEVEL_REGISTRY_ADV_CHAR_COUNT][LEVEL_REGISTRY_ADV_CHAR_NAME];
 
 	/* Phase 2+3: measured at manifest parse time by
 	 * LevelRegistry_ValidateAndMeasure(). Zero if the LEV was not

@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_adventure_pack.h>
 
 void MM_Title_MenuUpdate(void)
 {
@@ -132,8 +133,8 @@ void MM_Title_MenuUpdate(void)
 
 		// go to adventure character select screen
 		sdata->mainMenuState = MAIN_MENU_ADVENTURE;
-
-		MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
+                NativeAdventurePack_ActivateForLoad();
+                MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
 		break;
 
 	// adventure save/load

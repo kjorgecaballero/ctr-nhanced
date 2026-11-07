@@ -1,5 +1,6 @@
 #include <common.h>
 #include <platform/native_custom_racer.h>
+#include <platform/native_adventure_pack.h>
 #include <widescreen.h>
 
 enum GarageInputMask
@@ -89,6 +90,10 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	struct GameTracker *gGT = sdata->gGT;
 	struct PrimMem *primMem = &gGT->backBuffer->primMem;
 	s16 currCharacterID = gGarage.garageCharacterIDs[currSelectIndex];
+        {
+                int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
+                if (packID >= 0) currCharacterID = (s16)packID;
+        }
 	struct MetaDataCHAR *MDC = GET_METADATA(currCharacterID);
 	int nameIndex = MDC->name_LNG_long;
 	RECT r;
@@ -284,6 +289,10 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	RECTMENU_DrawInnerRect(&r, 4, gGT->backBuffer->otMem.uiOT);
 
 	char *name = sdata->lngStrings[nameIndex];
+        {
+                const char *customName = NativeCustomRacer_GetDisplayName(currCharacterID);
+                if (customName != NULL) name = (char *)customName;
+        }
 
 	// Draw character name
 	DecalFont_DrawLine(name, GARAGE_CHARACTER_NAME_X, GARAGE_CHARACTER_NAME_Y, FONT_BIG, JUSTIFY_CENTER | ORANGE);
@@ -386,6 +395,10 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 					sdata->ptrDesiredMenu = &data.menuSubmitName;
 
 					data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
+                {
+                        int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
+                        if (packID >= 0) data.characterIDs[0] = (s16)packID;
+                }
 					sdata->advProgress.characterID = data.characterIDs[0];
 
 					SubmitName_RestoreName(0);
@@ -472,6 +485,10 @@ update_garage_camera:
 			sdata->ptrDesiredMenu = &data.menuSubmitName;
 
 			data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
+                {
+                        int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
+                        if (packID >= 0) data.characterIDs[0] = (s16)packID;
+                }
 			sdata->advProgress.characterID = data.characterIDs[0];
 
 			SubmitName_RestoreName(0);

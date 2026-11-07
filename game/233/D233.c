@@ -1,4 +1,5 @@
 #include <common.h>
+#include <platform/native_adventure_pack.h>
 
 static void OVR233_ResetGarage(void);
 static void OVR233_ResetCreditsBSS(void);
@@ -184,6 +185,7 @@ void CS_OVR233_InitData(void)
 static void OVR233_ResetGarage(void)
 {
 	gGarage = s_gGarageInitialState;
+        NativeAdventurePack_OnGarageReset();
 }
 
 static void OVR233_ResetCreditsBSS(void)

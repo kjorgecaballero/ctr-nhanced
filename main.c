@@ -44,6 +44,7 @@
 #include "platform/native_checkpoint_file.c"
 #include "platform/native_cd.c"
 #include "platform/native_custom_racer.c"
+#include "platform/native_adventure_pack.c"
 #include "platform/native_custom_music.c"
 #include "platform/native_gpu_links.c"
 #include "platform/native_gpu.c"
