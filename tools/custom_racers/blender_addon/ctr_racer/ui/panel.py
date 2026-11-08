@@ -73,6 +73,8 @@ class NFR_PT_Racer(Panel):
             self._draw_items(context, layout)
         elif tab == 'SFX':
             self._draw_sfx(context, layout)
+        elif tab == 'ADVENTURE':
+            _draw_adventure(layout, context)
         elif tab == 'LEVELS':
             self._draw_levels(context, layout)
         elif tab == 'VOICES':
@@ -990,3 +992,51 @@ def register():
 def unregister():
     for c in reversed(_CLASSES):
         bpy.utils.unregister_class(c)
+
+def _draw_adventure(layout, context):
+    st = context.scene.nfr_adventure
+    box = layout.box()
+    box.label(text="Adventure Pack Settings", icon='WORLD')
+    box.prop(st, "pack_name")
+    box.prop(st, "slug")
+    box.prop(st, "lev_file")
+    box.prop(st, "vrm_file")
+    box.prop(st, "music_file")
+    box.prop(st, "scale_mult", text="Scale Multiplier")
+
+    box = layout.box()
+    box.label(text="Camera Tools", icon='CAMERA_DATA')
+    row = box.row(align=True)
+    row.operator("nfr.adventure_add_cam", text="4:3").ar = '4:3'
+    row.operator("nfr.adventure_add_cam", text="16:9").ar = '16:9'
+    row.operator("nfr.adventure_add_cam", text="16:10").ar = '16:10'
+    row.operator("nfr.adventure_add_cam", text="21:9").ar = '21:9'
+    
+    row = box.row(align=True)
+    row.operator("nfr.adventure_assign_cam", text="Get Coords from Active Camera", icon='EYEDROPPER')
+    row = box.row(align=True)
+    row.operator("nfr.adventure_aim_cam", text="Aim Camera at Slot 0", icon='TRACKER')
+    
+    row = box.row(align=True)
+    row.prop(st, "cam_x"); row.prop(st, "cam_y"); row.prop(st, "cam_z")
+    row = box.row(align=True)
+    row.prop(st, "cam_rot_x"); row.prop(st, "cam_rot_y")
+
+    box = layout.box()
+    box.label(text="Character Slots (Max 8)", icon='OUTLINER_OB_GROUP_INSTANCE')
+    box.label(text="Select object in 3D view, then click 'Get'", icon='INFO')
+    
+    for i in range(8):
+        row = box.row(align=True)
+        row.prop(st, f"char_{i}", text=f"S{i}")
+        op = row.operator("nfr.adventure_assign_single", text="Get", icon='EYEDROPPER')
+        op.slot_index = i
+        
+        row2 = box.row(align=True)
+        row2.prop(st, f"x_{i}", text="X")
+        row2.prop(st, f"y_{i}", text="Y")
+        row2.prop(st, f"z_{i}", text="Z")
+        row2.prop(st, f"rot_{i}", text="Rot")
+
+    layout.separator()
+    layout.operator("nfr.adventure_build", icon='EXPORT', text="BUILD ADVENTURE PACK")

@@ -42,7 +42,7 @@ UI_MODES = [
     ('SETUP',  'Setup',  'Racer settings, slot roster, materials'),
     ('KART',   'Kart',   'Kart editor, presets, animation clips'),
     ('CUSTOM', 'Custom', 'Dance, items, SFX, voices'),
-    ('LEVELS', 'Levels', 'Custom level builder'),
+    ('LEVELS', 'Levels', 'Custom levels and adventure packs'),
 ]
 
 UI_TABS_BY_MODE = {
@@ -63,7 +63,8 @@ UI_TABS_BY_MODE = {
         ('VOICES', 'Voices', 'Custom voiceline WAVs'),
     ],
     'LEVELS': [
-        ('LEVELS', 'Tracks', 'Custom track builder'),
+        ('LEVELS',    'Tracks',    'Custom track builder'),
+        ('ADVENTURE', 'Adventure', 'Custom Adventure Garages'),
     ],
 }
 

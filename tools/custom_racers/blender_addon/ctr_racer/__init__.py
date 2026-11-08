@@ -16,14 +16,15 @@ bl_info = {
     "category": "Import-Export",
 }
 
-from . import prefs, core, render, slots, export, kart, anim, dance, items, sfx, voices, levels, ui
+from . import prefs, core, render, slots, export, kart, anim, dance, items, sfx, voices, levels, ui, adventure
 from .core.icons import _teardown_previews
 
 
 def register():
     prefs.register()
     core.register()      # Object.racer PointerProperty + NFR_RacerProps
-    render.register()    # Scene/Material props + render operators
+    render.register()
+    adventure.register()    # Scene/Material props + render operators
     slots.register()     # slot operators
     export.register()    # export operators
     kart.register()      # kart template importer + Scene.kart_state
@@ -48,6 +49,7 @@ def unregister():
     kart.unregister()
     export.unregister()
     slots.unregister()
+    adventure.unregister()
     render.unregister()
     core.unregister()
     prefs.unregister()

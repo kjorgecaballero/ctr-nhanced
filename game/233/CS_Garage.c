@@ -45,6 +45,15 @@ enum
 	GARAGE_CHARACTER_ARROW_ROT_LEFT = 0x800,
 };
 
+/* Adventure-pack camera calibration knobs (ANG units: 0x1000 = 360 deg).
+ * Tune empirically: if the view is mirrored/inverted, flip the sign of
+ * the corresponding bias or negate the ratan2 result. */
+#ifndef ADV_CAM_AIM_HEIGHT
+#define ADV_CAM_AIM_HEIGHT  0   /* raise aim point above the slot origin (feet) */
+#endif
+#define ADV_CAM_YAW_BIAS    0
+#define ADV_CAM_PITCH_BIAS  0
+
 
 void CS_Garage_ZoomOut(s16 zoomState)
 {
@@ -550,11 +559,37 @@ update_garage_camera:
 	s16 pathFlags;
 	SVec3 camPos;
 	SVec3 camRot;
-	CAM_Path_Move((int)garageFrames, CTR_VECTOR_DATA(&(camPos)), CTR_VECTOR_DATA(&(camRot)), &pathFlags);
+
+	if (NativeAdventurePack_IsActive()) {
+		s16 cam_p[3];
+		s16 cam_r[2];   /* rot del JSON: no se usa */
+		s16 char_p[3];
+		s16 char_r[2];
+		NativeAdventurePack_GetCamera(cam_p, cam_r);
+		NativeAdventurePack_GetSlotPos(currSelectIndex, char_p, char_r);
+
+		camPos.x = cam_p[0];
+		camPos.y = cam_p[1];
+		camPos.z = cam_p[2];
+
+		/* look-at: objetivo - camara */
+		int dx = char_p[0] - cam_p[0];
+		int dy = (char_p[1] + ADV_CAM_AIM_HEIGHT) - cam_p[1];
+		int dz = char_p[2] - cam_p[2];
+		int horiz_dist = SquareRoot0((u32)(dx * dx + dz * dz));
+		int pitch = ratan2(dy, horiz_dist);
+
+		/* Combinacion verificada visualmente (antes "MODO 1"):
+		 * yaw normal, pitch negado, roll 180 grados. */
+		camRot.y = (s16)((ratan2(dx, dz) + ADV_CAM_YAW_BIAS) & 0xFFF);
+		camRot.x = (s16)((-pitch + ADV_CAM_PITCH_BIAS) & 0xFFF);
+		camRot.z = (s16)0x800;
+	} else {
+		CAM_Path_Move((int)garageFrames, CTR_VECTOR_DATA(&(camPos)), CTR_VECTOR_DATA(&(camRot)), &pathFlags);
+	}
 
 	// set position and rotation to pushBuffer
 	gGT->pushBuffer[0].pos = camPos;
-
 	gGT->pushBuffer[0].rot = camRot;
 
 	int zoom = gGarage.numFramesCurr_ZoomOut;
@@ -584,6 +619,8 @@ void CS_Garage_Init(void)
 	sdata->ptrActiveMenu = &gGarage.menuGarage;
 
 	gGarage.menuGarage.state &= ~(ONLY_DRAW_TITLE);
+
+	
 
 	// 0 = just entered garage
 	CS_Garage_ZoomOut(0);

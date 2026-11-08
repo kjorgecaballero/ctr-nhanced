@@ -606,10 +606,22 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 			                 NativeCustomRacer_GetOxideMenuModelSlot(),
 			                 LOAD_OxideMenuModel_SetPointer);
 		}
+#ifdef CTR_NATIVE
+		/* second batch of adventure-pack models (queue is empty again here) */
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
+			NativeAdventurePack_StartLoadingModelsLate(bigfile);
+#endif
 		break;
 	}
 	case 7:
 	{
+#ifdef CTR_NATIVE
+		/* Adventure pack models may still be streaming (queued after the LEV).
+		 * Stay in this stage until they have all arrived. */
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive() &&
+		    !NativeAdventurePack_ModelsReady(bigfile))
+			return loadingStage;
+#endif
 		struct Level *lev = sdata->ptrLevelFile;
 
 		gGT->level1 = lev;
@@ -908,6 +920,9 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		NativeCustomRacer_DumpVRAMIfRequested();
 		/* === End Custom Racer === */
 
+		/* Pools (MainInit_JitPoolsNew, case 7) and models (case 6/7) are
+		 * ready only here. Do NOT spawn from CS_Garage_Init: it runs from
+		 * case 4 via mainMenuInit[], before pools/models exist. */
 		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
 			NativeAdventurePack_SpawnCharacters(gGT);
 

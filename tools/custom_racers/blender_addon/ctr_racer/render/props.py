@@ -116,6 +116,7 @@ def register():
             ('SFX',       "SFX",       "Custom kart SFX (boost, weapons, etc.)"),
             ('VOICES',    "Voices",    "Custom voiceline WAV export"),
             ('LEVELS', 'Levels', 'Custom level editor'),
+            ('ADVENTURE', 'Adventure', ''),
         ],
         default='SETTINGS',
     )
