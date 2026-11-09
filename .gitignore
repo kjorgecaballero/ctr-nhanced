@@ -78,3 +78,5 @@ run*.log
 *.dmp
 crash_dumps/
 memcards_final_test_*
+tools/custom_racers/garage/garage_retail.lev
+tools/custom_racers/garage/garage_retail.vrm
