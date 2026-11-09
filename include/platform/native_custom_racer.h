@@ -590,3 +590,4 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
 
 int NativeCustomRacer_IsGarageModel(struct Model *m);
 void NativeCustomRacer_RegisterGarageModel(int slot, struct Model *m);
+u16 NativeCustomRacer_GetGarageAnimFrames(struct Model *m);

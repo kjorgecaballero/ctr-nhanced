@@ -321,14 +321,10 @@ void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 			// they may be disabled due to podium scene on adv hub
 			if ((gGT->gameMode2 & NO_LEV_INSTANCE) == 0)
                 {    
-                    extern int NativeCustomRacer_IsGarageModel(struct Model *m);
-                    if (!NativeCustomRacer_IsGarageModel(levInstDef->model))
+                    meta = COLL_LevModelMeta(modelID);
+                    if (meta->LInB != NULL)       
                     {
-                        meta = COLL_LevModelMeta(modelID);
-                        if (meta->LInB != NULL)       
-                        {
-                            meta->LInB(inst);
-                        }
+                        meta->LInB(inst);
                     }
                 }
 		}

@@ -146,6 +146,19 @@ void NativeCustomRacer_RegisterGarageModel(int slot, struct Model *m) {
     if (slot >= 0 && slot < GARAGE_CUSTOM_SLOTS) s_garageCustomModels[slot] = m;
 }
 
+
+u16 NativeCustomRacer_GetGarageAnimFrames(struct Model *m)
+{
+    if (m == NULL) return 0;
+    for (int i = 0; i < GARAGE_CUSTOM_SLOTS; i++) {
+        if (s_garageCustomModels[i] == m) {
+            if (m->headers && m->headers[0].ptrAnimations && m->headers[0].ptrAnimations[0])
+                return (u16)(m->headers[0].ptrAnimations[0]->numFrames & 0x7FFF);
+        }
+    }
+    return 0;
+}
+
 int NativeCustomRacer_IsGarageModel(struct Model *m) {
     if (m == NULL) return 0;
     for (int i = 0; i < GARAGE_CUSTOM_SLOTS; i++)
