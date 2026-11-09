@@ -168,6 +168,31 @@ int NativeAdventurePack_ModelsReady(struct BigHeader *bigfile)
  * Los modelos custom usan Sentinel (texturas OpenGL), no VRAM. PatchLev
  * skipea correctamente los layouts con CLUT Sentinel.
  */
+/* Retail garage kart model names have irregular truncations:
+ *   crash     -> "selectkart"        (no suffix)
+ *   cortex    -> "selectkartcorte"   (truncated to 15 chars)
+ *   tiny      -> "selectkarttiny"
+ *   coco      -> "selectkartcoco"
+ *   ngin      -> "selectkartngin"
+ *   dingodile -> "selectkartdingo"   (truncated)
+ *   polar     -> "selectkartpolar"
+ *   pura      -> "selectkartpura"
+ * Returns NULL for unknown retail names. */
+static const char *KartModelNameForRetail(const char *retailName)
+{
+    if (retailName == NULL) return NULL;
+    if (strcmp(retailName, "crash")     == 0) return "selectkart";
+    if (strcmp(retailName, "cortex")    == 0) return "selectkartcorte";
+    if (strcmp(retailName, "tiny")      == 0) return "selectkarttiny";
+    if (strcmp(retailName, "coco")      == 0) return "selectkartcoco";
+    if (strcmp(retailName, "ngin")      == 0) return "selectkartngin";
+    if (strcmp(retailName, "n_gin")     == 0) return "selectkartngin";
+    if (strcmp(retailName, "dingodile") == 0) return "selectkartdingo";
+    if (strcmp(retailName, "polar")     == 0) return "selectkartpolar";
+    if (strcmp(retailName, "pura")      == 0) return "selectkartpura";
+    return NULL;
+}
+
 void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
 {
     if (lev == NULL || lev->ptrInstDefs == NULL) return;
@@ -209,6 +234,65 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                 i, charID, (void *)custom);
         applied++;
     }
+    /* Optional: custom karts per slot. Empty slug = retail kart.
+     * Each kart replaces the InstDef whose name matches
+     * "selectkart<retailName>" where retailName = slot's retail char. */
+    {
+        const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
+        if (pack != NULL && pack->adventureKartCount > 0)
+        {
+            for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS && i < pack->adventureKartCount; i++)
+            {
+                if (pack->adventureKartSlugs[i][0] == '\0')
+                    continue;
+
+                int retailCharID = gGarage.garageCharacterIDs[i];
+                const char *retailName = GET_METADATA(retailCharID)->name_Debug;
+                if (retailName == NULL || retailName[0] == '\0')
+                    continue;
+
+                const char *kartModelName = KartModelNameForRetail(retailName);
+                if (kartModelName == NULL)
+                {
+                    fprintf(stderr, "[AdventurePack] custom kart slot %d: no retail kart for '%s'\n",
+                            i, retailName);
+                    continue;
+                }
+
+                struct Model *customKart = NativeCustomRacer_LoadGarageKart(
+                    pack->adventureKartSlugs[i], kartModelName);
+                if (customKart == NULL)
+                    continue;
+
+                int replaced = 0;
+                for (u32 j = 0; j < lev->numInstances; j++)
+                {
+                    struct InstDef *def = &lev->ptrInstDefs[j];
+                    if (def->model == NULL || def->model->name == NULL)
+                        continue;
+
+                    /* Match by MODEL name, not InstDef name: retail InstDefs
+                     * are called "selectkart0/1/2..." but the Models inside
+                     * are "selectkartcoco", "selectkartpolar", etc. The
+                     * PVS bypass in RenderQueueExecute also checks
+                     * model->name, so this is the correct anchor. */
+                    if (strcmp(def->model->name, kartModelName) == 0)
+                    {
+                        def->model = customKart;
+                        replaced = 1;
+                        fprintf(stderr, "[AdventurePack] custom kart slot %d: matched InstDef '%s' (model '%s')\n",
+                                i, def->name, kartModelName);
+                        break;
+                    }
+                }
+
+                if (!replaced)
+                    fprintf(stderr, "[AdventurePack] custom kart slot %d: model '%s' not found\n",
+                            i, kartModelName);
+            }
+        }
+    }
+
     /* Silence CSEQ (menu music) ONLY if a custom ambient VAG
      * was loaded for this garage. If the garage has no ambient,
      * leave the menu music alone. */

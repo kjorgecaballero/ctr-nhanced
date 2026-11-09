@@ -206,6 +206,13 @@ void NativeCustomRacer_SwitchGarageCharacter(int newCharID);
 int  NativeCustomRacer_HasGarageAmbient(void);
 void NativeCustomRacer_PreloadGarageSfx(const char *slug);
 
+/* Load <slug>/kart.ctr and rename it to "selectkart<retailName>"
+ * (e.g. "selectkartcoco") so the PVS bypass in RenderQueueExecute
+ * works. retailName = GET_METADATA(gGarage.garageCharacterIDs[slot])
+ * ->name_Debug ("crash", "coco", ...). Returns NULL if the file is
+ * missing or cannot be loaded. */
+struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName);
+
 void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 
 

@@ -4031,6 +4031,38 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
  * D-pad. Stops the current garage VAG and preloads the new character's
  * audio (ambient.vag + sfx_N.vag). If the new character has no
  * ambient.vag, the previous one keeps silent (no retail fallback). */
+struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName)
+{
+    if (slug == NULL || slug[0] == '\0' || retailName == NULL || retailName[0] == '\0')
+        return NULL;
+
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/%s/kart.ctr", slug);
+
+    long sz = 0;
+    unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
+    if (!buf)
+    {
+        Log("[CustomRacer] kart.ctr not found: %s\n", path);
+        return NULL;
+    }
+
+    ApplyContainerPtrMap(buf, sz);
+    ExpandModelHeaders(buf, sz);
+
+    struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
+
+    /* The caller passes the full retail model name already
+     * (e.g. "selectkartcoco", "selectkart"). Rename so the PVS
+     * bypass in RenderQueueExecute matches. */
+    snprintf(m->name, 16, "%s", retailName);
+    m->id = -1;
+
+    Log("[CustomRacer] kart.ctr loaded: %s (%ld bytes) as '%s'\n",
+        path, sz, m->name);
+    return m;
+}
+
 void NativeCustomRacer_SwitchGarageCharacter(int newCharID)
 {
     NativeCustomRacer_ResetGarageAudio();

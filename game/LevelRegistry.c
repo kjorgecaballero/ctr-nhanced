@@ -756,6 +756,17 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
 			}
 			level->adventureCharCount = n;
 		}
+                else if (strcmp(key, "karts") == 0)
+                {
+                        int n = LevelJson_ReadStringArray(&json, level->adventureKartSlugs,
+                                                          LEVEL_REGISTRY_ADV_CHAR_COUNT);
+                        if (n < 0)
+                        {
+                                fprintf(stderr, "[LevelRegistry] Parse fail: bad 'karts' value\n");
+                                return 0;
+                        }
+                        level->adventureKartCount = n;
+                }
 		else if (!LevelJson_SkipValue(&json))
 		{
 			fprintf(stderr, "[LevelRegistry] Parse fail: bad value for key '%s'\n", key);
