@@ -455,6 +455,17 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 			sdata->advCharSelectIndex_curr = currSelectIndex;
 
 			Garage_MoveLR(currSelectIndex);
+
+                        {
+                            extern void NativeCustomRacer_SwitchGarageCharacter(int);
+                            int newID = (int)gGarage.garageCharacterIDs[currSelectIndex];
+                            {
+                                extern int NativeAdventurePack_GetCharacterID(int);
+                                int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
+                                if (packID >= 0) newID = packID;
+                            }
+                            NativeCustomRacer_SwitchGarageCharacter(newID);
+                        }
 		}
 
 		// reset frame counter to max number of frames

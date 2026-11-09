@@ -419,6 +419,7 @@ afterCameraAndSkipChecks:
 			 * for frames that are not a target. Fires on frame
 			 * transitions only (see NativeCustomRacer_TickDanceSfx). */
 			NativeCustomRacer_TickDanceSfx(instance->model, (int)animFrame);
+			NativeCustomRacer_TickGarageSfx(instance->model, (int)animFrame);
 		}
 		if (cs->frameOverrideRoot != 0)
 		{
@@ -672,10 +673,18 @@ processOpcode:
 		break;
 
 	case CS_OPCODE_START_MUSIC:
+		if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
+		    NativeLevelTextures_IsCustomLevelActive() &&
+		    NativeCustomRacer_HasGarageAmbient())
+			break;
 		CseqMusic_Start((u32)(u16)opcodeMetaShorts[6], 0, 0, 0, opcodeMeta->arg0.i);
 		break;
 
 	case CS_OPCODE_RESTART_MUSIC:
+		if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
+		    NativeLevelTextures_IsCustomLevelActive() &&
+		    NativeCustomRacer_HasGarageAmbient())
+			break;
 		CseqMusic_Restart((u32)(u16)opcodeMetaShorts[6], 1);
 		break;
 

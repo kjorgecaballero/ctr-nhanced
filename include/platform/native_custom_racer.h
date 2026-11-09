@@ -190,6 +190,22 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
  * take 25, 26, etc. */
 #define NATIVE_DANCE_SFX_SPU_VOICE  24
 
+/* === Custom garage SFX (per-frame + ambient) === */
+#define NATIVE_GARAGE_SFX_MAX 16
+#define NATIVE_GARAGE_SFX_SPU_VOICE 24
+#define NATIVE_GARAGE_SFX_SPU_BASE 0x80000u
+#define NATIVE_GARAGE_SFX_SPU_END 0x100000u
+
+#define NATIVE_GARAGE_AMBIENT_VOICE 32
+#define NATIVE_GARAGE_AMBIENT_SPU_BASE 0x1C0000u
+#define NATIVE_GARAGE_AMBIENT_SPU_END 0x200000u
+
+void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame);
+void NativeCustomRacer_ResetGarageAudio(void);
+void NativeCustomRacer_SwitchGarageCharacter(int newCharID);
+int  NativeCustomRacer_HasGarageAmbient(void);
+void NativeCustomRacer_PreloadGarageSfx(const char *slug);
+
 void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 
 
@@ -589,5 +605,5 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
 #endif
 
 int NativeCustomRacer_IsGarageModel(struct Model *m);
-void NativeCustomRacer_RegisterGarageModel(int slot, struct Model *m);
+void NativeCustomRacer_RegisterGarageModel(int slot, int charID, struct Model *m);
 u16 NativeCustomRacer_GetGarageAnimFrames(struct Model *m);

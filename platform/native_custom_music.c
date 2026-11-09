@@ -356,7 +356,18 @@ static int NativeCustomMusic_TryStartLevelEx(int levelID, int preservePosition)
 
 int NativeCustomMusic_TryStartLevel(int levelID)
 {
-        return NativeCustomMusic_TryStartLevelEx(levelID, 0);
+    {
+        extern int NativeCustomRacer_HasGarageAmbient(void);
+        const struct LevelDef *act = LevelRegistry_GetActive();
+        const struct LevelDef *rep = LevelRegistry_GetReplacement(levelID);
+        if (NativeCustomRacer_HasGarageAmbient()
+            || (act != NULL && act->isAdventureGarage)
+            || (rep != NULL && rep->isAdventureGarage))
+        {
+            return 0;
+        }
+    }
+    return NativeCustomMusic_TryStartLevelEx(levelID, 0);
 }
 
 int NativeCustomMusic_TrySwapHub(int levelID)

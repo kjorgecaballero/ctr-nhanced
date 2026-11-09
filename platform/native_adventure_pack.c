@@ -171,6 +171,7 @@ int NativeAdventurePack_ModelsReady(struct BigHeader *bigfile)
 void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
 {
     if (lev == NULL || lev->ptrInstDefs == NULL) return;
+    NativeCustomRacer_ResetGarageAudio();
     int applied = 0;
     for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
     {
@@ -185,7 +186,13 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
         }
         struct Model *custom = (struct Model *)((u8 *)raw + LOAD_MODEL_FILE_HEADER_BYTES);
         custom->id = STATIC_CRASHSELECT + i;  // forzar ID para el PVS bypass
-        NativeCustomRacer_RegisterGarageModel(i, custom);
+        NativeCustomRacer_RegisterGarageModel(i, charID, custom);
+        
+        const char *slug = NativeCustomRacer_GetFolder(charID);
+        if (slug)
+        {
+            NativeCustomRacer_PreloadGarageSfx(slug);
+        }
 
         // Reemplazar en gGT->modelPtr[]
         sdata->gGT->modelPtr[STATIC_CRASHSELECT + i] = custom;
@@ -202,6 +209,30 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                 i, charID, (void *)custom);
         applied++;
     }
+    /* Silence CSEQ (menu music) ONLY if a custom ambient VAG
+     * was loaded for this garage. If the garage has no ambient,
+     * leave the menu music alone. */
+    if (NativeLevelTextures_IsCustomLevelActive()
+        && NativeCustomRacer_HasGarageAmbient()) {
+        CseqMusic_StopAll();
+        sdata->cseqBoolPlay = 0;
+        sdata->cseqHighestIndex = -1;
+        fprintf(stderr, "[GarageSfx] CSEQ silenced (custom ambient active)\n");
+    }
+
+    /* If this garage has a custom ambient VAG, silence the custom
+     * level OGG music (music.ogg) so the ambient is audible. The
+     * OGG resumes for the next non-garage level because
+     * NativeCustomRacer_ResetGarageAudio clears the ambient flag
+     * and LOAD_TenStages/MainMain restart the OGG normally. */
+    /* Custom garage: NEVER play music.ogg. Garages use ambient.vag
+     * + sfx_N.vag, not race music. Stop unconditionally. */
+    {
+        extern void NativeCustomMusic_Stop(void);
+        NativeCustomMusic_Stop();
+        fprintf(stderr, "[GarageSfx] OGG music stopped (custom garage)\n");
+    }
+
     fprintf(stderr, "[AdventurePack] ApplyCustomRacers: %d custom models applied\n", applied);
 }
 

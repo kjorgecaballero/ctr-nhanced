@@ -23,9 +23,12 @@ int CseqMusic_Start(u16 songID, int p2, struct SongSet *p3, int p4, int p5)
 #ifdef CTR_NATIVE
         /* songID 0 = level music. If a custom OGG exists for this
          * level, load it and skip the retail CSEQ. */
-        if ((songID == 0) && NativeCustomMusic_TryStartLevel(sdata->gGT->levelID))
-        {
-                return 1;
+        if (songID == 0) {
+                extern int NativeCustomRacer_HasGarageAmbient(void);
+                if (NativeCustomRacer_HasGarageAmbient())
+                        return 1;
+                if (NativeCustomMusic_TryStartLevel(sdata->gGT->levelID))
+                        return 1;
         }
 #endif
 

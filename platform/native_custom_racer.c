@@ -141,9 +141,13 @@ static PageEntry s_pageEntries[NATIVE_ROSTER_MAX];
 /* Garage custom models (for INSTANCE.c to skip CS_Thread_LInB) */
 #define GARAGE_CUSTOM_SLOTS 8
 static struct Model *s_garageCustomModels[GARAGE_CUSTOM_SLOTS];
+static int s_garageCustomCharID[GARAGE_CUSTOM_SLOTS];
 
-void NativeCustomRacer_RegisterGarageModel(int slot, struct Model *m) {
-    if (slot >= 0 && slot < GARAGE_CUSTOM_SLOTS) s_garageCustomModels[slot] = m;
+void NativeCustomRacer_RegisterGarageModel(int slot, int charID, struct Model *m) {
+    if (slot >= 0 && slot < GARAGE_CUSTOM_SLOTS) {
+        s_garageCustomModels[slot] = m;
+        s_garageCustomCharID[slot] = charID;
+    }
 }
 
 
@@ -317,6 +321,18 @@ static u32 s_danceSfxSpuNext;
  * value is calculated when loading the VAG (see PreloadDanceSfxVags) from
  * the sample size and rate. */
 static u8 s_danceSfxCooldown[NATIVE_CUSTOM_COUNT][NATIVE_DANCE_SFX_MAX];
+
+/* === Custom garage SFX (per-frame + ambient) === */
+static u32 s_garageSfxFrames  [NATIVE_CUSTOM_COUNT][NATIVE_GARAGE_SFX_MAX];
+static u8  s_garageSfxCount   [NATIVE_CUSTOM_COUNT];
+static s16 s_garageSfxPrevFrame[NATIVE_CUSTOM_COUNT];
+static u32 s_garageSfxSpuAddr[NATIVE_CUSTOM_COUNT][NATIVE_GARAGE_SFX_MAX];
+static u16 s_garageSfxSpuPitch[NATIVE_CUSTOM_COUNT][NATIVE_GARAGE_SFX_MAX];
+static u32 s_garageSfxSpuNext;
+static u8 s_garageSfxCooldown[NATIVE_CUSTOM_COUNT][NATIVE_GARAGE_SFX_MAX];
+static u32 s_garageSfxCooldownLen;
+static u32 s_garageAmbientAddr;
+
 static u32 s_danceSfxCooldownLen;    /* ticks, common to all slots */
 
 /* === Custom kart SFX (Fase 4, VAG) ===
@@ -362,6 +378,7 @@ static int ParseEngineID(const char *s)
 /* Legacy parser (ext_id folder). Kept for backward compatibility.       */
 /* --------------------------------------------------------------------- */
 static void LoadDanceSfxSidecar(int idx, const char *folder);
+static void LoadGarageSfxSidecar(int idx, const char *folder);
 
 static int Roster_ParseLine(char *line, RosterEntry *out)
 {
@@ -693,6 +710,7 @@ void NativeCustomRacer_ReloadRoster(void)
                                           * NATIVE_DANCE_SFX_MAX;
 
                 LoadDanceSfxSidecar(idx, folderStored);
+                LoadGarageSfxSidecar(idx, folderStored);
 
                 {
                     const char *dn = (e.displayName[0] != '\0') ? e.displayName : e.folder;
@@ -3884,4 +3902,143 @@ void NativeCustomRacer_DrawLineForRacer(char *str, s16 posX, s16 posY,
 int NativeCustomRacer_AllocTexIdx(void)
 {
         return AllocModelTexIdx();
+}
+
+static void LoadGarageSfxSidecar(int idx, const char *folder)
+{
+    s_garageSfxCount[idx] = 0;
+    char path[256];
+    snprintf(path, sizeof(path), "assets/mods/racers/%s/garage/sfx.bin", folder);
+    FILE *f = fopen(path, "rb");
+    if (!f) return;
+    char magic[4];
+    u32 count = 0;
+    if (fread(magic, 1, 4, f) != 4 || memcmp(magic, "GSFX", 4) != 0 || fread(&count, sizeof(u32), 1, f) != 1) {
+        fclose(f); return;
+    }
+    if (count > NATIVE_GARAGE_SFX_MAX) count = NATIVE_GARAGE_SFX_MAX;
+    if (fread(s_garageSfxFrames[idx], sizeof(u32), count, f) != count) {
+        fclose(f); return;
+    }
+    fclose(f);
+    s_garageSfxCount[idx] = (u8)count;
+}
+
+void NativeCustomRacer_ResetGarageAudio(void)
+{
+    NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
+    memset(s_garageSfxSpuAddr, 0, sizeof(s_garageSfxSpuAddr));
+    memset(s_garageSfxPrevFrame, 0xFF, sizeof(s_garageSfxPrevFrame));
+    memset(s_garageSfxCooldown, 0, sizeof(s_garageSfxCooldown));
+    s_garageSfxSpuNext = NATIVE_GARAGE_SFX_SPU_BASE;
+    s_garageAmbientAddr = 0;
+}
+
+int NativeCustomRacer_HasGarageAmbient(void)
+{
+    return s_garageAmbientAddr != 0;
+}
+
+void NativeCustomRacer_PreloadGarageSfx(const char *slug)
+{
+    int charID = NativeCustomRacer_GetCharacterIDFromFolder(slug);
+    if (charID < NATIVE_CUSTOM_ID_BASE) return;
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+
+    // Preload per-frame SFX
+    u8 count = s_garageSfxCount[idx];
+    for (int i = 0; i < (int)count; i++) {
+        char path[256];
+        snprintf(path, sizeof(path), "assets/mods/racers/%s/garage/sfx_%d.vag", slug, i);
+        FILE *f = fopen(path, "rb");
+        if (!f) continue;
+        u8 hdr[20] = {0}; size_t got = fread(hdr, 1, sizeof(hdr), f);
+        fseek(f, 0, SEEK_END); long file_size = ftell(f); fclose(f);
+        if (file_size <= 48 || got < 20) continue;
+        u32 rate = (u32)hdr[0x10] | ((u32)hdr[0x11] << 8) | ((u32)hdr[0x12] << 16) | ((u32)hdr[0x13] << 24);
+        u16 pitch = (rate > 0) ? (u16)(((u64)rate * 0x1000u) / 44100u) : 0x1000;
+        u32 needed = (u32)(file_size - 48);
+        needed = (needed + 15u) & ~15u;
+        if (s_garageSfxSpuNext + needed > NATIVE_GARAGE_SFX_SPU_END) continue;
+
+        u32 loaded = NativeVag_Load(path, s_garageSfxSpuNext, NULL);
+        if (loaded == 0) continue;
+        s_garageSfxSpuAddr[idx][i] = loaded;
+        s_garageSfxSpuPitch[idx][i] = pitch;
+        s_garageSfxSpuNext = loaded + needed;
+
+        u64 samples = ((u64)needed / 16u) * 28u;
+        u32 rate_hz = (rate > 0) ? rate : 44100u;
+        u32 dur_ticks = (u32)((samples * 60u + rate_hz - 1u) / rate_hz) + 6u;
+        if (dur_ticks > 250u) dur_ticks = 250u;
+        s_garageSfxCooldownLen = dur_ticks;
+    }
+
+    // Preload Ambient Loop
+    char ambientPath[256];
+    snprintf(ambientPath, sizeof(ambientPath), "assets/mods/racers/%s/garage/ambient.vag", slug);
+    FILE *af = fopen(ambientPath, "rb");
+    if (af) {
+        u8 hdr[20] = {0}; size_t got = fread(hdr, 1, sizeof(hdr), af);
+        fseek(af, 0, SEEK_END); long file_size = ftell(af); fclose(af);
+        if (file_size > 48 && got >= 20) {
+            u32 rate = (u32)hdr[0x10] | ((u32)hdr[0x11] << 8) | ((u32)hdr[0x12] << 16) | ((u32)hdr[0x13] << 24);
+            u16 pitch = (rate > 0) ? (u16)(((u64)rate * 0x1000u) / 44100u) : 0x1000;
+            u32 needed = (u32)(file_size - 48); needed = (needed + 15u) & ~15u;
+            if (s_garageAmbientAddr == 0 && NATIVE_GARAGE_AMBIENT_SPU_BASE + needed <= NATIVE_GARAGE_AMBIENT_SPU_END) {
+                u32 loaded = NativeVag_Load(ambientPath, NATIVE_GARAGE_AMBIENT_SPU_BASE, NULL);
+                if (loaded) {
+                    s_garageAmbientAddr = loaded;
+                    NativeVag_Play(s_garageAmbientAddr, NATIVE_GARAGE_AMBIENT_VOICE, 0x2000, 0x2000, pitch, 1);
+                    fprintf(stderr, "[GarageSfx] ambient for %s playing at 0x%X\n", slug, loaded);
+                }
+            }
+        }
+    }
+}
+
+
+void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
+{
+    if (model == NULL) return;
+    int charID = -1;
+    for (int i = 0; i < GARAGE_CUSTOM_SLOTS; i++) {
+        if (s_garageCustomModels[i] == model) { charID = s_garageCustomCharID[i]; break; }
+    }
+    if (charID < NATIVE_CUSTOM_ID_BASE) return;
+    int idx = charID - NATIVE_CUSTOM_ID_BASE;
+    u8 count = s_garageSfxCount[idx];
+    if (count == 0) return;
+    s16 prev = s_garageSfxPrevFrame[idx];
+    s_garageSfxPrevFrame[idx] = (s16)frame;
+    for (int i = 0; i < (int)NATIVE_GARAGE_SFX_MAX; i++) {
+        if (s_garageSfxCooldown[idx][i] > 0) s_garageSfxCooldown[idx][i]--;
+    }
+    for (int i = 0; i < (int)count; i++) {
+        if ((int)s_garageSfxFrames[idx][i] != frame) continue;
+        if (s_garageSfxCooldown[idx][i] > 0) continue;
+        if (prev >= (s16)frame) continue;
+        u32 spu_addr = s_garageSfxSpuAddr[idx][i];
+        if (spu_addr == 0) continue;
+        s_garageSfxCooldown[idx][i] = (u8)s_garageSfxCooldownLen;
+        NativeVag_Play(spu_addr, NATIVE_GARAGE_SFX_SPU_VOICE, 0x2000, 0x2000, s_garageSfxSpuPitch[idx][i], 0);
+    }
+}
+
+
+/* Called from CS_Garage.c when the player changes selection with the
+ * D-pad. Stops the current garage VAG and preloads the new character's
+ * audio (ambient.vag + sfx_N.vag). If the new character has no
+ * ambient.vag, the previous one keeps silent (no retail fallback). */
+void NativeCustomRacer_SwitchGarageCharacter(int newCharID)
+{
+    NativeCustomRacer_ResetGarageAudio();
+
+    if (!NativeCustomRacer_HasSlot(newCharID))
+        return;
+
+    const char *slug = NativeCustomRacer_GetFolder(newCharID);
+    if (slug != NULL)
+        NativeCustomRacer_PreloadGarageSfx(slug);
 }

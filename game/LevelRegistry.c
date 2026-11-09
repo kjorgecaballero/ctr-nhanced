@@ -353,7 +353,7 @@ const char *LevelRegistry_GetActiveMusicPath(int levelID)
 {
         const struct LevelDef *level = LevelRegistry_ResolveForMusic(levelID);
 
-        if (level == NULL || level->music[0] == '\0' || level->assetName[0] == '\0')
+        if (level == NULL || level->isAdventureGarage || level->music[0] == '\0' || level->assetName[0] == '\0')
                 return NULL;
 
         snprintf(s_musicPathBuf, sizeof(s_musicPathBuf),
@@ -366,7 +366,7 @@ const char *LevelRegistry_GetActiveMusicFinalPath(int levelID)
         const struct LevelDef *level = LevelRegistry_ResolveForMusic(levelID);
         size_t len;
 
-        if (level == NULL || level->music[0] == '\0' || level->assetName[0] == '\0')
+        if (level == NULL || level->isAdventureGarage || level->music[0] == '\0' || level->assetName[0] == '\0')
                 return NULL;
 
         len = strlen(level->music);

@@ -118,6 +118,14 @@ void Garage_PlayFX(u32 soundId, int charId)
 
 void Garage_LerpFX(void)
 {
+    /* Custom garage: suppress retail ambient FX (Garage_LerpFX loops
+     * a 3D positional SFX that doesn't exist in the custom LEV). The
+     * custom ambient VAG (if any) is managed by PreloadGarageSfx. */
+    extern int NativeLevelTextures_IsCustomLevelActive(void);
+    if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
+        NativeLevelTextures_IsCustomLevelActive())
+        return;
+
 	struct GarageFX *garageSounds = sdata->garageSoundPool;
 	u32 *soundIDCountRef;
 

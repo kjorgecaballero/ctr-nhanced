@@ -139,6 +139,10 @@ int LOAD_TenStages(struct GameTracker *gGT, int loadingStage, struct BigHeader *
 			NativeCustomRacer_ResetMenuCache();
 			GhostReplay_ResetCache();
 		}
+                {
+                        extern void NativeCustomRacer_ResetGarageAudio(void);
+                        NativeCustomRacer_ResetGarageAudio();
+                }
 #endif
 
 		gGT->level1 = 0;
