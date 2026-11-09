@@ -767,14 +767,150 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
                 }
                 level->adventureKartCount = n;
             }
-            else if (strcmp(key, "idle_anim")   == 0) { LevelJson_ReadInt(&json, &level->garageIdleAnim); }
-            else if (strcmp(key, "idle_start")  == 0) { LevelJson_ReadInt(&json, &level->garageIdleStart); level->garageHasIdleAnim = 1; }
-            else if (strcmp(key, "idle_end")    == 0) { LevelJson_ReadInt(&json, &level->garageIdleEnd); }
-            else if (strcmp(key, "idle_loop")   == 0) { LevelJson_ReadInt(&json, &level->garageIdleLoop); }
-            else if (strcmp(key, "select_anim") == 0) { LevelJson_ReadInt(&json, &level->garageSelectAnim); }
-            else if (strcmp(key, "select_start")== 0) { LevelJson_ReadInt(&json, &level->garageSelectStart); level->garageHasSelectAnim = 1; }
-            else if (strcmp(key, "select_end")  == 0) { LevelJson_ReadInt(&json, &level->garageSelectEnd); }
-            else if (strcmp(key, "select_loop") == 0) { LevelJson_ReadInt(&json, &level->garageSelectLoop); }
+            else if (strcmp(key, "idle_anim") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageIdleAnim[i] = v; level->garageHasIdleAnim = 1;
+                }
+            }
+            else if (strcmp(key, "idle_start") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageIdleStart[i] = v; level->garageHasIdleAnim = 1;
+                }
+            }
+            else if (strcmp(key, "idle_end") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageIdleEnd[i] = v;
+                }
+            }
+            else if (strcmp(key, "idle_loop") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageIdleLoop[i] = v;
+                }
+            }
+            else if (strcmp(key, "select_anim") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageSelectAnim[i] = v; level->garageHasSelectAnim = 1;
+                }
+            }
+            else if (strcmp(key, "select_start") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageSelectStart[i] = v; level->garageHasSelectAnim = 1;
+                }
+            }
+            else if (strcmp(key, "select_end") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageSelectEnd[i] = v;
+                }
+            }
+            else if (strcmp(key, "select_loop") == 0) {
+                int v = 0;
+                if (LevelJson_ReadInt(&json, &v)) {
+                    for (int i = 0; i < 8; i++) level->garageSelectLoop[i] = v;
+                }
+            }
+            else if (strcmp(key, "idle_anims") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageIdleAnim[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    } level->garageHasIdleAnim = 1;
+                }
+            }
+            else if (strcmp(key, "idle_starts") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageIdleStart[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    } level->garageHasIdleAnim = 1;
+                }
+            }
+            else if (strcmp(key, "idle_ends") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageIdleEnd[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    }
+                }
+            }
+            else if (strcmp(key, "idle_loops") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageIdleLoop[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    }
+                }
+            }
+            else if (strcmp(key, "select_anims") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageSelectAnim[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    } level->garageHasSelectAnim = 1;
+                }
+            }
+            else if (strcmp(key, "select_starts") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageSelectStart[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    } level->garageHasSelectAnim = 1;
+                }
+            }
+            else if (strcmp(key, "select_ends") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageSelectEnd[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    }
+                }
+            }
+            else if (strcmp(key, "select_loops") == 0) {
+                char buf[128];
+                if (LevelJson_ReadString(&json, buf, sizeof(buf))) {
+                    char *p = buf;
+                    for (int i = 0; i < 8; i++) {
+                        level->garageSelectLoop[i] = atoi(p);
+                        p = strchr(p, ',');
+                        if (!p) break;
+                        p++;
+                    }
+                }
+            }
             else if (!LevelJson_SkipValue(&json))
 		{
 			fprintf(stderr, "[LevelRegistry] Parse fail: bad value for key '%s'\n", key);

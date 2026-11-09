@@ -40,8 +40,8 @@ struct LevelDef
         /* Optional idle / select animation ranges for custom characters.
          * idleLoop/selectLoop: 1 = loop, 0 = one-shot (freeze on last frame).
          * hasSelectAnim: 0 if "select" was not in the JSON (idle always). */
-        int garageIdleAnim, garageIdleStart, garageIdleEnd, garageIdleLoop;
-        int garageSelectAnim, garageSelectStart, garageSelectEnd, garageSelectLoop;
+        int garageIdleAnim[8], garageIdleStart[8], garageIdleEnd[8], garageIdleLoop[8];
+        int garageSelectAnim[8], garageSelectStart[8], garageSelectEnd[8], garageSelectLoop[8];
         int garageHasSelectAnim;
         int garageHasIdleAnim;
 

@@ -399,8 +399,11 @@ afterCameraAndSkipChecks:
 			int stateChanged = (effectiveSelected != s_prevGarageBoolSelected);
 			s_prevGarageBoolSelected = effectiveSelected;
 
+			int slot = (int)instance->model->id - STATIC_CRASHSELECT;
+			if (slot < 0 || slot >= 8) slot = 0;
+
 			int newAnim = 0, newStart = 0, newEnd = 0, newLoop = 1;
-			if (NativeCustomRacer_GetGarageAnimRange(instance->model, effectiveSelected,
+			if (NativeCustomRacer_GetGarageAnimRange(instance->model, slot, effectiveSelected,
 			                                         &newAnim, &newStart, &newEnd, &newLoop))
 			{
 				animIndex = newAnim;
@@ -502,7 +505,7 @@ processOpcode:
                 if (instance != 0) {
                         customFrames = NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model);
                         if (customFrames == 0) {
-                             extern int NativeCustomRacer_GetGarageAnimRange(struct Model *, int, int*, int*, int*, int*);
+                             extern int NativeCustomRacer_GetGarageAnimRange(struct Model *, int, int, int*, int*, int*, int*);
                              int currBoolSelected = (int)gGarage.boolSelected;
                              if (currBoolSelected) {
                                  s_garageSelectLatch = 60;
@@ -510,7 +513,9 @@ processOpcode:
                                  s_garageSelectLatch--;
                              }
                              int effSel = (s_garageSelectLatch > 0) ? 1 : 0;
-                             if (NativeCustomRacer_GetGarageAnimRange(instance->model, effSel, &customAnim, &customStart, &customEnd, &customLoop)) {
+                             int slot = (int)instance->model->id - STATIC_CRASHSELECT;
+                             if (slot < 0 || slot >= 8) slot = 0;
+                             if (NativeCustomRacer_GetGarageAnimRange(instance->model, slot, effSel, &customAnim, &customStart, &customEnd, &customLoop)) {
                                  isGarageCustom = 1;
                                  customFrames = (u16)(customEnd - customStart + 1);
                              }

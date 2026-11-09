@@ -4064,43 +4064,46 @@ struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *ret
 }
 
 
-static int s_garageIdleAnim = 0, s_garageIdleStart = 0, s_garageIdleEnd = 0, s_garageIdleLoop = 1;
-static int s_garageSelectAnim = 0, s_garageSelectStart = 0, s_garageSelectEnd = 0, s_garageSelectLoop = 0;
+static int s_garageIdleAnim[8], s_garageIdleStart[8], s_garageIdleEnd[8], s_garageIdleLoop[8];
+static int s_garageSelectAnim[8], s_garageSelectStart[8], s_garageSelectEnd[8], s_garageSelectLoop[8];
 static int s_garageHasSelect = 0;
 static int s_garageHasIdle = 0;
 static int s_lastGarageBoolSelected = -1;
 
-void NativeCustomRacer_SetGarageAnimData(int idleAnim, int idleStart, int idleEnd, int idleLoop,
-                                         int hasSelect, int selectAnim, int selectStart, int selectEnd, int selectLoop)
+void NativeCustomRacer_SetGarageAnimData(const int *idleAnim, const int *idleStart, const int *idleEnd, const int *idleLoop,
+                                         int hasSelect, const int *selectAnim, const int *selectStart, const int *selectEnd, const int *selectLoop)
 {
-    s_garageIdleAnim = idleAnim;
-    s_garageIdleStart = idleStart;
-    s_garageIdleEnd = idleEnd;
-    s_garageIdleLoop = idleLoop;
+    for (int i = 0; i < 8; i++) {
+        s_garageIdleAnim[i]    = idleAnim[i];
+        s_garageIdleStart[i]   = idleStart[i];
+        s_garageIdleEnd[i]     = idleEnd[i];
+        s_garageIdleLoop[i]    = idleLoop[i];
+        s_garageSelectAnim[i]  = selectAnim[i];
+        s_garageSelectStart[i] = selectStart[i];
+        s_garageSelectEnd[i]   = selectEnd[i];
+        s_garageSelectLoop[i]  = selectLoop[i];
+    }
     s_garageHasSelect = hasSelect;
-    s_garageSelectAnim = selectAnim;
-    s_garageSelectStart = selectStart;
-    s_garageSelectEnd = selectEnd;
-    s_garageSelectLoop = selectLoop;
     s_garageHasIdle = 1;
 }
 
 
-int NativeCustomRacer_GetGarageAnimRange(struct Model *m, int isSelected, int *anim, int *start, int *end, int *loop)
+int NativeCustomRacer_GetGarageAnimRange(struct Model *m, int slot, int isSelected, int *anim, int *start, int *end, int *loop)
 {
     if (!NativeCustomRacer_IsGarageModel(m) || !s_garageHasIdle)
         return 0;
+    if (slot < 0 || slot >= 8) slot = 0;
 
     if (s_garageHasSelect && isSelected) {
-        *anim = s_garageSelectAnim;
-        *start = s_garageSelectStart;
-        *end = s_garageSelectEnd;
-        *loop = s_garageSelectLoop;
+        *anim  = s_garageSelectAnim[slot];
+        *start = s_garageSelectStart[slot];
+        *end   = s_garageSelectEnd[slot];
+        *loop  = s_garageSelectLoop[slot];
     } else {
-        *anim = s_garageIdleAnim;
-        *start = s_garageIdleStart;
-        *end = s_garageIdleEnd;
-        *loop = s_garageIdleLoop;
+        *anim  = s_garageIdleAnim[slot];
+        *start = s_garageIdleStart[slot];
+        *end   = s_garageIdleEnd[slot];
+        *loop  = s_garageIdleLoop[slot];
     }
     return 1;
 }
