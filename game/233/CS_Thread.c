@@ -321,7 +321,7 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 				CTR_Box_DrawClearBox(&R233.introClearBoxRect, &R233.introClearBoxColor, 1, gGT->backBuffer->otMem.uiOT);
 			}
 
-			if (gGT->levelID == NAUGHTY_DOG_CRATE)
+			if (sdata->gGT->levelID == NAUGHTY_DOG_CRATE)
 			{
 				gGT->pushBuffer[0].distanceToScreen_PREV = CS_ND_CRATE_CAMERA_DISTANCE;
 			}
@@ -332,9 +332,9 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 		if ((sdata->gGamepads->gamepad[0].buttonsTapped & BTN_START) != 0)
 		{
 			gGT->clockEffectEnabled &= ~CAM_PATH_FLAG_CLOCK_EFFECT;
-			if ((u32)(gGT->levelID - CREDITS_CRASH) >= CS_CREDITS_LEVEL_COUNT)
+			if ((u32)(sdata->gGT->levelID - CREDITS_CRASH) >= CS_CREDITS_LEVEL_COUNT)
 			{
-				if (gGT->levelID == NAUGHTY_DOG_CRATE)
+				if (sdata->gGT->levelID == NAUGHTY_DOG_CRATE)
 				{
 					if ((u32)gGT->msInThisLEV >> CS_FRAME32_SHIFT < CS_ND_CRATE_SKIP_MIN_FRAME32)
 					{
@@ -354,7 +354,7 @@ int CS_Thread_UseOpcode(struct Instance *instance, struct CutsceneObj *cs)
 						RaceFlag_SetFullyOffScreen();
 					}
 					levelToLoad = CREDITS_CRASH;
-					if ((u32)(gGT->levelID - OXIDE_ENDING) < CS_OXIDE_ENDING_LEVEL_COUNT)
+					if ((u32)(sdata->gGT->levelID - OXIDE_ENDING) < CS_OXIDE_ENDING_LEVEL_COUNT)
 					{
 						goto requestSkipLevelLoad;
 					}
@@ -450,8 +450,13 @@ processOpcode:
 		 * frames must play 0..N-1, not 0..retailFrames. customFrames == 0
 		 * disables the override and leaves retail behavior untouched. */
 		u16 customFrames = 0;
-		if (instance != 0)
+		if (instance != 0) {
 			customFrames = NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model);
+			if (customFrames == 0) {
+				extern u16 NativeCustomRacer_GetGarageAnimFrames(struct Model *);
+				customFrames = NativeCustomRacer_GetGarageAnimFrames(instance->model);
+			}
+		}
 
 		if (instance != 0)
 		{
@@ -573,11 +578,22 @@ processOpcode:
 	case CS_OPCODE_SPAWN_CHILD:
 		if (instance != 0)
 		{
+			/* Bloqueo total en garaje custom: no queremos yoyos, cajas, ni nada retail. */
+			if (sdata->gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive()) {
+				break;
+			}
+
 			/* Custom podium dance: suppress retail FX spawns. The
 			 * retail script's SPAWN_CHILD models (smoke, sparks)
 			 * are choreographed for the retail animation; the
 			 * custom dance has no matching timing. */
 			if (NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model) > 0)
+				break;
+
+			/* Custom garage characters: suppress retail child spawns
+			 * (Crash's yoyo, Dingodile's smoke, etc.). */
+			extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+			if (NativeCustomRacer_IsGarageModel(instance->model))
 				break;
 
 			// Retail builds this opcode 3 init data at scratchpad 0x1f800108.
@@ -627,7 +643,15 @@ processOpcode:
 		    NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model) > 0)
 			break;
 
-		if (gGT->levelID == ADVENTURE_GARAGE)
+		/* Custom garage characters: their animation scripts don't match
+		 * the retail ANIM_RANGE/PLAY_CONTEXT_FX timing. Suppress FX. */
+		if (instance != 0) {
+		    extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+		    if (NativeCustomRacer_IsGarageModel(instance->model))
+		        break;
+		}
+
+		if (sdata->gGT->levelID == ADVENTURE_GARAGE)
 		{
 			if (instance != 0)
 			{
@@ -721,12 +745,12 @@ processOpcode:
 		if ((gGT->gameMode2 & CREDITS) == 0)
 		{
 			cutsceneOpcodes = R233.introCutsceneOpcodes;
-			scriptIndex = gGT->levelID - INTRO_RACE_TODAY;
+			scriptIndex = sdata->gGT->levelID - INTRO_RACE_TODAY;
 		}
 		else
 		{
 			cutsceneOpcodes = R233.creditsCutsceneOpcodes;
-			scriptIndex = gGT->levelID - CREDITS_CRASH;
+			scriptIndex = sdata->gGT->levelID - CREDITS_CRASH;
 		}
 		CS_ScriptCmd_OpcodeAt(cs, cutsceneOpcodes[scriptIndex]);
 		goto updateInstanceAndReturn;
@@ -735,7 +759,7 @@ processOpcode:
 	case CS_OPCODE_REQUEST_LEVEL:
 	{
 		int requestedLevelID = opcodeMeta->arg1.i;
-		gGT->levelID = requestedLevelID;
+		sdata->gGT->levelID = requestedLevelID;
 		if (requestedLevelID == INTRO_RACE_TODAY)
 		{
 			RaceFlag_SetCanDraw(0);
@@ -1351,6 +1375,18 @@ void CS_Thread_Particles(struct Thread *t)
 		return;
 	}
 
+	extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+	if (NativeCustomRacer_IsGarageModel(inst->model))
+	{
+		return;
+	}
+
+	/* Bloqueo total de partículas retail en garaje custom. */
+	if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
+	    NativeLevelTextures_IsCustomLevelActive()) {
+		return;
+	}
+
 	particleID = cs->particleID;
 	if ((u8)particleID >= 9)
 	{
@@ -1414,6 +1450,12 @@ CTR_STATIC_ASSERT(offsetof(struct CSInterpolateLinePacket, xy1) == 0x14);
 void CS_Thread_InterpolateFramesMS(struct Thread *t)
 {
 	struct GameTracker *gGT = sdata->gGT;
+
+	/* Garaje custom: bloquear el "hilo" del yoyo de Crash (linea 2D
+	 * semi-transparente que el script retail dibuja entre dos huesos). */
+	if (sdata->gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive()) {
+		return;
+	}
 	struct Instance *inst = t->inst;
 	struct PrimMem *primMem;
 	struct CSInterpolateLinePacket *packet;
@@ -1752,7 +1794,7 @@ struct Thread *CS_Thread_Init(s16 modelID, const char *name, struct CsThreadInit
 
 	if (modelID == NOFUNC)
 	{
-		int level = gGT->levelID;
+		int level = sdata->gGT->levelID;
 
 		if (level == NAUGHTY_DOG_CRATE)
 		{
@@ -1870,14 +1912,14 @@ after_opcode:
 		inst->matrix.t[1] = transformedCharacterPos[1] + initData->podiumPos.y;
 		inst->matrix.t[2] = transformedCharacterPos[2] + initData->podiumPos.z;
 
-		if (gGT->levelID != NAUGHTY_DOG_CRATE)
+		if (sdata->gGT->levelID != NAUGHTY_DOG_CRATE)
 		{
 			inst->scale.x = CS_PODIUM_CHARACTER_SCALE;
 			inst->scale.y = CS_PODIUM_CHARACTER_SCALE;
 			inst->scale.z = CS_PODIUM_CHARACTER_SCALE;
 		}
 
-		if ((u32)(gGT->levelID - GEM_STONE_VALLEY) < CS_ADV_HUB_LEVEL_COUNT)
+		if ((u32)(sdata->gGT->levelID - GEM_STONE_VALLEY) < CS_ADV_HUB_LEVEL_COUNT)
 		{
 			inst->depthBiasNormal -= 4;
 			inst->depthBiasSecondary -= 4;
