@@ -158,6 +158,25 @@ int NativeAdventurePack_ModelsReady(struct BigHeader *bigfile)
     return 0;
 }
 
+
+/* Fuerza maxDistanceLOD=0xFFFF en TODOS los modelos del .lev (karts y
+ * personajes). Sin esto, los selectkart* (nhdr=1) se descartan por LOD
+ * al no tener header con maxDistanceLOD alto. */
+void NativeAdventurePack_ForceGarageLOD(struct Level *lev)
+{
+    if (lev == NULL || lev->ptrModelsPtrArray == NULL) return;
+    int count = 0;
+    for (u32 i = 0; i < lev->numModels; i++) {
+        struct Model *m = lev->ptrModelsPtrArray[i];
+        if (m == NULL) break;
+        for (int h = 0; h < m->numHeaders; h++) {
+            m->headers[h].maxDistanceLOD = (s16)0xFFFF;
+        }
+        count++;
+    }
+    fprintf(stderr, "[AdventurePack] ForceGarageLOD: %d models maxDistanceLOD=0xFFFF\n", count);
+}
+
 void NativeAdventurePack_OverrideModelPtrs(struct GameTracker *gGT)
 {
     if (!s_packActive || gGT == NULL) return;

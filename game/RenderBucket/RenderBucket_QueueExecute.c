@@ -2341,9 +2341,13 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 					if (di == NULL || di->model == NULL) continue;
 					int mid = (int)di->model->id;
 					int shouldBypass = (mid >= STATIC_PINGARAGE && mid <= STATIC_OXIDEGARAGE);
-					if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
-					    mid >= STATIC_CRASHSELECT && mid <= STATIC_CRASHSELECT + 7)
-						shouldBypass = 1;
+					if (sdata->gGT->levelID == ADVENTURE_GARAGE) {
+					    if (mid >= STATIC_CRASHSELECT && mid <= STATIC_CRASHSELECT + 7)
+					        shouldBypass = 1;
+					    else if (mid == -1 && di->model->name != NULL &&
+					             strncmp(di->model->name, "selectkart", 10) == 0)
+					        shouldBypass = 1;
+					}
 					if (!shouldBypass) continue;
 
 					int inPvs = 0;

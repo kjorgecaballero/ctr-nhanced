@@ -687,6 +687,12 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		{
 			LibraryOfModels_Store(gGT, lev->numModels, lev->ptrModelsPtrArray);
 #ifdef CTR_NATIVE
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive())
+		{
+			extern void NativeAdventurePack_ForceGarageLOD(struct Level *);
+			NativeAdventurePack_ForceGarageLOD(lev);
+		}
+
 		/* ADVENTURE PACK DESACTIVADO: los modelos de carrera no tienen
 		 * las texturas en model_textures.vrm. Los modelos del .lev
 		 * inyectado (crashselect, etc.) SÍ las tienen (garage_retail).
