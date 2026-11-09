@@ -167,12 +167,24 @@ void NativeAdventurePack_OverrideModelPtrs(struct GameTracker *gGT)
             fprintf(stderr, "[AdventurePack] slot %d raw=NULL\n", i);
             continue;
         }
-        struct Model *m = (struct Model *)((u8 *)s_packModelRaw[i] + LOAD_MODEL_FILE_HEADER_BYTES);
-        m->id = STATIC_CRASHSELECT + i;
-        gGT->modelPtr[STATIC_CRASHSELECT + i] = m;
-        s_packModels[i] = m;
-        fprintf(stderr, "[AdventurePack] model override slot %d m=%p\n",
-                i, (void *)m);
+        u8 *raw = (u8 *)s_packModelRaw[i];
+        u32 fileSize = *(u32 *)raw;
+        struct Model **list = (struct Model **)(raw + 8);
+        struct Model *charModel = list[18];
+        if ((uintptr_t)charModel < (uintptr_t)(raw + 8) ||
+            (uintptr_t)charModel >= (uintptr_t)(raw + 4 + fileSize)) {
+            fprintf(stderr, "[AdventurePack] slot %d list[18]=%p out of range\n", i, (void*)charModel);
+            continue;
+        }
+        charModel->id = STATIC_CRASHSELECT + i;
+        gGT->modelPtr[STATIC_CRASHSELECT + i] = charModel;
+        s_packModels[i] = charModel;
+
+        extern int NativeLevelTextures_PatchModel(struct Model *);
+        NativeLevelTextures_PatchModel(charModel);
+
+        fprintf(stderr, "[AdventurePack] model override slot %d m=%p name='%.16s' id=%d\n",
+                i, (void *)charModel, charModel->name, (int)charModel->id);
     }
 }
 

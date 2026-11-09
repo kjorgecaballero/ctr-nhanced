@@ -687,8 +687,11 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		{
 			LibraryOfModels_Store(gGT, lev->numModels, lev->ptrModelsPtrArray);
 #ifdef CTR_NATIVE
-		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
-			NativeAdventurePack_OverrideModelPtrs(gGT);
+		/* ADVENTURE PACK DESACTIVADO: los modelos de carrera no tienen
+		 * las texturas en model_textures.vrm. Los modelos del .lev
+		 * inyectado (crashselect, etc.) SÍ las tienen (garage_retail).
+		 * Dejamos que el motor los cree desde el .lev directamente. */
+		(void)0;
 #endif
 
 			gGT->ptrCircle = (u32)DecalGlobal_FindInLEV(lev, rdata.s_circle);
@@ -923,8 +926,9 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		/* Pools (MainInit_JitPoolsNew, case 7) and models (case 6/7) are
 		 * ready only here. Do NOT spawn from CS_Garage_Init: it runs from
 		 * case 4 via mainMenuInit[], before pools/models exist. */
-		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
-			NativeAdventurePack_SpawnCharacters(gGT);
+		/* ADVENTURE PACK DESACTIVADO: el .lev ya tiene las 17 InstDef
+		 * con los modelos del garaje. No spawnear instancias duplicadas. */
+		(void)0;
 
 		return -2;
 	}

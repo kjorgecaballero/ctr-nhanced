@@ -2340,7 +2340,11 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 					struct Instance *di = lvl->ptrInstDefs[i].ptrInstance;
 					if (di == NULL || di->model == NULL) continue;
 					int mid = (int)di->model->id;
-					if (mid < STATIC_PINGARAGE || mid > STATIC_OXIDEGARAGE) continue;
+					int shouldBypass = (mid >= STATIC_PINGARAGE && mid <= STATIC_OXIDEGARAGE);
+					if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
+					    mid >= STATIC_CRASHSELECT && mid <= STATIC_CRASHSELECT + 7)
+						shouldBypass = 1;
+					if (!shouldBypass) continue;
 
 					int inPvs = 0;
 					if (visInstSrc != NULL)
@@ -2350,7 +2354,7 @@ void *RenderBucket_QueueLevInstances(struct CameraDC *cDC, struct OTMem *otState
 							if (*v == di) { inPvs = 1; break; }
 					}
 					if (!inPvs)
-						entry = RenderBucket_QueueDraw(di, entry, player, lodMask, gameMode1, &queueState);
+                        entry = RenderBucket_QueueDraw(di, entry, player, lodMask, gameMode1, &queueState);
 				}
 			}
 		}
