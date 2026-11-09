@@ -687,6 +687,11 @@ if (LOAD_IsCustomLevel(gGT->levelID) || NativeSettings_GetHighMp() != 0)
 		{
 			LibraryOfModels_Store(gGT, lev->numModels, lev->ptrModelsPtrArray);
 #ifdef CTR_NATIVE
+		if (gGT->levelID == ADVENTURE_GARAGE && NativeAdventurePack_IsActive())
+		{
+			extern void NativeAdventurePack_ApplyCustomRacers(struct Level *);
+			NativeAdventurePack_ApplyCustomRacers(lev);
+		}
 		if (gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive())
 		{
 			extern void NativeAdventurePack_ForceGarageLOD(struct Level *);

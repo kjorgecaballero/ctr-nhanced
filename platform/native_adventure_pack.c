@@ -162,6 +162,49 @@ int NativeAdventurePack_ModelsReady(struct BigHeader *bigfile)
 /* Fuerza maxDistanceLOD=0xFFFF en TODOS los modelos del .lev (karts y
  * personajes). Sin esto, los selectkart* (nhdr=1) se descartan por LOD
  * al no tener header con maxDistanceLOD alto. */
+
+/* Reemplaza el modelo de cada InstDef de personaje del garaje (IDs 0xCE-0xD5)
+ * por el modelo custom del roster, si el slot tiene un custom.
+ * Los modelos custom usan Sentinel (texturas OpenGL), no VRAM. PatchLev
+ * skipea correctamente los layouts con CLUT Sentinel.
+ */
+void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
+{
+    if (lev == NULL || lev->ptrInstDefs == NULL) return;
+    int applied = 0;
+    for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
+    {
+        int charID = s_packCharIDs[i];
+        if (charID < 0) continue;
+        if (charID < NATIVE_CUSTOM_ID_BASE) continue;  // retail, dejar como esta
+
+        void *raw = NativeCustomRacer_LoadModel(0, charID);
+        if (raw == NULL) {
+            fprintf(stderr, "[AdventurePack] custom slot %d charID=%d FAILED to load\n", i, charID);
+            continue;
+        }
+        struct Model *custom = (struct Model *)((u8 *)raw + LOAD_MODEL_FILE_HEADER_BYTES);
+        custom->id = STATIC_CRASHSELECT + i;  // forzar ID para el PVS bypass
+        NativeCustomRacer_RegisterGarageModel(i, custom);
+
+        // Reemplazar en gGT->modelPtr[]
+        sdata->gGT->modelPtr[STATIC_CRASHSELECT + i] = custom;
+
+        // Reemplazar en el InstDef correspondiente
+        for (u32 j = 0; j < lev->numInstances; j++) {
+            struct InstDef *def = &lev->ptrInstDefs[j];
+            if (def->model != NULL && def->model->id == STATIC_CRASHSELECT + i) {
+                def->model = custom;
+                break;
+            }
+        }
+        fprintf(stderr, "[AdventurePack] custom racer slot %d charID=%d applied (model=%p)\n",
+                i, charID, (void *)custom);
+        applied++;
+    }
+    fprintf(stderr, "[AdventurePack] ApplyCustomRacers: %d custom models applied\n", applied);
+}
+
 void NativeAdventurePack_ForceGarageLOD(struct Level *lev)
 {
     if (lev == NULL || lev->ptrModelsPtrArray == NULL) return;
