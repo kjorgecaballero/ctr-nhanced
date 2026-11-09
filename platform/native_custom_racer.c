@@ -137,6 +137,22 @@ static int s_rosterLoaded = 0;
 static struct MatrixND s_customMatrices[NATIVE_CUSTOM_COUNT][6];
 static u8 s_customRotCount[NATIVE_CUSTOM_COUNT];
 static PageEntry s_pageEntries[NATIVE_ROSTER_MAX];
+
+/* Garage custom models (for INSTANCE.c to skip CS_Thread_LInB) */
+#define GARAGE_CUSTOM_SLOTS 8
+static struct Model *s_garageCustomModels[GARAGE_CUSTOM_SLOTS];
+
+void NativeCustomRacer_RegisterGarageModel(int slot, struct Model *m) {
+    if (slot >= 0 && slot < GARAGE_CUSTOM_SLOTS) s_garageCustomModels[slot] = m;
+}
+
+int NativeCustomRacer_IsGarageModel(struct Model *m) {
+    if (m == NULL) return 0;
+    for (int i = 0; i < GARAGE_CUSTOM_SLOTS; i++)
+        if (s_garageCustomModels[i] == m) return 1;
+    return 0;
+}
+
 static int s_pageEntryCount = 0;
 
 static int s_page = 0;

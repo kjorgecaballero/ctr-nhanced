@@ -320,15 +320,17 @@ void INSTANCE_LevInitAll(struct InstDef *levInstDef, int numInst)
 			// Only continue if LEV instances are enabled,
 			// they may be disabled due to podium scene on adv hub
 			if ((gGT->gameMode2 & NO_LEV_INSTANCE) == 0)
-			{
-				meta = COLL_LevModelMeta(modelID);
-
-				if (meta->LInB != NULL)
-				{
-					// call funcLevInstDefBirth, make thread for this instance
-					meta->LInB(inst);
-				}
-			}
+                {    
+                    extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+                    if (!NativeCustomRacer_IsGarageModel(levInstDef->model))
+                    {
+                        meta = COLL_LevModelMeta(modelID);
+                        if (meta->LInB != NULL)       
+                        {
+                            meta->LInB(inst);
+                        }
+                    }
+                }
 		}
 
 		b32 boolArcadeOnly = ((((u32)modelID - PU_FRUIT_CRATE) < 2) || (modelID == PU_WUMPA_FRUIT));
