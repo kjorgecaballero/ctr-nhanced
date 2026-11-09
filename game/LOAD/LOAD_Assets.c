@@ -239,6 +239,20 @@ int LOAD_DriverMPK(struct BigHeader *bigfile, int levelLOD, void (*callback)(str
 		    ((gGT->gameMode2 & CREDITS) != 0) ||
 		    (gGT->levelID == ADVENTURE_GARAGE))
 		{
+#ifdef CTR_NATIVE
+		/* Adventure Hub sets ADVENTURE_ARENA in LOAD_TenStages case 0 and
+		 * lands in this branch before the custom-model load below, so a
+		 * custom driver's .ctr never got loaded (invisible kart in the hub).
+		 * driverModelExtras[0].fileBase was left pointing at the previous
+		 * race's MPK-derived model. Load the custom here; QueueLastPack
+		 * only queues the retail MPK with NULL destination and does not
+		 * touch driverModelExtras[] so the override survives. */
+		if (NativeCustomRacer_HasSlot(data.characterIDs[0]))
+		{
+			void *customModel = NativeCustomRacer_LoadModel(0, data.characterIDs[0]);
+			data.driverModelExtras[0].fileBase = customModel;
+		}
+#endif
 			lastFileIndexMPK = BI_ADVENTUREPACK + GET_MPK_ID(data.characterIDs[0]);
 			goto QueueLastPack;
 		}
