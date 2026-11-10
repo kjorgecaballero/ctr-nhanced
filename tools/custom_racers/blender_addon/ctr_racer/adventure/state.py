@@ -1,39 +1,98 @@
 import bpy
-from bpy.props import StringProperty, IntProperty, PointerProperty
+from bpy.props import StringProperty, IntProperty, PointerProperty, BoolProperty, CollectionProperty
 from bpy.types import PropertyGroup
 
+
+# ─────────────────────────────────────────────────────────────────────
+# NFR_AdventureSfxEntry — one per-frame SFX for a slot
+# Must be defined FIRST (NFR_AdventureSlot references it)
+# ─────────────────────────────────────────────────────────────────────
+class NFR_AdventureSfxEntry(PropertyGroup):
+    frame: IntProperty(name="Frame", min=0, default=0)
+    wav_path: StringProperty(name="WAV", subtype='FILE_PATH', default="")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# NFR_AdventureSlot — per-slot config (8 slots in NFR_AdventureState)
+# Must be defined BEFORE NFR_AdventureState (which references it)
+# ─────────────────────────────────────────────────────────────────────
+class NFR_AdventureSlot(PropertyGroup):
+    char_slug:    StringProperty(name="Character Slug", default="")
+    idle_object:  PointerProperty(name="Idle/Char Object", type=bpy.types.Object)
+    kart_object:  PointerProperty(name="Kart Object", type=bpy.types.Object)
+
+    # Position (auto-filled on export)
+    pos_x: IntProperty(name="X", default=0)
+    pos_y: IntProperty(name="Y", default=0)
+    pos_z: IntProperty(name="Z", default=0)
+    pos_rot: IntProperty(name="Rot", default=0)
+
+    # Animations
+    idle_anim: IntProperty(name="Idle Anim", default=0)
+    idle_start: IntProperty(name="Idle Start", default=0)
+    idle_end: IntProperty(name="Idle End", default=0)
+    idle_loop: BoolProperty(name="Idle Loop", default=True)
+
+    select_anim: IntProperty(name="Select Anim", default=0)
+    select_start: IntProperty(name="Select Start", default=0)
+    select_end: IntProperty(name="Select End", default=0)
+    select_loop: BoolProperty(name="Select Loop", default=False)
+
+    # Audio (per character)
+    ambient_wav: StringProperty(name="Ambient WAV", subtype='FILE_PATH', default="")
+    sfx_entries: CollectionProperty(type=NFR_AdventureSfxEntry)
+
+
+# ─────────────────────────────────────────────────────────────────────
+# NFR_AdventureState — the whole garage pack (Scene.nfr_adventure)
+# ─────────────────────────────────────────────────────────────────────
 class NFR_AdventureState(PropertyGroup):
     pack_name: StringProperty(name="Pack Name", default="My Pack")
     slug: StringProperty(name="Slug", default="my_pack")
     lev_file: StringProperty(name="LEV File", subtype='FILE_PATH')
     vrm_file: StringProperty(name="VRM File", subtype='FILE_PATH')
-    music_file: StringProperty(name="Music OGG", subtype='FILE_PATH')
-    
-    scale_mult: IntProperty(name="Scale Multiplier", default=100, description="Coordinate scale. CTR uses 100 (cm). Adjust if your LEV is in meters.")
-    
+
+    # Camera (one per garage)
     cam_x: IntProperty(name="Cam X", default=0)
     cam_y: IntProperty(name="Cam Y", default=100)
     cam_z: IntProperty(name="Cam Z", default=500)
     cam_rot_x: IntProperty(name="Cam Rot X", default=0)
     cam_rot_y: IntProperty(name="Cam Rot Y", default=0)
-    cam_rot_z: IntProperty(name="Cam Rot Z", default=0)
+    cam_captured: BoolProperty(name="Captured", default=False)
 
-    # 8 Slots (String for custom slugs like 'spyro')
-    char_0: StringProperty(name="Slug", default="crash"); x_0: IntProperty(name="X", default=0); y_0: IntProperty(name="Y", default=0); z_0: IntProperty(name="Z", default=0); rot_0: IntProperty(name="Rot", default=0)
-    char_1: StringProperty(name="Slug", default="coco"); x_1: IntProperty(name="X", default=0); y_1: IntProperty(name="Y", default=0); z_1: IntProperty(name="Z", default=0); rot_1: IntProperty(name="Rot", default=0)
-    char_2: StringProperty(name="Slug", default="cortex"); x_2: IntProperty(name="X", default=0); y_2: IntProperty(name="Y", default=0); z_2: IntProperty(name="Z", default=0); rot_2: IntProperty(name="Rot", default=0)
-    char_3: StringProperty(name="Slug", default="tiny"); x_3: IntProperty(name="X", default=0); y_3: IntProperty(name="Y", default=0); z_3: IntProperty(name="Z", default=0); rot_3: IntProperty(name="Rot", default=0)
-    char_4: StringProperty(name="Slug", default="polar"); x_4: IntProperty(name="X", default=0); y_4: IntProperty(name="Y", default=0); z_4: IntProperty(name="Z", default=0); rot_4: IntProperty(name="Rot", default=0)
-    char_5: StringProperty(name="Slug", default="pura"); x_5: IntProperty(name="X", default=0); y_5: IntProperty(name="Y", default=0); z_5: IntProperty(name="Z", default=0); rot_5: IntProperty(name="Rot", default=0)
-    char_6: StringProperty(name="Slug", default="dingodile"); x_6: IntProperty(name="X", default=0); y_6: IntProperty(name="Y", default=0); z_6: IntProperty(name="Z", default=0); rot_6: IntProperty(name="Rot", default=0)
-    char_7: StringProperty(name="Slug", default="ngin"); x_7: IntProperty(name="X", default=0); y_7: IntProperty(name="Y", default=0); z_7: IntProperty(name="Z", default=0); rot_7: IntProperty(name="Rot", default=0)
+    # 8 slots (each one is a NFR_AdventureSlot)
+    slots: CollectionProperty(type=NFR_AdventureSlot)
+    active_slot_idx: IntProperty(name="Active Slot", default=0, min=0, max=7)
+
+
+_classes = (NFR_AdventureSfxEntry, NFR_AdventureSlot, NFR_AdventureState)
+
 
 def register():
-    bpy.utils.register_class(NFR_AdventureState)
+    for cls in _classes:
+        bpy.utils.register_class(cls)
+
     if not hasattr(bpy.types.Scene, "nfr_adventure"):
         bpy.types.Scene.nfr_adventure = PointerProperty(type=NFR_AdventureState)
+
+    # Pre-populate 8 slots on first access
+    def _init_slots():
+        scene = getattr(bpy.context, 'scene', None)
+        if scene is None or not hasattr(scene, 'nfr_adventure'):
+            return None
+        try:
+            st = scene.nfr_adventure
+            while len(st.slots) < 8:
+                st.slots.add()
+        except Exception:
+            pass
+        return None  # don't re-run
+
+    bpy.app.timers.register(_init_slots, first_interval=0.5)
+
 
 def unregister():
     if hasattr(bpy.types.Scene, "nfr_adventure"):
         del bpy.types.Scene.nfr_adventure
-    bpy.utils.unregister_class(NFR_AdventureState)
+    for cls in reversed(_classes):
+        bpy.utils.unregister_class(cls)

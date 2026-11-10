@@ -590,6 +590,17 @@ def make_clips_from_keys(mesh, records, quantize):
 def build():
     mesh = json.loads(SOURCE.read_text())
     mesh = apply_matrix_world(mesh)
+    _vs = mesh['vertices']
+    _xs = [v[0] for v in _vs]; _ys = [v[1] for v in _vs]; _zs = [v[2] for v in _vs]
+    _h = (max(_zs) - min(_zs)) * 64
+    _off = (((max(_xs) + min(_xs)) / 2) ** 2 + ((max(_ys) + min(_ys)) / 2) ** 2) ** 0.5 * 64
+    print(f"[build_character] size (engine units): height={_h:.0f} "
+          f"width={(max(_xs)-min(_xs))*64:.0f} depth={(max(_ys)-min(_ys))*64:.0f} "
+          f"centerOffset={_off:.0f} zMin={min(_zs)*64:.0f}")
+    if _off > 300 or _h > 600:
+        print("[build_character] WARNING: model is far from the origin or huge "
+              "(normal characters: height ~75-140, centerOffset < 20). "
+              "In Blender: Location (0,0,0) and scale to ~1.5 units tall.")
     textures = prepare_textures(mesh)
     basis = mesh['keys']['Basis']
 

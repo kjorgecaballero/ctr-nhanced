@@ -995,48 +995,94 @@ def unregister():
 
 def _draw_adventure(layout, context):
     st = context.scene.nfr_adventure
-    box = layout.box()
-    box.label(text="Adventure Pack Settings", icon='WORLD')
-    box.prop(st, "pack_name")
-    box.prop(st, "slug")
-    box.prop(st, "lev_file")
-    box.prop(st, "vrm_file")
-    box.prop(st, "music_file")
-    box.prop(st, "scale_mult", text="Scale Multiplier")
 
+    # ─── PACK SETUP ─────────────────────────────────
     box = layout.box()
-    box.label(text="Camera Tools", icon='CAMERA_DATA')
+    box.label(text="Garage Pack", icon='WORLD')
     row = box.row(align=True)
-    row.operator("nfr.adventure_add_cam", text="4:3").ar = '4:3'
-    row.operator("nfr.adventure_add_cam", text="16:9").ar = '16:9'
-    row.operator("nfr.adventure_add_cam", text="16:10").ar = '16:10'
-    row.operator("nfr.adventure_add_cam", text="21:9").ar = '21:9'
-    
+    row.prop(st, "pack_name", text="Name")
+    row.prop(st, "slug", text="Slug")
     row = box.row(align=True)
-    row.operator("nfr.adventure_assign_cam", text="Get Coords from Active Camera", icon='EYEDROPPER')
-    row = box.row(align=True)
-    row.operator("nfr.adventure_aim_cam", text="Aim Camera at Slot 0", icon='TRACKER')
-    
-    row = box.row(align=True)
-    row.prop(st, "cam_x"); row.prop(st, "cam_y"); row.prop(st, "cam_z")
-    row = box.row(align=True)
-    row.prop(st, "cam_rot_x"); row.prop(st, "cam_rot_y")
+    row.prop(st, "lev_file", text="LEV")
+    row.prop(st, "vrm_file", text="VRM")
 
+    # ─── CAMERA ─────────────────────────────────────
     box = layout.box()
-    box.label(text="Character Slots (Max 8)", icon='OUTLINER_OB_GROUP_INSTANCE')
-    box.label(text="Select object in 3D view, then click 'Get'", icon='INFO')
-    
-    for i in range(8):
-        row = box.row(align=True)
-        row.prop(st, f"char_{i}", text=f"S{i}")
-        op = row.operator("nfr.adventure_assign_single", text="Get", icon='EYEDROPPER')
-        op.slot_index = i
-        
-        row2 = box.row(align=True)
-        row2.prop(st, f"x_{i}", text="X")
-        row2.prop(st, f"y_{i}", text="Y")
-        row2.prop(st, f"z_{i}", text="Z")
-        row2.prop(st, f"rot_{i}", text="Rot")
+    box.label(text="Camera (one per garage)", icon='CAMERA_DATA')
+    row = box.row(align=True)
+    row.operator("nfr.adventure_add_cam", text="Add Camera...", icon='ADD')
+    row.operator("nfr.adventure_assign_cam", text="Get from Active Cam", icon='EYEDROPPER')
+    if st.cam_captured:
+        box.label(text=f"✓ Captured: X:{st.cam_x} Y:{st.cam_y} Z:{st.cam_z}", icon='CHECKMARK')
+    else:
+        box.label(text="⚠ Not captured — place a camera, then Get", icon='ERROR')
 
+    # ─── SLOT EDITOR ────────────────────────────────
+    box = layout.box()
+    box.label(text="Slot Editor", icon='OUTLINER_OB_GROUP_INSTANCE')
+    box.prop(st, "active_slot_idx", text="Active Slot")
+
+    if st.active_slot_idx >= len(st.slots):
+        box.label(text="Initializing slots...", icon='INFO')
+        layout.separator()
+        row = layout.row(); row.scale_y = 1.5
+        row.operator("nfr.adventure_build", icon='EXPORT', text="BUILD GARAGE PACK")
+        return
+
+    slot = st.slots[st.active_slot_idx]
+    sub = box.box()
+
+    sub.prop(slot, "char_slug", text="Character Slug")
+    sub.prop(slot, "idle_object", text="Idle/Character Object")
+    sub.prop(slot, "kart_object", text="Kart Object (optional)")
+
+    sub.separator()
+    sub.label(text="Animations", icon='PLAY')
+    row = sub.row(align=True)
+    row.label(text="Idle:")
+    row.prop(slot, "idle_anim", text="Anim")
+    row.prop(slot, "idle_start", text="Start")
+    row.prop(slot, "idle_end", text="End")
+    row.prop(slot, "idle_loop", text="Loop")
+
+    row = sub.row(align=True)
+    row.label(text="Select:")
+    row.prop(slot, "select_anim", text="Anim")
+    row.prop(slot, "select_start", text="Start")
+    row.prop(slot, "select_end", text="End")
+    row.prop(slot, "select_loop", text="Loop")
+
+    # Position (read-only, auto-captured)
+    sub.separator()
+    row = sub.row(align=True)
+    row.label(text=f"Position: X:{slot.pos_x} Y:{slot.pos_y} Z:{slot.pos_z} Rot:{slot.pos_rot}", icon='INFO')
+
+    # Export
+    row = sub.row()
+    row.scale_y = 1.2
+    row.operator("nfr.adventure_export_assets", text=f"📤 Export Garage Model for S{st.active_slot_idx}", icon='EXPORT')
+
+    # ─── AUDIO (per slot) ───────────────────────────
+    box = layout.box()
+    box.label(text=f"Audio for S{st.active_slot_idx} ({slot.char_slug or 'unset'})", icon='SOUND')
+    box.prop(slot, "ambient_wav", text="Ambient WAV (loop)")
+
+    sub = box.box()
+    sub.label(text="Per-frame SFX:")
+    if len(slot.sfx_entries) == 0:
+        sub.label(text="(none — click Add SFX)", icon='INFO')
+    for e_idx, e in enumerate(slot.sfx_entries):
+        row = sub.row(align=True)
+        row.prop(e, "frame", text="F")
+        row.prop(e, "wav_path", text="")
+        op = row.operator("nfr.adventure_sfx_remove", text="", icon='X')
+        op.index = e_idx
+    row = sub.row(align=True)
+    row.operator("nfr.adventure_sfx_add", text="Add SFX", icon='ADD')
+    row.operator("nfr.adventure_build_audio", text=f"🔊 Build Audio for S{st.active_slot_idx}", icon='SOUND')
+
+    # ─── BUILD ──────────────────────────────────────
     layout.separator()
-    layout.operator("nfr.adventure_build", icon='EXPORT', text="BUILD ADVENTURE PACK")
+    row = layout.row()
+    row.scale_y = 1.5
+    row.operator("nfr.adventure_build", icon='EXPORT', text="BUILD GARAGE PACK")

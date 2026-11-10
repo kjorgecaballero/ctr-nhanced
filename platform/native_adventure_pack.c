@@ -212,12 +212,12 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
         if (charID < 0) continue;
         if (charID < NATIVE_CUSTOM_ID_BASE) continue;  // retail, dejar como esta
 
-        void *raw = NativeCustomRacer_LoadModel(0, charID);
+        void *raw = NativeCustomRacer_LoadGarageModel(charID);
         if (raw == NULL) {
             fprintf(stderr, "[AdventurePack] custom slot %d charID=%d FAILED to load\n", i, charID);
             continue;
         }
-        struct Model *custom = (struct Model *)((u8 *)raw + LOAD_MODEL_FILE_HEADER_BYTES);
+        struct Model *custom = (struct Model *)raw;
         custom->id = STATIC_CRASHSELECT + i;  // forzar ID para el PVS bypass
         NativeCustomRacer_RegisterGarageModel(i, charID, custom);
         

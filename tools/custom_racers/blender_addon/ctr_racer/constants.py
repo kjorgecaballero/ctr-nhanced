@@ -64,7 +64,7 @@ UI_TABS_BY_MODE = {
     ],
     'LEVELS': [
         ('LEVELS',    'Tracks',    'Custom track builder'),
-        ('ADVENTURE', 'Adventure', 'Custom Adventure Garages'),
+        ('ADVENTURE', 'Garage', 'Custom Adventure Garages + Audio + Karts'),
     ],
 }
 

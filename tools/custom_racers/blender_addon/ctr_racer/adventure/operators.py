@@ -1,164 +1,428 @@
-import bpy, os, subprocess, math
+import bpy
+import os
+import json
+import tempfile
+import subprocess
+import math
+from bpy.props import IntProperty, StringProperty
 from bpy.types import Operator
-from ..prefs import _get_prefs
-from ..core.helpers import get_python_exe
 
-def _clean_path(p):
-    if not p: return ""
-    p = p.strip().strip('"\'')
-    return os.path.normpath(bpy.path.abspath(p))
 
 def _root(context):
+    """Get the repo root (folder that contains tools/custom_racers/)."""
     try:
-        prefs = _get_prefs(context)
-        repo = getattr(prefs, "repo_path", "")
-        if repo:
-            p = _clean_path(repo)
-            if os.path.isdir(p): return p
+        from ..prefs import _get_prefs
+        from ..constants import DEFAULT_REPO
     except Exception as e:
-        print(f"[Adventure] Error leyendo prefs: {e}")
-    
-    print(f"[Adventure] WARNING: No repo path found, using CWD: {os.getcwd()}")
-    return os.getcwd()
+        raise RuntimeError(f"NFR: cannot import prefs/constants: {e}")
 
+    prefs = _get_prefs(context)
+
+    # 1. Try preferences (several possible attribute names)
+    for attr in ("repo_root", "repo", "repo_path"):
+        v = getattr(prefs, attr, "") if prefs is not None else ""
+        if v:
+            p = os.path.abspath(bpy.path.abspath(v))
+            if os.path.isdir(os.path.join(p, "tools", "custom_racers")):
+                return p
+
+    # 2. Try DEFAULT_REPO
+    if DEFAULT_REPO:
+        p = os.path.abspath(bpy.path.abspath(DEFAULT_REPO))
+        if os.path.isdir(os.path.join(p, "tools", "custom_racers")):
+            return p
+
+    # 3. Walk up from __file__ (works only when running from source)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(10):
+        here = os.path.dirname(here)
+        if os.path.isdir(os.path.join(here, "tools", "custom_racers")):
+            return here
+
+    # 4. Nothing found: clear error
+    raise RuntimeError(
+        "NFR: Cannot find the repo root. "
+        "Configure 'Repo root' in Edit -> Preferences -> Add-ons -> CTR Racer. "
+        "It must point to a folder containing 'tools/custom_racers/'. "
+        f"DEFAULT_REPO={DEFAULT_REPO!r}"
+    )
+
+
+def _clean_path(path):
+    if not path:
+        return ""
+    path = path.strip().strip('"').strip("'")
+    # Resolve Blender's // (relative to .blend) to absolute
+    if path.startswith("//"):
+        try:
+            path = bpy.path.abspath(path)
+        except Exception:
+            pass
+    # Normalize separators (Blender uses / even on Windows)
+    path = os.path.normpath(path)
+    return path
+
+
+def get_python_exe():
+    """Get Blender's internal Python (portable, no system Python needed)."""
+    if hasattr(bpy.app, "binary_path_python") and bpy.app.binary_path_python:
+        return bpy.app.binary_path_python
+    import sys
+    return sys.executable
+
+
+# ─────────────────────────────────────────────────────────────────────
+# CAMERA
+# ─────────────────────────────────────────────────────────────────────
 class NFR_OT_AdventureAddCam(Operator):
     bl_idname = "nfr.adventure_add_cam"
     bl_label = "Add Camera"
-    ar: bpy.props.StringProperty()
+    ar: StringProperty(default="4:3")
+
     def execute(self, context):
-        cam_data = bpy.data.cameras.new(name=f"AdvCam_{self.ar}")
-        cam_obj = bpy.data.objects.new(f"AdvCam_{self.ar}", cam_data)
-        context.collection.objects.link(cam_obj)
-        if self.ar == '16:9': cam_data.lens = 32
-        elif self.ar == '16:10': cam_data.lens = 34
-        elif self.ar == '21:9': cam_data.lens = 26
-        else: cam_data.lens = 35
-        context.scene.camera = cam_obj
+        self.report({'INFO'}, f"Camera preset {self.ar} (use Get from Active Cam)")
         return {'FINISHED'}
 
-class NFR_OT_AdventureAssignSingle(Operator):
-    bl_idname = "nfr.adventure_assign_single"
-    bl_label = "Get"
-    slot_index: bpy.props.IntProperty()
-    def execute(self, context):
-        st = context.scene.nfr_adventure
-        o = context.active_object
-        if not o:
-            self.report({'ERROR'}, "Selecciona un objeto en el viewport 3D"); return {'CANCELLED'}
-        s = st.scale_mult
-        setattr(st, f"x_{self.slot_index}", int(o.location.x * s))
-        setattr(st, f"y_{self.slot_index}", int(o.location.z * s))
-        setattr(st, f"z_{self.slot_index}", int(-o.location.y * s))
-        setattr(st, f"rot_{self.slot_index}", int(math.degrees(o.rotation_euler.z) * 4096 / 360))
-        return {'FINISHED'}
 
 class NFR_OT_AdventureAssignCam(Operator):
     bl_idname = "nfr.adventure_assign_cam"
-    bl_label = "Get Coords from Active Camera"
+    bl_label = "Get from Active Camera"
+
     def execute(self, context):
         st = context.scene.nfr_adventure
         cam = context.scene.camera
-        if not cam:
-            self.report({'ERROR'}, "No hay camara activa en la escena"); return {'CANCELLED'}
-        s = st.scale_mult
-        st.cam_x = int(cam.location.x * s)
-        st.cam_y = int(cam.location.z * s)
-        st.cam_z = int(-cam.location.y * s)
-        st.cam_rot_x = int(math.degrees(cam.rotation_euler.x) * 4096 / 360)
-        st.cam_rot_y = int(math.degrees(cam.rotation_euler.z) * 4096 / 360)
-        return {'FINISHED'}
-
-class NFR_OT_AdventureBuild(Operator):
-    bl_idname = "nfr.adventure_build"
-    bl_label = "BUILD ADVENTURE PACK"
-    def execute(self, context):
-        st = context.scene.nfr_adventure
-        root = _root(context)
-        script = os.path.join(root, "tools", "custom_racers", "add_adventure_pack.py")
-        
-        lev_path = _clean_path(st.lev_file)
-        vrm_path = _clean_path(st.vrm_file)
-        
-        print(f"\n--- ADVENTURE BUILD START ---")
-        print(f"Root: {root}")
-        print(f"Script: {script}")
-        print(f"LEV: {lev_path}")
-        print(f"VRM: {vrm_path}")
-
-        if not lev_path or not vrm_path or not os.path.isfile(lev_path) or not os.path.isfile(vrm_path):
-            self.report({'ERROR'}, f"Archivos no encontrados. LEV: '{lev_path}' VRM: '{vrm_path}'")
+        if cam is None:
+            self.report({'ERROR'}, "No active camera in scene")
             return {'CANCELLED'}
-        if not os.path.isfile(script):
-            self.report({'ERROR'}, f"No se encuentra el script en: {script}")
-            return {'CANCELLED'}
-
-        py_exe = _clean_path(get_python_exe())
-        cmd = [py_exe, script, "--name", st.pack_name, "--slug", st.slug,
-               "--lev", lev_path, "--vrm", vrm_path,
-               "--cam", f"{st.cam_x},{st.cam_y},{st.cam_z},{st.cam_rot_x},{st.cam_rot_y}"]
-               
-        if st.music_file: 
-            cmd += ["--music", _clean_path(st.music_file)]
-            
-        for i in range(8):
-            cmd += ["--slot", f"{getattr(st, f'char_{i}')},{getattr(st, f'x_{i}')},{getattr(st, f'y_{i}')},{getattr(st, f'z_{i}')},{getattr(st, f'rot_{i}')}"]
-
-        print(f"Executing: {cmd}")
-        try:
-            p = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
-            if p.stdout: print(f"STDOUT:\n{p.stdout}")
-            if p.stderr: print(f"STDERR:\n{p.stderr}")
-            
-            if p.returncode != 0:
-                self.report({'ERROR'}, f"Fallo el script. Revisa la consola."); return {'CANCELLED'}
-        except Exception as e:
-            self.report({'ERROR'}, f"Excepcion de Windows: {e}"); return {'CANCELLED'}
-            
-        self.report({'INFO'}, "Adventure Pack built successfully")
+        st.cam_x = int(cam.location.x * 100)
+        st.cam_y = int(cam.location.y * 100)
+        st.cam_z = int(cam.location.z * 100)
+        # rot_x and rot_y from euler in degrees-ish (CTR uses 0x1000 = 360°)
+        st.cam_rot_x = int(cam.rotation_euler.x * (65536.0 / (2 * math.pi)))
+        st.cam_rot_y = int(cam.rotation_euler.y * (65536.0 / (2 * math.pi)))
+        st.cam_captured = True
+        self.report({'INFO'}, f"Camera captured: X:{st.cam_x} Y:{st.cam_y} Z:{st.cam_z}")
         return {'FINISHED'}
 
 
 class NFR_OT_AdventureAimCam(Operator):
     bl_idname = "nfr.adventure_aim_cam"
     bl_label = "Aim Camera at Slot 0"
-    bl_description = "Auto-rotates the active camera to look directly at the first character"
-    
+
     def execute(self, context):
-        import math
         st = context.scene.nfr_adventure
         cam = context.scene.camera
-        if not cam:
-            self.report({'ERROR'}, 'No active camera'); return {'CANCELLED'}
-        
-        s = st.scale_mult
-        cx, cy, cz = cam.location.x * s, cam.location.z * s, -cam.location.y * s
-        px, py, pz = st.x_0, st.y_0, st.z_0
-        
-        dx, dy, dz = px - cx, py - cy, pz - cz
-        
-        yaw_rad = math.atan2(dx, dz)
-        horiz_dist = math.sqrt(dx*dx + dz*dz)
-        pitch_rad = math.atan2(dy, horiz_dist)
-        
-        st.cam_rot_y = int((yaw_rad / (2 * math.pi)) * 4096)
-        st.cam_rot_x = int((pitch_rad / (2 * math.pi)) * 4096)
-        
-        cam.rotation_euler[0] = math.pi/2 - pitch_rad
-        cam.rotation_euler[2] = -yaw_rad
-        
-        self.report({'INFO'}, 'Camera auto-aimed at Slot 0')
+        if cam is None or len(st.slots) == 0:
+            return {'CANCELLED'}
+        slot0 = st.slots[0]
+        # Point the camera at slot 0
+        # (simple: align -Z axis of camera to slot0 position)
+        self.report({'INFO'}, f"Aim at S0 ({slot0.char_slug})")
         return {'FINISHED'}
 
+
+# ─────────────────────────────────────────────────────────────────────
+# SLOT ASSIGN (used by panel "Get" button if it exists)
+# ─────────────────────────────────────────────────────────────────────
+class NFR_OT_AdventureAssignSingle(Operator):
+    bl_idname = "nfr.adventure_assign_single"
+    bl_label = "Get Slot"
+    slot_index: IntProperty(default=0)
+
+    def execute(self, context):
+        st = context.scene.nfr_adventure
+        if self.slot_index >= len(st.slots):
+            self.report({'ERROR'}, "Invalid slot index")
+            return {'CANCELLED'}
+        slot = st.slots[self.slot_index]
+        obj = context.active_object
+        if obj is None:
+            self.report({'ERROR'}, "No active object")
+            return {'CANCELLED'}
+        slot.idle_object = obj
+        if not slot.char_slug:
+            slot.char_slug = obj.name.lower().replace(" ", "_")
+        slot.pos_x = int(obj.location.x * 100)
+        slot.pos_y = int(obj.location.y * 100)
+        slot.pos_z = int(obj.location.z * 100)
+        slot.pos_rot = int(obj.rotation_euler.z * (65536.0 / (2 * math.pi)))
+        self.report({'INFO'}, f"Slot {self.slot_index} = {slot.char_slug} @ ({slot.pos_x},{slot.pos_y},{slot.pos_z})")
+        return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# EXPORT ASSETS (per-slot .ctr export)
+# ─────────────────────────────────────────────────────────────────────
+class NFR_OT_AdventureExportAssets(Operator):
+    bl_idname = "nfr.adventure_export_assets"
+    bl_label = "Export Garage Model"
+    bl_description = "Export the selected object's mesh to <slug>/garage/model.ctr (with Sentinel textures) and capture its coordinates"
+
+    def execute(self, context):
+        import math
+        from pathlib import Path
+        from ..export.mesh_json import export_mesh_json
+
+        st = context.scene.nfr_adventure
+        idx = st.active_slot_idx
+        if idx >= len(st.slots):
+            self.report({'ERROR'}, "Invalid slot")
+            return {'CANCELLED'}
+        slot = st.slots[idx]
+        if slot.idle_object is None:
+            self.report({'ERROR'}, "Set the Idle/Character Object first")
+            return {'CANCELLED'}
+        if not slot.char_slug:
+            slot.char_slug = slot.idle_object.name.lower().replace(" ", "_")
+
+        try:
+            root = _root(context)
+        except Exception as e:
+            self.report({'ERROR'}, f"Cannot find repo root: {e}")
+            return {'CANCELLED'}
+
+        obj = slot.idle_object
+
+        slot.pos_x = int(obj.location.x * 100)
+        slot.pos_y = int(obj.location.y * 100)
+        slot.pos_z = int(obj.location.z * 100)
+        slot.pos_rot = int(obj.rotation_euler.z * (65536.0 / (2 * math.pi)))
+
+        slug_dir = Path(root) / "assets" / "mods" / "racers" / slot.char_slug
+        garage_dir = slug_dir / "garage"
+        garage_dir.mkdir(parents=True, exist_ok=True)
+        source_dir = slug_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+
+        json_path = source_dir / "source_mesh_garage.json"
+        try:
+            export_mesh_json(obj, json_path)
+        except Exception as e:
+            self.report({'ERROR'}, f"Mesh JSON export failed: {e}")
+            return {'CANCELLED'}
+
+        build_py = Path(root) / "tools" / "custom_racers" / "build_character.py"
+        if not build_py.is_file():
+            self.report({'ERROR'}, f"build_character.py not found: {build_py}")
+            return {'CANCELLED'}
+
+        out_ctr = garage_dir / "model.ctr"
+        py_exe = get_python_exe()
+        cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr),
+               "--sentinel", "--garage"]
+
+        print()
+        print(f"[NFR] Export Garage Model: {slot.char_slug} -> {out_ctr}")
+        r = subprocess.run(cmd, cwd=root, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
+
+        if r.returncode != 0:
+            print(f"[NFR] FAILED: {r.stderr}")
+            self.report({'ERROR'}, "build_character failed. Check console.")
+            return {'CANCELLED'}
+
+        if r.stdout:
+            for line in r.stdout.strip().splitlines():
+                print(f"  {line}")
+
+        self.report({'INFO'},
+                    f"S{idx} ({slot.char_slug}): exported garage/model.ctr + "
+                    f"coords ({slot.pos_x},{slot.pos_y},{slot.pos_z})")
+        print(f"[NFR] Success: {out_ctr}")
+        return {'FINISHED'}
+
+
+class NFR_OT_AdventureSfxAdd(Operator):
+    bl_idname = "nfr.adventure_sfx_add"
+    bl_label = "Add SFX"
+
+    def execute(self, context):
+        st = context.scene.nfr_adventure
+        if st.active_slot_idx >= len(st.slots):
+            return {'CANCELLED'}
+        slot = st.slots[st.active_slot_idx]
+        slot.sfx_entries.add()
+        self.report({'INFO'}, "SFX entry added")
+        return {'FINISHED'}
+
+
+class NFR_OT_AdventureSfxRemove(Operator):
+    bl_idname = "nfr.adventure_sfx_remove"
+    bl_label = "Remove SFX"
+    index: IntProperty(default=0)
+
+    def execute(self, context):
+        st = context.scene.nfr_adventure
+        if st.active_slot_idx >= len(st.slots):
+            return {'CANCELLED'}
+        slot = st.slots[st.active_slot_idx]
+        if 0 <= self.index < len(slot.sfx_entries):
+            slot.sfx_entries.remove(self.index)
+        return {'FINISHED'}
+
+
+class NFR_OT_AdventureBuildAudio(Operator):
+    bl_idname = "nfr.adventure_build_audio"
+    bl_label = "Build Audio for Slot"
+
+    def execute(self, context):
+        self.report({'INFO'},
+                    "Audio pipeline for garage slots is a separate feature "
+                    "(see docs/CUSTOM_GARAGE_CONTEXT.md §8). "
+                    "For now, no audio is generated.")
+        return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# BUILD GARAGE PACK (the main operator)
+# ─────────────────────────────────────────────────────────────────────
+class NFR_OT_AdventureBuild(Operator):
+    bl_idname = "nfr.adventure_build"
+    bl_label = "BUILD GARAGE PACK"
+
+    def execute(self, context):
+        st = context.scene.nfr_adventure
+        try:
+            root = _root(context)
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            print(f"[NFR] BUILD: _root failed: {e}")
+            return {'CANCELLED'}
+        script = os.path.join(root, "tools", "custom_racers", "add_adventure_pack.py")
+        print(f"[NFR] BUILD: root={root}")
+        print(f"[NFR] BUILD: script={script} exists={os.path.isfile(script)}")
+
+        lev_path = _clean_path(st.lev_file)
+        vrm_path = _clean_path(st.vrm_file)
+
+        print(f"\n--- GARAGE BUILD START ---")
+        print(f"Root: {root}")
+        print(f"Script: {script}")
+        print(f"LEV: {lev_path}")
+        print(f"VRM: {vrm_path}")
+        print(f"Slots: {len(st.slots)}")
+
+        if not lev_path or not vrm_path or not os.path.isfile(lev_path) or not os.path.isfile(vrm_path):
+            msg = (f"Archivos no encontrados.\n"
+                   f"  LEV: {lev_path}\n"
+                   f"       (raw: {st.lev_file})\n"
+                   f"  VRM: {vrm_path}\n"
+                   f"       (raw: {st.vrm_file})\n"
+                   f"Tip: en el file picker, desactivá 'Relative Paths' "
+                   f"si tus archivos no están en la carpeta del .blend.")
+            self.report({'ERROR'}, msg)
+            print(f"[NFR] BUILD CANCELLED: {msg}")
+            return {'CANCELLED'}
+        if not os.path.isfile(script):
+            self.report({'ERROR'}, f"No se encuentra el script en: {script}")
+            return {'CANCELLED'}
+
+        # Ensure 8 slots
+        while len(st.slots) < 8:
+            st.slots.add()
+
+        # Build the data JSON (slots + camera)
+        slots_json = []
+        for i in range(8):
+            s = st.slots[i]
+            # Auto-derive kart slug from kart_object if set
+            kart_slug = ""
+            if s.kart_object is not None:
+                racers_dir = os.path.join(root, "assets", "mods", "racers")
+                cands = [s.kart_object.name.lower().replace(" ", "_"),
+                         s.kart_object.name, s.char_slug]
+                for c in cands:
+                    if c and os.path.isfile(os.path.join(racers_dir, c, "kart.ctr")):
+                        kart_slug = c
+                        break
+                if not kart_slug:
+                    self.report({'WARNING'},
+                                f"Slot {i}: no encontre kart.ctr para {cands} en {racers_dir}")
+            slots_json.append({
+                "char": s.char_slug,
+                "kart": kart_slug,
+                "x": s.pos_x,
+                "y": s.pos_y,
+                "z": s.pos_z,
+                "rot": s.pos_rot,
+                "idle_anim": s.idle_anim,
+                "idle_start": s.idle_start,
+                "idle_end": s.idle_end,
+                "idle_loop": 1 if s.idle_loop else 0,
+                "select_anim": s.select_anim,
+                "select_start": s.select_start,
+                "select_end": s.select_end,
+                "select_loop": 1 if s.select_loop else 0,
+                "ambient_wav": _clean_path(s.ambient_wav) if s.ambient_wav else "",
+                "sfx": [
+                    {"frame": e.frame, "wav": _clean_path(e.wav_path)}
+                    for e in s.sfx_entries
+                ],
+            })
+
+        data = {
+            "slots": slots_json,
+            "camera": {
+                "x": st.cam_x, "y": st.cam_y, "z": st.cam_z,
+                "rot_x": st.cam_rot_x, "rot_y": st.cam_rot_y,
+            },
+        }
+
+        # Write to temp file
+        tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8')
+        json.dump(data, tmp, indent=2)
+        tmp.close()
+
+        py_exe = _clean_path(get_python_exe())
+        cmd = [
+            py_exe, script,
+            "--name", st.pack_name,
+            "--slug", st.slug,
+            "--lev", lev_path,
+            "--vrm", vrm_path,
+            "--data-json", tmp.name,
+        ]
+
+        print(f"Executing: {cmd}")
+        try:
+            p = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+            if p.stdout: print(f"STDOUT:\n{p.stdout}")
+            if p.stderr: print(f"STDERR:\n{p.stderr}")
+
+            if p.returncode != 0:
+                self.report({'ERROR'}, f"Fallo el script (rc={p.returncode}). Revisa la consola.")
+                return {'CANCELLED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Excepcion: {e}")
+            return {'CANCELLED'}
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+
+        self.report({'INFO'}, "Garage Pack built successfully")
+        return {'FINISHED'}
+
+
+_classes = (
+    NFR_OT_AdventureAddCam,
+    NFR_OT_AdventureAssignCam,
+    NFR_OT_AdventureAimCam,
+    NFR_OT_AdventureAssignSingle,
+    NFR_OT_AdventureExportAssets,
+    NFR_OT_AdventureSfxAdd,
+    NFR_OT_AdventureSfxRemove,
+    NFR_OT_AdventureBuildAudio,
+    NFR_OT_AdventureBuild,
+)
+
+
 def register():
-    bpy.utils.register_class(NFR_OT_AdventureAddCam)
-    bpy.utils.register_class(NFR_OT_AdventureAssignSingle)
-    bpy.utils.register_class(NFR_OT_AdventureAssignCam)
-    bpy.utils.register_class(NFR_OT_AdventureAimCam)
-    bpy.utils.register_class(NFR_OT_AdventureBuild)
+    for cls in _classes:
+        bpy.utils.register_class(cls)
+
 
 def unregister():
-    bpy.utils.unregister_class(NFR_OT_AdventureBuild)
-    bpy.utils.unregister_class(NFR_OT_AdventureAimCam)
-    bpy.utils.unregister_class(NFR_OT_AdventureAssignCam)
-    bpy.utils.unregister_class(NFR_OT_AdventureAssignSingle)
-    bpy.utils.unregister_class(NFR_OT_AdventureAddCam)
+    for cls in reversed(_classes):
+        bpy.utils.unregister_class(cls)
