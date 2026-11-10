@@ -66,8 +66,13 @@ def _install_vag(src, dst):
         return True, "usado %s (junto al WAV)" % os.path.basename(twin)
     tmpl = os.environ.get(VAG_ENCODER_ENV, "").strip()
     if not tmpl:
-        return False, ("es un WAV y no hay .vag gemelo ni encoder: define %s "
-                       "o deja un .vag con el mismo nombre junto al WAV" % VAG_ENCODER_ENV)
+        # AUTO-FIX: Usar el vag_codec del repositorio por defecto
+        vag_codec = os.path.join(REPO_ROOT, "tools", "custom_racers", "vag_codec.py")
+        if os.path.exists(vag_codec):
+            tmpl = f'"{sys.executable}" "{vag_codec}" encode --rate 11025 --norm --loop {{wav}} {{out}}'
+        else:
+            return False, ("es un WAV y no hay .vag gemelo ni encoder: define %s "
+                           "o deja un .vag con el mismo nombre junto al WAV" % VAG_ENCODER_ENV)
     argv = [a.format(wav=src, out=dst).strip('"')
             for a in shlex.split(tmpl, posix=(os.name != "nt"))]
     r = subprocess.run(argv, capture_output=True, text=True)
