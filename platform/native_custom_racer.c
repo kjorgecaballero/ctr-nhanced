@@ -57,7 +57,8 @@ enum {
     NATIVE_SENTINEL_KIND_MASK      = 2,
     NATIVE_SENTINEL_KIND_MASK_BEAM = 3,
     NATIVE_SENTINEL_KIND_ITEM      = 4,   /* items/<item>/sentinel_NN.bin */
-    NATIVE_SENTINEL_KIND_GARAGE    = 5,   /* <slug>/garage/sentinel_NN.bin */
+    NATIVE_SENTINEL_KIND_GARAGE    = 5,
+    NATIVE_SENTINEL_KIND_GARAGE_KART = 6,   /* <slug>/garage/sentinel_NN.bin */
 };
 
 /* Width in VRAM words assigned to each player slot. */
@@ -244,6 +245,7 @@ static s16             s_itemIconTexIdx    [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COU
 static struct Icon     s_itemIcon          [NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT];
 static s16             s_itemSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_ITEM_COUNT][NATIVE_MODEL_TEX_MAX];
 static s16 s_garageSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
+static s16 s_garageKartSentinelTexMap[NATIVE_CUSTOM_COUNT][NATIVE_MODEL_TEX_MAX];
 /* Per-custom wheels-visible flag (roster.txt optional wheels=yes|no). 1 = visible. */
 static u8  s_customHasWheels[NATIVE_CUSTOM_COUNT];
 
@@ -596,7 +598,8 @@ void NativeCustomRacer_ReloadRoster(void)
     memset(s_danceSentinelTexMap, 0xFF, sizeof(s_danceSentinelTexMap)); /* -1 = unset */
     memset(s_maskSentinelTexMap,  0xFF, sizeof(s_maskSentinelTexMap));  /* -1 = unset */
     memset(s_maskBeamSentinelTexMap, 0xFF, sizeof(s_maskBeamSentinelTexMap)); /* -1 = unset */
-    memset(s_garageSentinelTexMap, 0xFF, sizeof(s_garageSentinelTexMap)); /* -1 = unset */
+    memset(s_garageSentinelTexMap, 0xFF, sizeof(s_garageSentinelTexMap));
+    memset(s_garageKartSentinelTexMap, 0xFF, sizeof(s_garageKartSentinelTexMap)); /* -1 = unset */
     memset(s_customVoiceBase, 0, sizeof(s_customVoiceBase));
     memset(s_customMusicBase, 0, sizeof(s_customMusicBase));
     memset(s_customDanceSfxBase, 0, sizeof(s_customDanceSfxBase));
@@ -1161,6 +1164,12 @@ static void RegisterModelTextures(int characterID, unsigned char *data, int kind
         kind_name   = "garage";
         file_prefix = "sentinel";
         cache_row   = s_garageSentinelTexMap[charIdx];
+        break;
+    case NATIVE_SENTINEL_KIND_GARAGE_KART:
+        subdir      = "garage/kart/";
+        kind_name   = "garage_kart";
+        file_prefix = "sentinel";
+        cache_row   = s_garageKartSentinelTexMap[charIdx];
         break;
     default:
         subdir      = "";
@@ -3936,6 +3945,23 @@ static void LoadGarageSfxSidecar(int idx, const char *folder)
 
 void NativeCustomRacer_ResetGarageAudio(void)
 {
+    // --- FIX VRAM LEAK: Liberar texturas del garaje y kart al salir ---
+    for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++) {
+        for (int j = 0; j < NATIVE_MODEL_TEX_MAX; j++) {
+            if (s_garageSentinelTexMap[i][j] >= 0) {
+                NativeCustomRacer_FreeTexIdx(s_garageSentinelTexMap[i][j]);
+                s_garageSentinelTexMap[i][j] = -1;
+            }
+            if (s_garageKartSentinelTexMap[i][j] >= 0) {
+                NativeCustomRacer_FreeTexIdx(s_garageKartSentinelTexMap[i][j]);
+                s_garageKartSentinelTexMap[i][j] = -1;
+            }
+        }
+    }
+    memset(s_garageSentinelTexMap, 0xFF, sizeof(s_garageSentinelTexMap));
+    memset(s_garageKartSentinelTexMap, 0xFF, sizeof(s_garageKartSentinelTexMap));
+    // -------------------------------------------------------------------
+
     NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
     memset(s_garageSfxSpuAddr, 0, sizeof(s_garageSfxSpuAddr));
@@ -4047,7 +4073,7 @@ struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *ret
         return NULL;
 
     char path[256];
-    snprintf(path, sizeof(path), "assets/mods/racers/%s/kart.ctr", slug);
+    snprintf(path, sizeof(path), "assets/mods/racers/%s/garage/kart/kart.ctr", slug);
 
     long sz = 0;
     unsigned char *buf = LoadFileToMemory(path, NATIVE_CTR_MAX_BYTES, &sz);
@@ -4059,6 +4085,10 @@ struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *ret
 
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
+    int cid = NativeCustomRacer_GetCharacterIDFromFolder(slug);
+    if (cid >= NATIVE_CUSTOM_ID_BASE) {
+        RegisterModelTextures(cid, buf + 4, NATIVE_SENTINEL_KIND_GARAGE_KART, -1);
+    }
 
     struct Model *m = (struct Model *)(buf + LOAD_MODEL_FILE_HEADER_BYTES);
 

@@ -1061,6 +1061,10 @@ def _draw_adventure(layout, context):
     row = sub.row()
     row.scale_y = 1.2
     row.operator("nfr.adventure_export_assets", text=f"📤 Export Garage Model for S{st.active_slot_idx}", icon='EXPORT')
+    
+    row = sub.row()
+    row.scale_y = 1.2
+    row.operator("nfr.adventure_export_kart", text=f"📤 Export Kart for S{st.active_slot_idx}", icon='EXPORT')
 
     # ─── AUDIO (per slot) ───────────────────────────
     box = layout.box()

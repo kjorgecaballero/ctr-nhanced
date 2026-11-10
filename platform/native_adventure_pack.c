@@ -7,6 +7,7 @@ static int s_packCharIDs[NATIVE_ADVENTURE_PACK_SLOTS];
 static int s_packActive = 0;
 static s16 s_cam_pos[3] = {0, 100, 500};
 static s16 s_cam_rot[2] = {0, 0};
+static int s_cam_useRot = 0;
 static s16 s_slot_pos[8][4] = {
     {-700, 0, -200, 0}, {-500, 0, -100, 0}, {-300, 0, -50, 0}, {-100, 0, 0, 0},
     { 100, 0, 0, 0}, { 300, 0, -50, 0}, { 500, 0, -100, 0}, { 700, 0, -200, 0},
@@ -219,6 +220,9 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
         }
         struct Model *custom = (struct Model *)raw;
         custom->id = STATIC_CRASHSELECT + i;  // forzar ID para el PVS bypass
+        for (int h = 0; h < custom->numHeaders; h++) {
+            custom->headers[h].maxDistanceLOD = (s16)0xFFFF;
+        }
         NativeCustomRacer_RegisterGarageModel(i, charID, custom);
         
         const char *slug = NativeCustomRacer_GetFolder(charID);
@@ -231,10 +235,13 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
         sdata->gGT->modelPtr[STATIC_CRASHSELECT + i] = custom;
 
         // Reemplazar en el InstDef correspondiente
+        int replaced = 0;
+        int retailID = gGarage.garageCharacterIDs[i];
         for (u32 j = 0; j < lev->numInstances; j++) {
             struct InstDef *def = &lev->ptrInstDefs[j];
-            if (def->model != NULL && def->model->id == STATIC_CRASHSELECT + i) {
+            if (def->model != NULL && (def->model->id == STATIC_CRASHSELECT + i || def->model->id == retailID)) {
                 def->model = custom;
+                replaced = 1;
                 break;
             }
         }
@@ -272,6 +279,10 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                 if (customKart == NULL)
                     continue;
 
+                for (int h = 0; h < customKart->numHeaders; h++) {
+                    customKart->headers[h].maxDistanceLOD = (s16)0xFFFF;
+                }
+
                 int replaced = 0;
                 for (u32 j = 0; j < lev->numInstances; j++)
                 {
@@ -290,7 +301,6 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                         replaced = 1;
                         fprintf(stderr, "[AdventurePack] custom kart slot %d: matched InstDef '%s' (model '%s')\n",
                                 i, def->name, kartModelName);
-                        break;
                     }
                 }
 
@@ -403,6 +413,7 @@ void NativeAdventurePack_SpawnCharacters(struct GameTracker *gGT)
 
 void NativeAdventurePack_LoadCameras(void) {
     if (!s_packActive) return;
+    s_cam_useRot = 0;
     const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
     if (!pack) return;
 
@@ -424,6 +435,8 @@ void NativeAdventurePack_LoadCameras(void) {
     fclose(f);
 
     fprintf(stderr, "[DIAG-Adv] LoadCameras leyo %d valores del JSON\n", n);
+    s_cam_useRot = (n >= 5 + 8 * 4 + 1 && vals[5 + 8 * 4] == 1);
+    fprintf(stderr, "[DIAG-Adv] Camara: use_rot=%d\n", s_cam_useRot);
     if (n >= 5) {
         s_cam_pos[0] = vals[0]; s_cam_pos[1] = vals[1]; s_cam_pos[2] = vals[2];
         s_cam_rot[0] = vals[3]; s_cam_rot[1] = vals[4];
@@ -440,6 +453,8 @@ void NativeAdventurePack_LoadCameras(void) {
         }
     }
 }
+
+int NativeAdventurePack_CameraHasRot(void) { return s_packActive && s_cam_useRot; }
 
 void NativeAdventurePack_GetCamera(s16 *pos, s16 *rot) {
     pos[0] = s_cam_pos[0]; pos[1] = s_cam_pos[1]; pos[2] = s_cam_pos[2];

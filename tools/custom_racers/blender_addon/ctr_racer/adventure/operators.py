@@ -8,6 +8,62 @@ from bpy.props import IntProperty, StringProperty
 from bpy.types import Operator
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Blender (Z-up, metros)  ->  motor CTR (Y-up, ANG 0x1000 = 360 grados)
+#
+# Mismo cambio de ejes que usa build_character.py para el mesh:
+#     motor = (bx, bz, -by)
+# Un personaje que mira a -Y en Blender (vista frontal) mira a +Z en el
+# motor con yaw 0, asi que yaw_motor = rotacion Z de Blender.
+# ─────────────────────────────────────────────────────────────────────
+# Unidades de motor por unidad de Blender. OJO: el mesh se exporta a x64
+# (build_character.py) y antes aqui se usaba x100. Se mantiene 100 para no
+# cambiar lo no demostrado; CALIBRAR midiendo un objeto conocido del .lev.
+NFR_ENGINE_SCALE = 100.0
+# Si el personaje sale girado en el garaje, sumar 0x800 (180 grados) aqui.
+NFR_SLOT_YAW_OFFSET = 0
+
+
+def _s16(v):
+    """Redondea y satura a s16 (el motor guarda posiciones en s16)."""
+    return max(-32768, min(32767, int(round(v))))
+
+
+def _ang(rad):
+    """Radianes -> unidades ANG del motor (0x1000 = 360 grados)."""
+    return int(round(rad * 4096.0 / (2.0 * math.pi)))
+
+
+def _pos_to_engine(v):
+    k = NFR_ENGINE_SCALE
+    return _s16(v.x * k), _s16(v.z * k), _s16(-v.y * k)
+
+
+def _slot_from_object(slot, obj):
+    """Captura posicion/yaw en espacio mundo y en coordenadas del motor."""
+    mw = obj.matrix_world
+    slot.pos_x, slot.pos_y, slot.pos_z = _pos_to_engine(mw.translation)
+    slot.pos_rot = (_ang(mw.to_euler().z) + NFR_SLOT_YAW_OFFSET) & 0xFFF
+
+
+def _camera_to_engine(cam):
+    """Posicion + (pitch, yaw) de la camara en espacio motor.
+
+    La camara de Blender mira hacia su -Z local. Se saca ese vector en mundo,
+    se pasa al motor y se calcula yaw/pitch con la misma convencion que usa
+    CS_Garage.c para su look-at: yaw = atan2(dx, dz), pitch positivo = mira
+    hacia arriba. El roll no se exporta (el garaje lo fija a 180 grados).
+    """
+    from mathutils import Vector
+    mw = cam.matrix_world
+    px, py, pz = _pos_to_engine(mw.translation)
+    f = mw.to_quaternion() @ Vector((0.0, 0.0, -1.0))
+    fx, fy, fz = f.x, f.z, -f.y
+    yaw = math.atan2(fx, fz)
+    pitch = math.atan2(fy, math.hypot(fx, fz))
+    return px, py, pz, _ang(pitch), _ang(yaw) & 0xFFF
+
+
 def _root(context):
     """Get the repo root (folder that contains tools/custom_racers/)."""
     try:
@@ -94,14 +150,13 @@ class NFR_OT_AdventureAssignCam(Operator):
         if cam is None:
             self.report({'ERROR'}, "No active camera in scene")
             return {'CANCELLED'}
-        st.cam_x = int(cam.location.x * 100)
-        st.cam_y = int(cam.location.y * 100)
-        st.cam_z = int(cam.location.z * 100)
-        # rot_x and rot_y from euler in degrees-ish (CTR uses 0x1000 = 360°)
-        st.cam_rot_x = int(cam.rotation_euler.x * (65536.0 / (2 * math.pi)))
-        st.cam_rot_y = int(cam.rotation_euler.y * (65536.0 / (2 * math.pi)))
+        (st.cam_x, st.cam_y, st.cam_z,
+         st.cam_rot_x, st.cam_rot_y) = _camera_to_engine(cam)
+        # cam_rot_x = pitch (positivo = mira arriba), cam_rot_y = yaw; ANG 0x1000 = 360
         st.cam_captured = True
-        self.report({'INFO'}, f"Camera captured: X:{st.cam_x} Y:{st.cam_y} Z:{st.cam_z}")
+        self.report({'INFO'},
+                    f"Camera captured (engine): X:{st.cam_x} Y:{st.cam_y} Z:{st.cam_z} "
+                    f"pitch:{st.cam_rot_x} yaw:{st.cam_rot_y}")
         return {'FINISHED'}
 
 
@@ -142,10 +197,7 @@ class NFR_OT_AdventureAssignSingle(Operator):
         slot.idle_object = obj
         if not slot.char_slug:
             slot.char_slug = obj.name.lower().replace(" ", "_")
-        slot.pos_x = int(obj.location.x * 100)
-        slot.pos_y = int(obj.location.y * 100)
-        slot.pos_z = int(obj.location.z * 100)
-        slot.pos_rot = int(obj.rotation_euler.z * (65536.0 / (2 * math.pi)))
+        _slot_from_object(slot, obj)
         self.report({'INFO'}, f"Slot {self.slot_index} = {slot.char_slug} @ ({slot.pos_x},{slot.pos_y},{slot.pos_z})")
         return {'FINISHED'}
 
@@ -156,18 +208,16 @@ class NFR_OT_AdventureAssignSingle(Operator):
 class NFR_OT_AdventureExportAssets(Operator):
     bl_idname = "nfr.adventure_export_assets"
     bl_label = "Export Garage Model"
-    bl_description = "Export the selected object's mesh to <slug>/garage/model.ctr (with Sentinel textures) and capture its coordinates"
+    bl_description = "Export ONLY the character (idle_object) to <slug>/garage/model.ctr + sentinel_*.bin"
 
     def execute(self, context):
-        import math
         from pathlib import Path
         from ..export.mesh_json import export_mesh_json
+        import subprocess
 
         st = context.scene.nfr_adventure
         idx = st.active_slot_idx
-        if idx >= len(st.slots):
-            self.report({'ERROR'}, "Invalid slot")
-            return {'CANCELLED'}
+        if idx >= len(st.slots): return {'CANCELLED'}
         slot = st.slots[idx]
         if slot.idle_object is None:
             self.report({'ERROR'}, "Set the Idle/Character Object first")
@@ -175,62 +225,79 @@ class NFR_OT_AdventureExportAssets(Operator):
         if not slot.char_slug:
             slot.char_slug = slot.idle_object.name.lower().replace(" ", "_")
 
-        try:
-            root = _root(context)
-        except Exception as e:
-            self.report({'ERROR'}, f"Cannot find repo root: {e}")
-            return {'CANCELLED'}
-
-        obj = slot.idle_object
-
-        slot.pos_x = int(obj.location.x * 100)
-        slot.pos_y = int(obj.location.y * 100)
-        slot.pos_z = int(obj.location.z * 100)
-        slot.pos_rot = int(obj.rotation_euler.z * (65536.0 / (2 * math.pi)))
-
+        root = _root(context)
         slug_dir = Path(root) / "assets" / "mods" / "racers" / slot.char_slug
         garage_dir = slug_dir / "garage"
         garage_dir.mkdir(parents=True, exist_ok=True)
         source_dir = slug_dir / "source"
         source_dir.mkdir(parents=True, exist_ok=True)
 
-        json_path = source_dir / "source_mesh_garage.json"
-        try:
-            export_mesh_json(obj, json_path)
-        except Exception as e:
-            self.report({'ERROR'}, f"Mesh JSON export failed: {e}")
-            return {'CANCELLED'}
-
         build_py = Path(root) / "tools" / "custom_racers" / "build_character.py"
-        if not build_py.is_file():
-            self.report({'ERROR'}, f"build_character.py not found: {build_py}")
-            return {'CANCELLED'}
-
-        out_ctr = garage_dir / "model.ctr"
         py_exe = get_python_exe()
-        cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr),
-               "--sentinel", "--garage"]
 
-        print()
-        print(f"[NFR] Export Garage Model: {slot.char_slug} -> {out_ctr}")
-        r = subprocess.run(cmd, cwd=root, capture_output=True, text=True,
-                          encoding="utf-8", errors="replace")
+        obj = slot.idle_object
+        _slot_from_object(slot, obj)
 
+        json_path = source_dir / "source_mesh_garage.json"
+        export_mesh_json(obj, json_path)
+        out_ctr = garage_dir / "model.ctr"
+        cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr), "--sentinel", "--garage"]
+        r = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
         if r.returncode != 0:
-            print(f"[NFR] FAILED: {r.stderr}")
-            self.report({'ERROR'}, "build_character failed. Check console.")
+            self.report({'ERROR'}, "Character garage build failed. Check console.")
             return {'CANCELLED'}
 
-        if r.stdout:
-            for line in r.stdout.strip().splitlines():
-                print(f"  {line}")
-
-        self.report({'INFO'},
-                    f"S{idx} ({slot.char_slug}): exported garage/model.ctr + "
-                    f"coords ({slot.pos_x},{slot.pos_y},{slot.pos_z})")
-        print(f"[NFR] Success: {out_ctr}")
+        self.report({'INFO'}, f"S{idx} ({slot.char_slug}): garage model exported.")
         return {'FINISHED'}
 
+
+class NFR_OT_AdventureExportKart(Operator):
+    bl_idname = "nfr.adventure_export_kart"
+    bl_label = "Export Kart"
+    bl_description = "Export ONLY the kart to <slug>/garage/kart/kart.ctr"
+
+    def execute(self, context):
+        from pathlib import Path
+        from ..export.mesh_json import export_mesh_json
+        import subprocess
+        import shutil
+
+        st = context.scene.nfr_adventure
+        idx = st.active_slot_idx
+        if idx >= len(st.slots): return {'CANCELLED'}
+        slot = st.slots[idx]
+        if slot.kart_object is None:
+            self.report({'ERROR'}, "Set the Kart Object first")
+            return {'CANCELLED'}
+        if not slot.char_slug:
+            if slot.idle_object:
+                slot.char_slug = slot.idle_object.name.lower().replace(" ", "_")
+            else:
+                return {'CANCELLED'}
+
+        root = _root(context)
+        slug_dir = Path(root) / "assets" / "mods" / "racers" / slot.char_slug
+        kart_dir = slug_dir / "garage" / "kart"
+        kart_dir.mkdir(parents=True, exist_ok=True)
+        source_dir = slug_dir / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+
+        build_py = Path(root) / "tools" / "custom_racers" / "build_character.py"
+        py_exe = get_python_exe()
+
+        json_path = source_dir / "source_mesh_kart.json"
+        export_mesh_json(slot.kart_object, json_path)
+        out_ctr = kart_dir / "kart.ctr"
+        cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr), "--sentinel"]
+        r = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+        
+        if r.returncode != 0:
+            self.report({'ERROR'}, "Kart build failed.")
+            return {'CANCELLED'}
+
+        shutil.copy2(out_ctr, slug_dir / "kart.ctr")
+        self.report({'INFO'}, f"S{idx}: kart exported safely to garage/kart/.")
+        return {'FINISHED'}
 
 class NFR_OT_AdventureSfxAdd(Operator):
     bl_idname = "nfr.adventure_sfx_add"
@@ -365,6 +432,7 @@ class NFR_OT_AdventureBuild(Operator):
             "camera": {
                 "x": st.cam_x, "y": st.cam_y, "z": st.cam_z,
                 "rot_x": st.cam_rot_x, "rot_y": st.cam_rot_y,
+                "captured": 1 if st.cam_captured else 0,
             },
         }
 
@@ -405,12 +473,14 @@ class NFR_OT_AdventureBuild(Operator):
         return {'FINISHED'}
 
 
+
 _classes = (
     NFR_OT_AdventureAddCam,
     NFR_OT_AdventureAssignCam,
     NFR_OT_AdventureAimCam,
     NFR_OT_AdventureAssignSingle,
     NFR_OT_AdventureExportAssets,
+    NFR_OT_AdventureExportKart,
     NFR_OT_AdventureSfxAdd,
     NFR_OT_AdventureSfxRemove,
     NFR_OT_AdventureBuildAudio,

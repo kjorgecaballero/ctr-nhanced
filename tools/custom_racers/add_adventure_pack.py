@@ -1,30 +1,122 @@
 """
-add_adventure_pack.py — Build a custom Adventure Garage pack.
+add_adventure_pack.py - Build a custom Adventure Garage pack.
 
-Does NOT run lev_inject.py. The model injection is a separate manual step:
+Copies the LEV/VRM, writes level.json + cameras.json, injects the retail garage
+models with lev_inject.py (when tools/custom_racers/garage/* exist) and installs
+the per-character garage audio under assets/mods/racers/<char_slug>/garage/.
 
-    python tools/custom_racers/garage/lev_inject.py inject \\
-        --lev assets/mods/levels/<slug>/data.lev.bak \\
-        --models-from-lev tools/custom_racers/garage/garage_retail.lev \\
-        --translate=-1500,10,0 --pos-offset=0x30 \\
-        -o assets/mods/levels/<slug>/data.lev
-
-Then copy the retail VRM:
-
-    cp tools/custom_racers/garage/garage_retail.vrm \\
-       assets/mods/levels/<slug>/model_textures.vrm
+Audio: .vag files are copied as is; a .wav needs a sibling .vag with the same
+name or an external encoder in the NFR_VAG_ENCODER environment variable
+(template with {wav} and {out}).
 
 See docs/CUSTOM_GARAGE_CONTEXT.md for the full pipeline.
 """
 import argparse
 import json
 import os
+import shlex
 import shutil
+import struct
+import subprocess
 import sys
 
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 LEVELS_ROOT = os.path.join(REPO_ROOT, "assets", "mods", "levels")
+
+
+def _copy(src, dst):
+    """copy2 que no falla (SameFileError) si origen y destino son el mismo archivo."""
+    if os.path.exists(dst) and os.path.samefile(src, dst):
+        return
+    shutil.copy2(src, dst)
+
+
+# ---------------------------------------------------------------------------
+# Audio del garaje. El motor lee SOLO (native_custom_racer.c):
+#   assets/mods/racers/<char_slug>/garage/ambient.vag
+#   assets/mods/racers/<char_slug>/garage/sfx_<n>.vag
+#   assets/mods/racers/<char_slug>/garage/sfx.bin   ("GSFX", u32 count, u32 frames[])
+# sfx.bin se lee al cargar el roster: hay que reiniciar el juego tras cambiarlo.
+# ---------------------------------------------------------------------------
+VAG_ENCODER_ENV = "NFR_VAG_ENCODER"
+
+
+def _racer_garage_dir(slug):
+    return os.path.join(REPO_ROOT, "assets", "mods", "racers", slug, "garage")
+
+
+def _install_vag(src, dst):
+    """Deja un .vag en dst. Devuelve (ok, mensaje).
+
+    src puede ser: un .vag (se copia); un .wav con un .vag gemelo (mismo nombre,
+    se usa el gemelo); o un .wav y un encoder externo definido en la variable de
+    entorno NFR_VAG_ENCODER como plantilla, p. ej.:
+        python tools/loquesea/wav2vag.py {wav} {out}
+    """
+    if not src or not os.path.isfile(src):
+        return False, "no existe: %r" % src
+    stem, ext = os.path.splitext(src)
+    if ext.lower() == ".vag":
+        _copy(src, dst)
+        return True, "copiado"
+    twin = stem + ".vag"
+    if os.path.isfile(twin):
+        _copy(twin, dst)
+        return True, "usado %s (junto al WAV)" % os.path.basename(twin)
+    tmpl = os.environ.get(VAG_ENCODER_ENV, "").strip()
+    if not tmpl:
+        return False, ("es un WAV y no hay .vag gemelo ni encoder: define %s "
+                       "o deja un .vag con el mismo nombre junto al WAV" % VAG_ENCODER_ENV)
+    argv = [a.format(wav=src, out=dst).strip('"')
+            for a in shlex.split(tmpl, posix=(os.name != "nt"))]
+    r = subprocess.run(argv, capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.isfile(dst):
+        return False, "el encoder fallo: " + (r.stderr or r.stdout).strip()[:300]
+    return True, "codificado"
+
+
+def _write_gsfx(path, frames):
+    with open(path, "wb") as f:
+        f.write(b"GSFX")
+        f.write(struct.pack("<I", len(frames)))
+        if frames:
+            f.write(struct.pack("<%dI" % len(frames), *[max(0, int(v)) for v in frames]))
+
+
+def _install_audio(slots):
+    ok_all = True
+    for i, s in enumerate(slots):
+        amb = s.get("ambient_wav", "")
+        sfx = s.get("sfx", [])
+        if not amb and not sfx:
+            continue
+        slug = s.get("char", "")
+        if not slug:
+            print("WARNING: slot %d tiene audio pero no personaje; se omite" % i, file=sys.stderr)
+            ok_all = False
+            continue
+        racer_dir = os.path.join(REPO_ROOT, "assets", "mods", "racers", slug)
+        if not os.path.isdir(racer_dir):
+            print("WARNING: slot %d: no existe %s; se omite el audio" % (i, racer_dir), file=sys.stderr)
+            ok_all = False
+            continue
+        gdir = _racer_garage_dir(slug)
+        os.makedirs(gdir, exist_ok=True)
+
+        if amb:
+            ok, msg = _install_vag(amb, os.path.join(gdir, "ambient.vag"))
+            print("  audio slot %d (%s) ambient.vag: %s" % (i, slug, msg))
+            ok_all &= ok
+        if sfx:
+            frames = []
+            for j, e in enumerate(sfx):
+                frames.append(e.get("frame", 0))
+                ok, msg = _install_vag(e.get("wav", ""), os.path.join(gdir, "sfx_%d.vag" % j))
+                print("  audio slot %d (%s) sfx_%d.vag @frame %s: %s" % (i, slug, j, e.get("frame", 0), msg))
+                ok_all &= ok
+            _write_gsfx(os.path.join(gdir, "sfx.bin"), frames)
+    return ok_all
 
 
 def _empty_slots():
@@ -69,8 +161,15 @@ def main():
     os.makedirs(dst, exist_ok=True)
 
     # Copy LEV and VRM (the user's assets)
-    shutil.copy2(args.lev, os.path.join(dst, "data.lev"))
-    shutil.copy2(args.vrm, os.path.join(dst, "data.vrm"))
+    dst_lev = os.path.join(dst, "data.lev")
+    bak = dst_lev + ".bak"
+    clean_lev = args.lev
+    if os.path.exists(dst_lev) and os.path.samefile(args.lev, dst_lev) and os.path.isfile(bak):
+        # Reconstruyendo sobre un pack ya inyectado: el LEV limpio es el .bak.
+        clean_lev = bak
+        print("  --lev apunta al data.lev ya inyectado; se usa data.lev.bak como LEV limpio")
+    _copy(clean_lev, dst_lev)
+    _copy(args.vrm, os.path.join(dst, "data.vrm"))
 
     # Build the level.json manifest
     manifest = {
@@ -115,39 +214,31 @@ def main():
             for s in slots
         ],
     }
+    # OJO: NativeAdventurePack_LoadCameras NO parsea JSON, saca todos los enteros
+    # en orden: 5 de camara + 8*4 de slots + flag. Por eso "use_rot" va el ULTIMO
+    # y ninguna clave nueva con numeros puede ir antes. Con use_rot=1 el garaje
+    # usa el pitch/yaw capturado en Blender (rot_x = pitch, rot_y = yaw, ANG 0x1000).
+    captured = 1 if cam.get("captured") else 0
+    cameras["use_rot"] = captured
     cam_path = os.path.join(dst, "cameras.json")
-    if any(cam.get(k, 0) for k in ("x", "y", "z", "rot_x", "rot_y")):
+    has_slot_pos = any(s.get(k, 0) for s in slots for k in ("x", "y", "z", "rot"))
+    if captured or has_slot_pos:
         with open(cam_path, "w", encoding="utf-8") as f:
             json.dump(cameras, f, separators=(',', ':'))
     elif os.path.isfile(cam_path):
-        os.remove(cam_path)   # sin camara capturada: usar la del motor
+        os.remove(cam_path)   # nada capturado: el motor usa su camara y slots por defecto
 
 
-    # Copy per-slot audio files (ambient loop only for now; SFX is future)
-    # The C-side audio feature (commit 123ee3d03) expects sidecar files under
-    # <slug>/garage/. We copy the WAVs there so the user can run the audio
-    # pipeline separately.
-    audio_dir = os.path.join(dst, "garage")
-    for i, s in enumerate(slots):
-        amb = s.get("ambient_wav", "")
-        if amb and os.path.isfile(amb):
-            os.makedirs(audio_dir, exist_ok=True)
-            shutil.copy2(amb, os.path.join(audio_dir, f"ambient_{i}.wav"))
-        for j, sfx in enumerate(s.get("sfx", [])):
-            wav = sfx.get("wav", "")
-            if wav and os.path.isfile(wav):
-                os.makedirs(audio_dir, exist_ok=True)
-                shutil.copy2(wav, os.path.join(audio_dir, f"sfx_{i}_{j}.wav"))
+    # Audio por personaje -> assets/mods/racers/<char_slug>/garage/ (lo que lee el motor)
+    audio_ok = _install_audio(slots)
 
     # --- Inyeccion automatica del garaje retail (16 modelos + 17 instancias) ---
-    import subprocess
     garage_dir = os.path.join(REPO_ROOT, "tools", "custom_racers", "garage")
     retail_lev = os.path.join(garage_dir, "garage_retail.lev")
     retail_vrm = os.path.join(garage_dir, "garage_retail.vrm")
     injector = os.path.join(garage_dir, "lev_inject.py")
     if all(os.path.isfile(x) for x in (retail_lev, retail_vrm, injector)):
-        bak = os.path.join(dst, "data.lev.bak")
-        shutil.copy2(args.lev, bak)   # LEV limpio exportado de CTR Editor
+        _copy(clean_lev, bak)   # LEV limpio exportado de CTR Editor (no se pisa si ya es el .bak)
         r = subprocess.run(
             [sys.executable, injector, "inject", "--lev", bak,
              "--models-from-lev", retail_lev,
@@ -158,24 +249,17 @@ def main():
         if r.returncode != 0:
             print("ERROR: lev_inject fallo:\n" + r.stderr, file=sys.stderr)
             sys.exit(1)
-        shutil.copy2(retail_vrm, os.path.join(dst, "model_textures.vrm"))
+        _copy(retail_vrm, os.path.join(dst, "model_textures.vrm"))
         print("  retail garage injected + model_textures.vrm copied")
     else:
         print("WARNING: falta garage_retail.lev/.vrm o lev_inject.py en "
               + garage_dir + " -> NO se inyectaron modelos", file=sys.stderr)
 
     print(f"Pack built at {dst}")
-    print(f"  level.json, cameras.json, data.lev, data.vrm")
-    print()
-    print("NEXT STEPS (manual):")
-    print(f"  1. Backup the LEV:  cp {dst}/data.lev {dst}/data.lev.bak")
-    print(f"  2. Inject models:   python tools/custom_racers/garage/lev_inject.py inject \\")
-    print(f"         --lev {dst}/data.lev.bak \\")
-    print(f"         --models-from-lev tools/custom_racers/garage/garage_retail.lev \\")
-    print(f"         --translate=-1500,10,0 --pos-offset=0x30 \\")
-    print(f"         -o {dst}/data.lev")
-    print(f"  3. Copy VRM:        cp tools/custom_racers/garage/garage_retail.vrm {dst}/model_textures.vrm")
-    print(f"  4. Rebuild + run the game.")
+    print("  level.json, cameras.json, data.lev, data.vrm")
+    if not audio_ok:
+        print("WARNING: algun audio no se pudo instalar (ver mensajes arriba).", file=sys.stderr)
+    print("Si cambiaste SFX por frame (sfx.bin), reinicia el juego: se lee al cargar el roster.")
 
 
 if __name__ == "__main__":
