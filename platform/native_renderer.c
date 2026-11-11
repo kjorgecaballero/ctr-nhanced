@@ -948,7 +948,7 @@ GLint u_psxKeepTextureAlphaLoc;
 #define GPU_SAMPLE_TEXTURE_4BIT_FUNC                                             \
 	"	// returns 16 bit colour\n"                                                \
 	"	vec2 samplePSX(vec2 tc) {\n"                                               \
-	"		vec2 uv = (tc * vec2(0.25, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n"       \
+	"		vec2 uv = ((floor(tc * vec2(0.25, 1.0)) + 0.5) + v_page_clut.xy) * c_VRAMTexel;\n" \
 	"		vec2 comp = VRAM(uv);\n"                                                  \
 	"		int index = int(fract(tc.x / 4.0 + 0.0001) * 4.0);\n"                     \
 	"		float v = _idx2(comp, index / 2) * (255.0 / 16.0);\n"                     \
@@ -962,7 +962,7 @@ GLint u_psxKeepTextureAlphaLoc;
 #define GPU_SAMPLE_TEXTURE_8BIT_FUNC                                      \
 	"	// returns 16 bit colour\n"                                         \
 	"	vec2 samplePSX(vec2 tc) {\n"                                        \
-	"		vec2 uv = (tc * vec2(0.5, 1.0) + v_page_clut.xy) * c_VRAMTexel;\n" \
+	"		vec2 uv = ((floor(tc * vec2(0.5, 1.0)) + 0.5) + v_page_clut.xy) * c_VRAMTexel;\n" \
 	"		vec2 comp = VRAM(uv);\n"                                           \
 	"		vec2 clut_pos = v_page_clut.zw;\n"                                 \
 	"		int index = int(mod(tc.x, 2.0));\n"                                \
