@@ -2,9 +2,11 @@
 #include <platform/native_adventure_pack.h>
 #include <platform/native_custom_racer.h>
 #include <LevelRegistry.h>
+#include <native_settings.h>
 
 static int s_packCharIDs[NATIVE_ADVENTURE_PACK_SLOTS];
 static int s_packActive = 0;
+static const struct LevelDef *s_activePack = NULL;
 static s16 s_cam_pos[3] = {0, 100, 500};
 static s16 s_cam_rot[2] = {0, 0};
 static int s_cam_useRot = 0;
@@ -20,19 +22,48 @@ static s16 s_slot_pos[8][4] = {
     { 100, 0, 0, 0}, { 300, 0, -50, 0}, { 500, 0, -100, 0}, { 700, 0, -200, 0},
 };
 
+static const struct LevelDef *ResolvePackFromSetting(void)
+{
+    const char *id = NativeSettings_GetGaragePack();
+    int count = LevelRegistry_GetAdventureGarageCount();
+
+    if (id == NULL || id[0] == '\0')
+    {
+        /* Setting empty = RETAIL by default. Compat: if there is
+         * exactly one pack, use it automatically so users who had
+         * a single pack before this commit don't suddenly see the
+         * retail garage. With 0 or 2+ packs, use RETAIL (the user
+         * must pick explicitly). */
+        if (count == 1)
+            return LevelRegistry_GetAdventureGarageByIndex(0);
+        return NULL;
+    }
+
+    const struct LevelDef *pack = LevelRegistry_GetAdventureGarageByID(id);
+    if (pack == NULL)
+    {
+        fprintf(stderr,
+            "[AdventurePack] garage_pack='%s' not found (count=%d), "
+            "falling back to RETAIL\n", id, count);
+        return NULL;
+    }
+    return pack;
+}
+
 static void ResolvePack(void)
 {
     s_packActive = 0;
     for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
         s_packCharIDs[i] = -1;
 
-    const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
+    const struct LevelDef *pack = ResolvePackFromSetting();
     if (pack == NULL || !pack->isAdventureGarage)
         return;
     if (pack->adventureCharCount != NATIVE_ADVENTURE_PACK_SLOTS)
         return;
 
     s_packActive = 1;
+    s_activePack = pack;    /* must be set BEFORE LoadCameras */
     NativeAdventurePack_LoadCameras();
     for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
         s_packCharIDs[i] = NativeCustomRacer_GetCharacterIDFromFolder(
@@ -59,8 +90,7 @@ int NativeAdventurePack_IsActive(void) { return s_packActive; }
 void NativeAdventurePack_ActivateForLoad(void)
 {
     ResolvePack();
-    const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
-    LevelRegistry_SetActive((pack != NULL && pack->isAdventureGarage) ? pack : NULL);
+    LevelRegistry_SetActive(s_activePack);
 }
 
 /* === Fase 2a: model override + spawn === */
@@ -253,7 +283,7 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
     }
 
     {
-        const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
+        const struct LevelDef *pack = s_activePack;
         if (pack != NULL && pack->adventureKartCount > 0)
         {
             for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS && i < pack->adventureKartCount; i++)
@@ -395,7 +425,7 @@ void NativeAdventurePack_LoadCameras(void) {
     s_cam_useRot = 0;
     s_slotsFromJson = 0;
     s_kartFromJson = 0;
-    const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
+    const struct LevelDef *pack = s_activePack;
     if (!pack) return;
 
     char path[256];
