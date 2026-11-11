@@ -118,6 +118,7 @@ DANCE_MODE = False
 MASK_MODE = False
 MASK_BEAM_MODE = False
 ITEM_MODE = None
+GARAGE_MODE = False
 for i, a in enumerate(argv):
     if a == '--player_slot':
         PLAYER_SLOT = int(argv[i + 1])
@@ -131,6 +132,8 @@ for i, a in enumerate(argv):
         MASK_MODE = True
     elif a == '--mask-beam':
         MASK_BEAM_MODE = True
+    elif a == '--garage':
+        GARAGE_MODE = True
     elif a == '--item':
         ITEM_MODE = argv[i + 1] if i + 1 < len(argv) else None
 
@@ -164,6 +167,8 @@ elif MASK_MODE:
     SLOT_NAMES = ['mask']
 elif DANCE_MODE:
     SLOT_NAMES = ['dance']
+elif GARAGE_MODE:
+    SLOT_NAMES = ['idle', 'select']   # 0=idle loop, 1=select one-shot
 else:
     SLOT_NAMES = ['turn', 'reverse', 'bump', 'jump']
 # Sentinel file prefix. "sentinel" for model / dance / mask; "beam_sentinel"
@@ -802,6 +807,7 @@ def build():
     # clip ('dance' / 'mask') and shape keys are irrelevant.
     if (clips is None and not STATIC_MODE and not DANCE_MODE
             and not MASK_MODE and not MASK_BEAM_MODE
+            and not GARAGE_MODE
             and ITEM_MODE is None):
         clips = make_clips_from_keys(mesh, records, quantize)
 

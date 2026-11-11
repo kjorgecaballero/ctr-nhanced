@@ -126,8 +126,6 @@ def _install_audio(slots):
 
 def _empty_slots():
     return [{"char": "", "kart": "", "x": 0, "y": 0, "z": 0, "rot": 0,
-             "idle_anim": 0, "idle_start": 0, "idle_end": 0, "idle_loop": 1,
-             "select_anim": 0, "select_start": 0, "select_end": 0, "select_loop": 0,
              "ambient_wav": "", "sfx": []}
             for _ in range(8)]
 
@@ -186,20 +184,9 @@ def main():
         "prim_mem": 4194304,
         "characters":   [s.get("char", "")   for s in slots],
         "karts":        [s.get("kart", "")   for s in slots],
-        "idle_anims":   [s.get("idle_anim", 0)   for s in slots],
-        "idle_starts":  [s.get("idle_start", 0)  for s in slots],
-        "idle_ends":    [s.get("idle_end", 0)    for s in slots],
-        "idle_loops":   [s.get("idle_loop", 1)   for s in slots],
-        "select_anims": [s.get("select_anim", 0) for s in slots],
-        "select_starts":[s.get("select_start", 0) for s in slots],
-        "select_ends":  [s.get("select_end", 0)  for s in slots],
-        "select_loops": [s.get("select_loop", 0) for s in slots],
+        # GARAGE-ANIMS: frame ranges live in .ctr clips, not JSON.
     }
 
-    # game/LevelRegistry.c lee estas listas como STRING "0,0,..." (no array JSON)
-    for k in ("idle_anims", "idle_starts", "idle_ends", "idle_loops",
-              "select_anims", "select_starts", "select_ends", "select_loops"):
-        manifest[k] = ",".join(str(int(v)) for v in manifest[k])
 
     with open(os.path.join(dst, "level.json"), "w", encoding="utf-8") as f:
         json.dump(manifest, f, separators=(',', ':'))

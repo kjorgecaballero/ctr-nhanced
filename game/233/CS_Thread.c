@@ -113,8 +113,12 @@ CTR_STATIC_ASSERT(OFFSETOF(struct CsOpcodeMeta, frameEnd) == CS_AUDIO_VOLUME_VOI
 
 static const u32 CS_INTERPOLATE_LINE_DRAW_MODE = 0xe1000a20u;
 
-static int s_prevGarageBoolSelected = -1;
-static int s_garageSelectLatch = 0;
+static int s_prevGarageBoolSelected[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
+static int s_garageSelectLatch[8] = { 0,0,0,0,0,0,0,0};
+/* Raw gGarage.boolSelected transition tracker (for fade on select AND deselect).
+ * Separate from s_prevGarageBoolSelected, which tracks the latched
+ * effectiveSelected (60-frame delay for the anim-to-idle transition). */
+static int s_prevGarageRawSelected[8] = {0,0,0,0,0,0,0,0};  /* v3b */
 
 static void CS_SaveDecodedOpcode(const struct CutsceneObj *cs, int out[CS_DECODED_OPCODE_WORD_COUNT])
 {
@@ -383,51 +387,87 @@ afterCameraAndSkipChecks:
 	{
 	updateInstanceAndReturn:
 		/* Garage custom: ALWAYS override animIndex with the current state's
-		 * animation (idle vs select). Reset frame/duration only on state change. */
-		if (instance != 0 && NativeCustomRacer_IsGarageModel(instance->model))
-		{
-			int currBoolSelected = (int)gGarage.boolSelected;
-			
-			/* Latch the selection so the jump animation plays out */
-			if (currBoolSelected) {
-				s_garageSelectLatch = 60; // ~1 second at 60fps
-			} else if (s_garageSelectLatch > 0) {
-				s_garageSelectLatch--;
-			}
-			int effectiveSelected = (s_garageSelectLatch > 0) ? 1 : 0;
-			
-			int stateChanged = (effectiveSelected != s_prevGarageBoolSelected);
-			s_prevGarageBoolSelected = effectiveSelected;
+                 * animation. Frame counts come from the model (.ctr), not level.json.
+                 * Clips: index 0 = idle (loop), index 1 = select (one-shot). */
+                if (instance != 0 && NativeCustomRacer_IsGarageModel(instance->model))
+                {
+                        struct Model *gm = instance->model;
+                        int slot = (int)gm->id - STATIC_CRASHSELECT;
+                        if (slot < 0 || slot >= 8) slot = 0;
 
-			int slot = (int)instance->model->id - STATIC_CRASHSELECT;
-			if (slot < 0 || slot >= 8) slot = 0;
+                        int currBoolSelected = (int)gGarage.boolSelected;
+                        /* isCurrentSlot: only the slot the player is currently viewing can play
+                         * select / fade. boolSelected is global, so without this check every
+                         * custom character in the garage plays select in the background. */
+                        int isCurrentSlot = (slot == (int)sdata->advCharSelectIndex_curr);
+                        int wantSelect = currBoolSelected && isCurrentSlot;
+                        int stateChanged = (wantSelect != s_prevGarageBoolSelected[slot]);
+                        s_prevGarageBoolSelected[slot] = wantSelect;
 
-			int newAnim = 0, newStart = 0, newEnd = 0, newLoop = 1;
-			if (NativeCustomRacer_GetGarageAnimRange(instance->model, slot, effectiveSelected,
-			                                         &newAnim, &newStart, &newEnd, &newLoop))
-			{
-				animIndex = newAnim;
-				if (stateChanged)
-				{
-					animFrame32 = newStart << CS_FRAME32_SHIFT;
-					opcodeDuration = newEnd - newStart + 1;
-					if (instance->thread != 0)
-					{
-						instance->thread->inst->animIndex = (char)newAnim;
-						instance->thread->inst->animFrame = (s16)newStart;
-					}
-				}
-				/* Force animIndex to match the new state, even if !stateChanged */
-				if (instance->thread != 0)
-				{
-					instance->thread->inst->animIndex = (char)newAnim;
-				}
-				/* Clamp to prevent CS_Instance_SafeCheckAnimFrame from resetting the anim */
-				if ((animFrame32 >> CS_FRAME32_SHIFT) > newEnd) {
-					animFrame32 = newEnd << CS_FRAME32_SHIFT;
-				}
-			}
-		}
+                        if (isCurrentSlot && (currBoolSelected != s_prevGarageRawSelected[slot])) {
+                            const char *dbgF = getenv("CTR_DEBUG_GARAGE_FLASH");
+                            if (dbgF && dbgF[0] == '1')
+                                fprintf(stderr, "[GARAGE-FLASH] fade slot=%d from=%d to=%d\n",
+                                        slot, s_prevGarageRawSelected[slot], currBoolSelected);
+                            gGT->pushBuffer[0].fadeFromBlack_currentValue = CS_FADE_FROM_BLACK_CURRENT;
+                            gGT->pushBuffer[0].fadeFromBlack_desiredResult = CS_FADE_FROM_BLACK_TARGET;
+                            gGT->pushBuffer[0].fade_step = CS_FADE_FROM_BLACK_STEP;
+                        }
+                        s_prevGarageRawSelected[slot] = currBoolSelected;
+                        int effectiveSelected = wantSelect;
+                        u16 idleFrames = 0;
+                        u16 selFrames  = 0;
+                        int hasSel     = 0;
+                        if (gm->headers && gm->headers[0].ptrAnimations) {
+                                if (gm->headers[0].ptrAnimations[0])
+                                        idleFrames = (u16)(gm->headers[0].ptrAnimations[0]->numFrames & 0x7FFF);
+                                if (gm->headers[0].numAnimations >= 2 && gm->headers[0].ptrAnimations[1]) {
+                                        hasSel = 1;
+                                        selFrames = (u16)(gm->headers[0].ptrAnimations[1]->numFrames & 0x7FFF);
+                                }
+                        }
+
+                        /* CTR_DEBUG_GARAGE_ANIM=1 → dump per-frame state */
+                        {
+                                static int s_diagCtr = 0;
+                                if (s_diagCtr < 90)
+                                {
+                                        const char *dbg = getenv("CTR_DEBUG_GARAGE_ANIM");
+                                        if (dbg && dbg[0] == '1')
+                                                fprintf(stderr, "[GARAGE-ANIM] A n=%d id=%d idle=%d sel=%d hasSel=%d effSel=%d curAnim=%d curF=%d dur=%d\n",
+                                                        s_diagCtr++, (int)gm->id, (int)idleFrames, (int)selFrames, hasSel,
+                                                        effectiveSelected, (int)animIndex, (int)(animFrame32 >> CS_FRAME32_SHIFT), (int)opcodeDuration);
+                                }
+                        }
+                        if (idleFrames > 0)
+                        {
+                                int newAnim = 0, newStart = 0, newEnd = 0;
+                                if (effectiveSelected && selFrames > 0) {
+                                        newAnim = hasSel ? 1 : 0;
+                                        newEnd  = (int)selFrames - 1;
+                                } else {
+                                        newAnim = 0;
+                                        newEnd  = (int)idleFrames - 1;
+                                }
+                                animIndex = newAnim;
+                                if (stateChanged)
+                                {
+                                        animFrame32 = newStart << CS_FRAME32_SHIFT;
+                                        opcodeDuration = newEnd - newStart + 1;
+                                        if (instance->thread != 0)
+                                        {
+                                                instance->thread->inst->animIndex = (char)newAnim;
+                                                instance->thread->inst->animFrame = (s16)newStart;
+                                        }
+                                }
+                                if (instance->thread != 0)
+                                {
+                                        instance->thread->inst->animIndex = (char)newAnim;
+                                }
+                                /* NOTE: no clamp. CS_Instance_SafeCheckAnimFrame
+                                 * wraps automatically when animFrame >= numFrames. */
+                        }
+                }
 		cs->animFrame32 = animFrame32;
 		cs->animIndex = (char)animIndex;
 		cs->lodIndex = (s16)lodIndexState;
@@ -504,18 +544,37 @@ processOpcode:
                 int isGarageCustom = 0;
                 if (instance != 0) {
                         customFrames = NativeCustomRacer_GetPodiumDanceFramesForModel(instance->model);
-                        if (customFrames == 0) {
-                             extern int NativeCustomRacer_GetGarageAnimRange(struct Model *, int, int, int*, int*, int*, int*);
-                             int currBoolSelected = (int)gGarage.boolSelected;
-                             if (currBoolSelected) {
-                                 s_garageSelectLatch = 60;
-                             } else if (s_garageSelectLatch > 0) {
-                                 s_garageSelectLatch--;
-                             }
-                             int effSel = (s_garageSelectLatch > 0) ? 1 : 0;
-                             int slot = (int)instance->model->id - STATIC_CRASHSELECT;
+                        if (customFrames == 0 && NativeCustomRacer_IsGarageModel(instance->model)) {
+                             struct Model *gm = instance->model;
+                             int slot = (int)gm->id - STATIC_CRASHSELECT;
                              if (slot < 0 || slot >= 8) slot = 0;
-                             if (NativeCustomRacer_GetGarageAnimRange(instance->model, slot, effSel, &customAnim, &customStart, &customEnd, &customLoop)) {
+
+                             int currBoolSelected = (int)gGarage.boolSelected;
+                             int isCurrentSlot = (slot == (int)sdata->advCharSelectIndex_curr);
+                             int effSel = currBoolSelected && isCurrentSlot;
+                             u16 idleFrames = 0;
+                             u16 selFrames  = 0;
+                             int hasSel     = 0;
+                             if (gm->headers && gm->headers[0].ptrAnimations) {
+                                 if (gm->headers[0].ptrAnimations[0])
+                                     idleFrames = (u16)(gm->headers[0].ptrAnimations[0]->numFrames & 0x7FFF);
+                                 if (gm->headers[0].numAnimations >= 2 && gm->headers[0].ptrAnimations[1]) {
+                                     hasSel = 1;
+                                     selFrames = (u16)(gm->headers[0].ptrAnimations[1]->numFrames & 0x7FFF);
+                                 }
+                             }
+
+                             if (idleFrames > 0) {
+                                 if (effSel && selFrames > 0) {
+                                     customAnim = hasSel ? 1 : 0;
+                                     customEnd  = (int)selFrames - 1;
+                                     customLoop = 0;
+                                 } else {
+                                     customAnim = 0;
+                                     customEnd  = (int)idleFrames - 1;
+                                     customLoop = 1;
+                                 }
+                                 customStart = 0;
                                  isGarageCustom = 1;
                                  customFrames = (u16)(customEnd - customStart + 1);
                              }
@@ -744,18 +803,12 @@ processOpcode:
 		break;
 
 	case CS_OPCODE_START_MUSIC:
-		if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
-		    NativeLevelTextures_IsCustomLevelActive() &&
-		    NativeCustomRacer_HasGarageAmbient())
-			break;
+		/* AMBIENT-COEXIST: allow CSEQ track alongside custom ambient. */
 		CseqMusic_Start((u32)(u16)opcodeMetaShorts[6], 0, 0, 0, opcodeMeta->arg0.i);
 		break;
 
 	case CS_OPCODE_RESTART_MUSIC:
-		if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
-		    NativeLevelTextures_IsCustomLevelActive() &&
-		    NativeCustomRacer_HasGarageAmbient())
-			break;
+		/* AMBIENT-COEXIST: allow CSEQ restart alongside custom ambient. */
 		CseqMusic_Restart((u32)(u16)opcodeMetaShorts[6], 1);
 		break;
 
@@ -803,6 +856,11 @@ processOpcode:
 		goto finishOpcodeStep;
 
 	case CS_OPCODE_FADE_FROM_BLACK:
+		{
+		    const char *dbgF = getenv("CTR_DEBUG_GARAGE_FLASH");
+		    if (dbgF && dbgF[0] == '1')
+		        fprintf(stderr, "[GARAGE-FLASH] opcode FADE_FROM_BLACK level=%d\n", sdata->gGT->levelID);
+		}
 		gGT->pushBuffer[0].fadeFromBlack_currentValue = CS_FADE_FROM_BLACK_CURRENT;
 		gGT->pushBuffer[0].fadeFromBlack_desiredResult = CS_FADE_FROM_BLACK_TARGET;
 		gGT->pushBuffer[0].fade_step = CS_FADE_FROM_BLACK_STEP;

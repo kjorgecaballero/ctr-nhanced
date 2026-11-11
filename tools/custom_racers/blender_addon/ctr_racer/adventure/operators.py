@@ -210,7 +210,7 @@ class NFR_OT_AdventureExportAssets(Operator):
 
     def execute(self, context):
         from pathlib import Path
-        from ..export.mesh_json import export_mesh_json
+        from ..export.mesh_json import export_mesh_json, _bake_timeline_clips
         import subprocess
 
         st = context.scene.nfr_adventure
@@ -236,8 +236,20 @@ class NFR_OT_AdventureExportAssets(Operator):
         obj = slot.idle_object
         _slot_from_object(slot, obj)
 
+        # GARAGE-ANIMS: bake idle + select clips from the Blender timeline.
+        # Fixed indices: 0=idle (loop), 1=select (one-shot).
+        if slot.idle_end <= slot.idle_start:
+            self.report({'ERROR'}, f"S{idx}: idle_end ({slot.idle_end}) <= idle_start ({slot.idle_start})")
+            return {'CANCELLED'}
+        if slot.select_end <= slot.select_start:
+            self.report({'ERROR'}, f"S{idx}: select_end ({slot.select_end}) <= select_start ({slot.select_start})")
+            return {'CANCELLED'}
+        clips = _bake_timeline_clips(obj, {
+            "idle":   [int(slot.idle_start),   int(slot.idle_end)],
+            "select": [int(slot.select_start), int(slot.select_end)],
+        })
         json_path = source_dir / "source_mesh_garage.json"
-        export_mesh_json(obj, json_path)
+        export_mesh_json(obj, json_path, override_clips=clips)
         out_ctr = garage_dir / "model.ctr"
         cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr), "--sentinel", "--garage"]
         r = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
@@ -421,14 +433,6 @@ class NFR_OT_AdventureBuild(Operator):
                 "y": s.pos_y,
                 "z": s.pos_z,
                 "rot": s.pos_rot,
-                "idle_anim": s.idle_anim,
-                "idle_start": s.idle_start,
-                "idle_end": s.idle_end,
-                "idle_loop": 1 if s.idle_loop else 0,
-                "select_anim": s.select_anim,
-                "select_start": s.select_start,
-                "select_end": s.select_end,
-                "select_loop": 1 if s.select_loop else 0,
                 "ambient_wav": _clean_path(s.ambient_wav) if s.ambient_wav else "",
                 "sfx": [
                     {"frame": e.frame, "wav": _clean_path(e.wav_path)}

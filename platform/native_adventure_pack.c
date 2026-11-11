@@ -311,13 +311,10 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
         }
     }
 
-    if (NativeLevelTextures_IsCustomLevelActive()
-        && NativeCustomRacer_HasGarageAmbient()) {
-        CseqMusic_StopAll();
-        sdata->cseqBoolPlay = 0;
-        sdata->cseqHighestIndex = -1;
-    }
-
+    /* AMBIENT-COEXIST: do NOT stop menu music when a custom ambient is
+     * present. Retail plays the menu/garage music AND the ambient
+     * simultaneously (CSEQ voices 0-23 vs VAG voice 32, disjoint).
+     * Silencing was too aggressive. */
     {
         extern void NativeCustomMusic_Stop(void);
         NativeCustomMusic_Stop();
