@@ -4,6 +4,7 @@
 #include <string.h>
 #include "platform/native_gpu.h"
 #include "platform/native_glad.h"
+#include "platform/native_renderer.h"
 #include "LevelRegistry.h"
 
 extern int  NativeCustomRacer_AllocTexIdx(void);
@@ -71,7 +72,7 @@ static struct NltEntry s_lt[NLT_MAX];
 static int s_ltCount = 0;
 
 /* GL 256x256 page already built for a concrete (tpage, clut). */
-struct NltPage { u16 tpage, clut, idx; u8 src; };
+struct NltPage { u16 tpage, clut, idx, layer; u8 src; };
 static struct NltPage s_pg[NLT_MAX_PAGES];
 static int s_pgCount = 0;
 
@@ -317,6 +318,11 @@ static void NltFreeDecoded(void)
     }
     s_pgCount = 0;
     s_mltCount = 0;     /* model VRM coverage is reloaded together with the level VRM */
+
+    /* FASE 2: release the array layer counter so the next build cycle
+     * reuses layers 0..N-1. The GL_TEXTURE_2D_ARRAY itself is persistent
+     * (its 256MB are allocated once at NativeRenderer_InitSentinelArray). */
+    NativeRenderer_ResetSentinelLayerCount();
 }
 
 /* Drops ALL custom-level state (GL textures, virtual VRAM, hide bits, patch
@@ -560,6 +566,14 @@ static int NltGetPage(u16 tpage, u16 clut)
     }
 
     TextureID tex = NltUpload(page, 256, 256);
+
+    /* FASE 2 (shadow): upload the 256x256 page to the Sentinel array too.
+     * The array is not sampled yet (AddSplit still binds s_gpu.customTextures
+     * [idx] as sampler2D). Fase 3 flips the switch. */
+    int sentinelLayer = NativeRenderer_AllocSentinelLayer();
+    if (sentinelLayer >= 0)
+        NativeRenderer_UploadSentinelPage(sentinelLayer, page);
+
     free(page);
     if (tex == 0) return -1;
     int idx = NativeCustomRacer_AllocTexIdx();
@@ -570,6 +584,7 @@ static int NltGetPage(u16 tpage, u16 clut)
     s_pg[s_pgCount].clut = clut;
     s_pg[s_pgCount].src = (u8)s_src;
     s_pg[s_pgCount].idx = (u16)idx;
+    s_pg[s_pgCount].layer = (sentinelLayer >= 0) ? (u16)sentinelLayer : 0xFFFF;
     s_pgCount++;
 
     fprintf(stderr, "[NLT] page%s tpage=0x%04X clut=(%d,%d) mode=%d -> idx=%d miss=%d opaque=%d%s\n",

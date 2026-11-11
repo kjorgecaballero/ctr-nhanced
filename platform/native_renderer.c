@@ -590,6 +590,15 @@ GLuint NativeRenderer_GetSentinelArray(void)
 	return s_sentinelArray;
 }
 
+/* Resets the layer counter without releasing the GL_TEXTURE_2D_ARRAY.
+ * Called from NltFreeDecoded when the page table is cleared so the next
+ * build cycle can reuse layers 0..N-1 instead of burning through 1024
+ * slots after a few garage entries. */
+void NativeRenderer_ResetSentinelLayerCount(void)
+{
+	s_sentinelArrayLayerCount = 0;
+}
+
 internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target)
 {
 	target->texture = (TextureID)-1;

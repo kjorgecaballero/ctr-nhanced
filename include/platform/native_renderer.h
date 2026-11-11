@@ -56,6 +56,12 @@ void NativeRenderer_DrawTriangles(int startVertex, int triangles);
 void NativeRenderer_PushDebugLabel(const char *label);
 void NativeRenderer_PopDebugLabel(void);
 
+/* Sentinel array helpers (Fase 1/2: 605-pages-in-1-GL_TEXTURE_2D_ARRAY). */
+void NativeRenderer_InitSentinelArray(void);
+int  NativeRenderer_AllocSentinelLayer(void);
+void NativeRenderer_UploadSentinelPage(int layer, const unsigned char *rgba);
+void NativeRenderer_ResetSentinelLayerCount(void);
+
 #endif
 void NativeRenderer_SetPresentationAspect(int width, int height);
 void NativeRenderer_UpdatePresentationViewport(void);
