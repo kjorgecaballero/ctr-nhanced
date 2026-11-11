@@ -571,41 +571,138 @@ update_garage_camera:
 	SVec3 camPos;
 	SVec3 camRot;
 
-	if (NativeAdventurePack_IsActive()) {
-		s16 cam_p[3];
-		s16 cam_r[2];   /* [0]=pitch (+ = arriba), [1]=yaw; solo valido si CameraHasRot */
-		extern int NativeAdventurePack_CameraHasRot(void);
-		s16 char_p[3];
-		s16 char_r[2];
-		NativeAdventurePack_GetCamera(cam_p, cam_r);
-		NativeAdventurePack_GetSlotPos(currSelectIndex, char_p, char_r);
+	        /* CUSTOM-CAMERA-INTERP: estado de interpolación entre slots.
+         * Antes el path custom asignaba camPos/camRot directamente desde el
+         * JSON (use_rot=1) o desde el look-at (use_rot=0). Al cambiar de
+         * slot, la cámara saltaba bruscamente de A a B. Ahora interpola con
+         * ease-in-out cúbico en ~15 frames (0.25s a 60 fps). */
+        static s16 s_camFrom[3]    = {0, 0, 0};
+        static s16 s_camTo[3]      = {0, 0, 0};
+        static s16 s_camCur[3]     = {0, 0, 0};
+        static s16 s_camRotFrom[2] = {0, 0};
+        static s16 s_camRotTo[2]   = {0, 0};
+        static s16 s_camRotCur[2]  = {0, 0};
+        static s16 s_camInterpT    = 0x1000;   /* 0 = inicio, 0x1000 = terminado */
+        static int s_camLastSelectIdx = -1;
 
-		camPos.x = cam_p[0];
-		camPos.y = cam_p[1];
-		camPos.z = cam_p[2];
+        if (NativeAdventurePack_IsActive()) {
+                s16 cam_p[3];
+                s16 cam_r[2];   /* [0]=pitch (+ = arriba), [1]=yaw; solo valido si CameraHasRot */
+                extern int NativeAdventurePack_CameraHasRot(void);
+                s16 char_p[3];
+                s16 char_r[2];
+                NativeAdventurePack_GetCameraForSlot(currSelectIndex, cam_p, cam_r);
+                NativeAdventurePack_GetSlotPos(currSelectIndex, char_p, char_r);
 
-		if (NativeAdventurePack_CameraHasRot()) {
-			/* Camara capturada en Blender: pitch/yaw ya vienen en espacio motor
-			 * (ANG 0x1000 = 360), misma convencion que el look-at de abajo. */
-			camRot.y = (s16)((cam_r[1] + ADV_CAM_YAW_BIAS) & 0xFFF);
-			camRot.x = (s16)((-cam_r[0] + ADV_CAM_PITCH_BIAS) & 0xFFF);
-		} else {
-			/* look-at: objetivo - camara */
-			int dx = char_p[0] - cam_p[0];
-			int dy = (char_p[1] + ADV_CAM_AIM_HEIGHT) - cam_p[1];
-			int dz = char_p[2] - cam_p[2];
-			int horiz_dist = SquareRoot0((u32)(dx * dx + dz * dz));
-			int pitch = ratan2(dy, horiz_dist);
+                /* === CUSTOM-CAMERA-INTERP: calcular target por slot === */
+                s16 camTarget[3];
+                s16 rotTarget[2];
 
-			/* Combinacion verificada visualmente (antes "MODO 1"):
-			 * yaw normal, pitch negado. */
-			camRot.y = (s16)((ratan2(dx, dz) + ADV_CAM_YAW_BIAS) & 0xFFF);
-			camRot.x = (s16)((-pitch + ADV_CAM_PITCH_BIAS) & 0xFFF);
-		}
-		camRot.z = (s16)0x800;   /* roll 180 grados, verificado visualmente */
-	} else {
-		CAM_Path_Move((int)garageFrames, CTR_VECTOR_DATA(&(camPos)), CTR_VECTOR_DATA(&(camRot)), &pathFlags);
-	}
+                camTarget[0] = cam_p[0];
+                camTarget[1] = cam_p[1];
+                camTarget[2] = cam_p[2];
+
+                if (NativeAdventurePack_CameraHasRot()) {
+                        /* Camara capturada en Blender: pitch/yaw ya vienen en
+                         * espacio motor (ANG 0x1000 = 360). */
+                        rotTarget[0] = (s16)((-cam_r[0] + ADV_CAM_PITCH_BIAS) & 0xFFF);
+                        rotTarget[1] = (s16)(( cam_r[1] + ADV_CAM_YAW_BIAS) & 0xFFF);
+                } else {
+                        /* look-at: objetivo - camara */
+                        int dx = char_p[0] - cam_p[0];
+                        int dy = (char_p[1] + ADV_CAM_AIM_HEIGHT) - cam_p[1];
+                        int dz = char_p[2] - cam_p[2];
+                        int horiz_dist = SquareRoot0((u32)(dx * dx + dz * dz));
+                        int pitch = ratan2(dy, horiz_dist);
+
+                        rotTarget[0] = (s16)((-pitch + ADV_CAM_PITCH_BIAS) & 0xFFF);
+                        rotTarget[1] = (s16)(( ratan2(dx, dz) + ADV_CAM_YAW_BIAS) & 0xFFF);
+                }
+
+                /* Detectar cambio de slot. */
+                if (s_camLastSelectIdx == -1) {
+                        /* Primera entrada al garaje custom: sin pan. */
+                        s_camCur[0] = camTarget[0];
+                        s_camCur[1] = camTarget[1];
+                        s_camCur[2] = camTarget[2];
+                        s_camRotCur[0] = rotTarget[0];
+                        s_camRotCur[1] = rotTarget[1];
+                        s_camLastSelectIdx = currSelectIndex;
+                        s_camInterpT = 0x1000;
+                } else if (s_camLastSelectIdx == currSelectIndex
+                && (s_camTo[0] != camTarget[0]
+                 || s_camTo[1] != camTarget[1]
+                 || s_camTo[2] != camTarget[2]
+                 || s_camRotTo[0] != rotTarget[0]
+                 || s_camRotTo[1] != rotTarget[1])) {
+                        /* Same slot but target changed (LoadCameras ran after
+                         * the first frame). Snap direct to the correct target
+                         * without a visible pan. */
+                        s_camCur[0] = camTarget[0];
+                        s_camCur[1] = camTarget[1];
+                        s_camCur[2] = camTarget[2];
+                        s_camRotCur[0] = rotTarget[0];
+                        s_camRotCur[1] = rotTarget[1];
+                        s_camTo[0] = camTarget[0];
+                        s_camTo[1] = camTarget[1];
+                        s_camTo[2] = camTarget[2];
+                        s_camRotTo[0] = rotTarget[0];
+                        s_camRotTo[1] = rotTarget[1];
+                        s_camInterpT = 0x1000;
+                } else if (s_camLastSelectIdx != currSelectIndex) {
+                        /* Cambio de slot: pan desde el estado actual. */
+                        s_camFrom[0] = s_camCur[0];
+                        s_camFrom[1] = s_camCur[1];
+                        s_camFrom[2] = s_camCur[2];
+                        s_camRotFrom[0] = s_camRotCur[0];
+                        s_camRotFrom[1] = s_camRotCur[1];
+
+                        s_camTo[0] = camTarget[0];
+                        s_camTo[1] = camTarget[1];
+                        s_camTo[2] = camTarget[2];
+                        s_camRotTo[0] = rotTarget[0];
+                        s_camRotTo[1] = rotTarget[1];
+
+                        s_camLastSelectIdx = currSelectIndex;
+                        s_camInterpT = 0;
+                }
+
+                /* Avanzar interpolación (15 frames). */
+                if (s_camInterpT < 0x1000) {
+                        s_camInterpT += 0x1000 / 15;
+                        if (s_camInterpT > 0x1000) s_camInterpT = 0x1000;
+                }
+
+                /* Ease-in-out cúbico: w = t*t*(3-2t) en punto fijo 12 bits.
+                 * Rotación con shortest-angle (maneja wrap 0xFFF->0x001). */
+                {
+                        int t  = s_camInterpT;
+                        int t2 = (t * t) >> 12;
+                        int t3 = (t2 * t) >> 12;
+                        int w  = t2 * 3 - t3 * 2;
+
+                        for (int i = 0; i < 3; i++)
+                                s_camCur[i] = (s16)(s_camFrom[i] + (((s_camTo[i] - s_camFrom[i]) * w) >> 12));
+                        for (int i = 0; i < 2; i++) {
+                                int d = ((int)s_camRotTo[i] - (int)s_camRotFrom[i]) & 0xFFF;
+                                if (d > 0x800) d -= 0x1000;
+                                s_camRotCur[i] = (s16)(((int)s_camRotFrom[i] + ((d * w) >> 12)) & 0xFFF);
+                        }
+                }
+
+                camPos.x = s_camCur[0];
+                camPos.y = s_camCur[1];
+                camPos.z = s_camCur[2];
+                camRot.x = s_camRotCur[0];
+                camRot.y = s_camRotCur[1];
+                camRot.z = (s16)0x800;   /* roll 180 grados, verificado visualmente */
+        } else {
+                CAM_Path_Move((int)garageFrames, CTR_VECTOR_DATA(&(camPos)), CTR_VECTOR_DATA(&(camRot)), &pathFlags);
+                /* Al volver a retail, resetear el estado de interpolación
+                 * para que la próxima entrada al garaje custom no panee. */
+                s_camLastSelectIdx = -1;
+                s_camInterpT = 0x1000;
+        }
 
 	// set position and rotation to pushBuffer
 	gGT->pushBuffer[0].pos = camPos;
@@ -639,7 +736,13 @@ void CS_Garage_Init(void)
 
 	gGarage.menuGarage.state &= ~(ONLY_DRAW_TITLE);
 
-	
+	// Ensure cameras.json is parsed BEFORE the first rendered frame.
+	// Without this, s_cam_per_slot[] is BSS {0,0,0} on frame 1 and the
+	// camera pops to the correct target on a later frame.
+	{
+		extern void NativeAdventurePack_LoadCameras(void);
+		NativeAdventurePack_LoadCameras();
+	}
 
 	// 0 = just entered garage
 	CS_Garage_ZoomOut(0);

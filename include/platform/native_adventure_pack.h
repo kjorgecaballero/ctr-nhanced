@@ -23,4 +23,6 @@ int  NativeAdventurePack_ModelsReady(struct BigHeader *bigfile);
 void NativeAdventurePack_OverrideModelPtrs(struct GameTracker *gGT);
 void NativeAdventurePack_SpawnCharacters(struct GameTracker *gGT);
 
+void NativeAdventurePack_GetCameraForSlot(int slot, s16 *pos, s16 *rot);
+
 #endif

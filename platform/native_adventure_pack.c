@@ -11,6 +11,10 @@ static int s_cam_useRot = 0;
 static int s_slotsFromJson = 0;
 static s16 s_kart_pos[8][4];
 static int s_kartFromJson = 0;
+/* Per-slot cameras (opcional). Si el JSON tiene "cameras"[8][5],
+ * cada slot tiene su propia pos+rot. Si no, fallback a la global. */
+static s16 s_cam_per_slot[8][5];
+static int s_perSlotCameras = 0;
 static s16 s_slot_pos[8][4] = {
     {-700, 0, -200, 0}, {-500, 0, -100, 0}, {-300, 0, -50, 0}, {-100, 0, 0, 0},
     { 100, 0, 0, 0}, { 300, 0, -50, 0}, { 500, 0, -100, 0}, { 700, 0, -200, 0},
@@ -408,10 +412,10 @@ void NativeAdventurePack_LoadCameras(void) {
     FILE *f = fopen(path, "r");
     if (!f) return;
 
-    int vals[128]; int n = 0; char buf[4096];
-    while (fgets(buf, sizeof(buf), f) && n < 128) {
+    int vals[256]; int n = 0; char buf[4096];
+    while (fgets(buf, sizeof(buf), f) && n < 256) {
         char *p = buf;
-        while (*p && n < 128) {
+        while (*p && n < 256) {
             if ((*p >= '0' && *p <= '9') || *p == '-') {
                 vals[n++] = atoi(p);
                 while (*p && ((*p >= '0' && *p <= '9') || *p == '-')) p++;
@@ -445,6 +449,15 @@ void NativeAdventurePack_LoadCameras(void) {
                 s_kart_pos[i][k] = vals[38 + i*4 + k];
         s_kartFromJson = 1;
     }
+    /* Per-slot cameras: 40 valores extra despues de kart_slots */
+    s_perSlotCameras = 0;
+    if (n >= 5 + 8*4 + 1 + 8*4 + 8*5) {
+        for (int i = 0; i < 8; i++)
+            for (int k = 0; k < 5; k++)
+                s_cam_per_slot[i][k] = (s16)vals[70 + i*5 + k];
+        s_perSlotCameras = 1;
+        fprintf(stderr, "[DIAG-Adv] perSlotCameras=1\n");
+    }
     fprintf(stderr, "[DIAG-Adv] slotsFromJson=%d kartFromJson=%d useRot=%d\n",
             s_slotsFromJson, s_kartFromJson, s_cam_useRot);
 }
@@ -454,6 +467,20 @@ int NativeAdventurePack_CameraHasRot(void) { return s_packActive && s_cam_useRot
 void NativeAdventurePack_GetCamera(s16 *pos, s16 *rot) {
     pos[0] = s_cam_pos[0]; pos[1] = s_cam_pos[1]; pos[2] = s_cam_pos[2];
     rot[0] = s_cam_rot[0]; rot[1] = s_cam_rot[1];
+}
+
+/* Per-slot camera: si el JSON tiene "cameras"[8][5], la usa.
+ * Si no, fallback a la global (compat con packs viejos). */
+void NativeAdventurePack_GetCameraForSlot(int slot, s16 *pos, s16 *rot) {
+    if (s_perSlotCameras && slot >= 0 && slot < 8) {
+        pos[0] = s_cam_per_slot[slot][0];
+        pos[1] = s_cam_per_slot[slot][1];
+        pos[2] = s_cam_per_slot[slot][2];
+        rot[0] = s_cam_per_slot[slot][3];
+        rot[1] = s_cam_per_slot[slot][4];
+        return;
+    }
+    NativeAdventurePack_GetCamera(pos, rot);
 }
 
 void NativeAdventurePack_GetSlotPos(int slot, s16 *pos, s16 *rot) {
