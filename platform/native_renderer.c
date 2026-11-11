@@ -537,6 +537,59 @@ void NativeRenderer_UpdatePresentationViewport(void)
 	s_presentViewport.y = (g_windowHeight - viewportH) / 2;
 }
 
+/* SENTINEL ARRAY: 1 GL_TEXTURE_2D_ARRAY (1024 layers x 256x256 RGBA) replaces
+ * 605 per-page GL_TEXTURE_2D. Reduces glTexImage calls from 605 to 1
+ * glTexImage3D + 605 glTexSubImage3D. Populated by native_level_textures.c
+ * NltGetPage in Fase 2. Sampled by gte_shader_32_rgba via sampler2DArray
+ * when isSentinel=1 in Fase 3. */
+#define SENTINEL_ARRAY_CAPACITY 1024
+#define SENTINEL_PAGE_SIZE      256
+
+static GLuint s_sentinelArray = 0;
+static int    s_sentinelArrayLayerCount = 0;
+
+void NativeRenderer_InitSentinelArray(void)
+{
+	if (s_sentinelArray != 0) return;
+	glGenTextures(1, &s_sentinelArray);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, s_sentinelArray);
+	glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8,
+	             SENTINEL_PAGE_SIZE, SENTINEL_PAGE_SIZE, SENTINEL_ARRAY_CAPACITY,
+	             0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+	s_sentinelArrayLayerCount = 0;
+	fprintf(stderr, "[Renderer] Sentinel array: %d layers x %dx%d = %d MB\n",
+	        SENTINEL_ARRAY_CAPACITY, SENTINEL_PAGE_SIZE, SENTINEL_PAGE_SIZE,
+	        (SENTINEL_ARRAY_CAPACITY * SENTINEL_PAGE_SIZE * SENTINEL_PAGE_SIZE * 4) / (1024 * 1024));
+}
+
+int NativeRenderer_AllocSentinelLayer(void)
+{
+	if (s_sentinelArray == 0) NativeRenderer_InitSentinelArray();
+	if (s_sentinelArrayLayerCount >= SENTINEL_ARRAY_CAPACITY) return -1;
+	return s_sentinelArrayLayerCount++;
+}
+
+void NativeRenderer_UploadSentinelPage(int layer, const unsigned char *rgba)
+{
+	if (s_sentinelArray == 0 || layer < 0 || layer >= SENTINEL_ARRAY_CAPACITY) return;
+	glBindTexture(GL_TEXTURE_2D_ARRAY, s_sentinelArray);
+	glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0,
+	                0, 0, layer,
+	                SENTINEL_PAGE_SIZE, SENTINEL_PAGE_SIZE, 1,
+	                GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+	glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
+}
+
+GLuint NativeRenderer_GetSentinelArray(void)
+{
+	return s_sentinelArray;
+}
+
 internal void NativeRenderer_InitRenderTarget(struct NativeRenderTarget *target)
 {
 	target->texture = (TextureID)-1;
@@ -756,6 +809,9 @@ typedef struct
 	GLint psxDrawMaskSetLoc;
 	GLint psxTextureOutputStpLoc;
 	GLint psxKeepTextureAlphaLoc;
+	GLint isSentinelLoc;
+	GLint sentinelLayerLoc;
+	GLint sentinelArrayLoc;
 } GTEShader;
 
 internal int NativeRenderer_Shader_CheckShaderStatus(GLuint shader);
@@ -982,13 +1038,16 @@ const char *gte_shader_4 = GPU_FRAGMENT_SAMPLE_SHADER(4);
 const char *gte_shader_8 = GPU_FRAGMENT_SAMPLE_SHADER(8);
 const char *gte_shader_16 = GPU_FRAGMENT_SAMPLE_SHADER(16);
 const char *gte_shader_32_rgba = "      uniform sampler2D s_texture;\n"
+                                 "      uniform sampler2DArray s_sentinelArray;\n"
+                                 "      uniform int isSentinel;\n"
+                                 "      uniform float s_sentinelLayer;\n"
                                  "      uniform int psxDrawMaskSet;\n"
                                  "      uniform int psxKeepTextureAlpha;\n"
                                  "      uniform int psxSemiTransPass;\n"
                                  "      uniform vec2 texelSize;\n"
                                  "      void main() {\n"
                                  "              vec2 tc = v_texcoord.xy * texelSize + texelSize * 0.5;\n"
-                                 "              vec4 color = texture2D(s_texture, tc);\n"
+                                 "              vec4 color = (isSentinel != 0) ? texture(s_sentinelArray, vec3(tc, s_sentinelLayer)) : texture2D(s_texture, tc);\n"
                                  "              if (color.a < 0.25) discard;\n"
                                  "              float stp = (color.a < 0.75) ? 1.0 : 0.0;\n"
                                  "              if (psxSemiTransPass == 1 && stp > 0.5) discard;\n"
@@ -1149,9 +1208,11 @@ internal ShaderID NativeRenderer_Shader_Compile(const char *source, bool isPsxSh
 
 	GLint textureSampler = 0;
 	GLint lutSampler = 1;
+	GLint sentinelSampler = 2;
 	glUseProgram(program);
 	glUniform1iv(glGetUniformLocation(program, "s_texture"), 1, &textureSampler);
 	glUniform1iv(glGetUniformLocation(program, "s_rgLut"), 1, &lutSampler);
+	glUniform1iv(glGetUniformLocation(program, "s_sentinelArray"), 1, &sentinelSampler);
 	glUseProgram(0);
 
 	return program;
@@ -1204,6 +1265,9 @@ internal void NativeRenderer_CompilePSXShader(GTEShader *sh, const char *source)
 	sh->psxDrawMaskSetLoc = glGetUniformLocation(sh->shader, "psxDrawMaskSet");
 	sh->psxTextureOutputStpLoc = glGetUniformLocation(sh->shader, "psxTextureOutputStp");
 	sh->psxKeepTextureAlphaLoc = glGetUniformLocation(sh->shader, "psxKeepTextureAlpha");
+	sh->isSentinelLoc = glGetUniformLocation(sh->shader, "isSentinel");
+	sh->sentinelLayerLoc = glGetUniformLocation(sh->shader, "s_sentinelLayer");
+	sh->sentinelArrayLoc = glGetUniformLocation(sh->shader, "s_sentinelArray");
 }
 
 internal void NativeRenderer_InitialisePSXShaders(void)
