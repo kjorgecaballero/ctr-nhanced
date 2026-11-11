@@ -53,6 +53,9 @@ static const struct LevelDef *ResolvePackFromSetting(void)
 static void ResolvePack(void)
 {
     s_packActive = 0;
+    s_activePack = NULL;   /* must reset: otherwise RETAIL after a custom pack
+                            * leaves a stale pointer that GetOverrideForBigfileEntry
+                            * picks up (black screen: custom LEV without cameras) */
     for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
         s_packCharIDs[i] = -1;
 

@@ -54,6 +54,11 @@ enum
 #define ADV_CAM_YAW_BIAS    0
 #define ADV_CAM_PITCH_BIAS  0
 
+/* Set by CS_Garage_Init(), consumed by MenuProc on the next frame.
+ * Forces the custom camera interp to snap to currSelectIndex instead
+ * of sliding from the previous garage's slot. See CS_Garage_Init. */
+static int s_garageForceSnap = 0;
+
 
 void CS_Garage_ZoomOut(s16 zoomState)
 {
@@ -584,6 +589,12 @@ update_garage_camera:
         static s16 s_camRotCur[2]  = {0, 0};
         static s16 s_camInterpT    = 0x1000;   /* 0 = inicio, 0x1000 = terminado */
         static int s_camLastSelectIdx = -1;
+        if (s_garageForceSnap) {
+                /* Garage just (re)entered: drop the previous garage's
+                 * slot so the first frame snaps to currSelectIndex. */
+                s_garageForceSnap = 0;
+                s_camLastSelectIdx = -1;
+        }
 
         if (NativeAdventurePack_IsActive()) {
                 s16 cam_p[3];
@@ -744,6 +755,16 @@ void CS_Garage_Init(void)
 		NativeAdventurePack_LoadCameras();
 	}
 
-	// 0 = just entered garage
+	/* Reset selection to slot 0 on every garage entry. Without this,
+ * sdata->advCharSelectIndex_curr/_prev persist across garages
+ * (retail -> custom -> retail), and the camera enters on the
+ * previous garage's slot. s_garageForceSnap makes MenuProc skip
+ * the first-frame interpolation so the camera snaps to slot 0
+ * without sliding from the stale slot. */
+        sdata->advCharSelectIndex_curr = 0;
+        sdata->advCharSelectIndex_prev = 0;
+        s_garageForceSnap = 1;
+
+        // 0 = just entered garage
 	CS_Garage_ZoomOut(0);
 }

@@ -1632,8 +1632,15 @@ const char *LevelRegistry_GetOverrideForBigfileEntry(int levelID, int levelLOD, 
 		return path;
 	}
 
-	if (levelID == ADVENTURE_GARAGE && level->isAdventureGarage)
+	if (levelID == ADVENTURE_GARAGE)
 	{
+		/* Only override when the active level is explicitly a garage
+		 * pack. RETAIL (s_activeLevel == NULL) must fall through to
+		 * the retail bigfile load. GetRuntimeLevel would otherwise
+		 * return GetReplacement(40) = the first pack, loading the
+		 * custom LEV without the custom cameras/racers (black screen). */
+		if (s_activeLevel == NULL || !s_activeLevel->isAdventureGarage)
+			return NULL;
 		int expectedBase = BI_MAINMENUFILE + LOAD_MAIN_MENU_GARAGE_FILE_OFFSET;
 		if (subfileIndex == expectedBase + LVI_VRAM)
 			extension = "vrm";
