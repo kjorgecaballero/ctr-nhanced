@@ -121,4 +121,13 @@ int  LevelRegistry_GhostIDFromLogical(int logicalID);
 void LevelRegistry_SetGhostContext(const struct LevelDef *def);
 int  LevelRegistry_ResolveGhostLevelID(int retailID);
 
+/* === Adventure garage pack enumeration ===
+ * A "pack" is a LevelDef with isAdventureGarage == 1. Multiple packs
+ * can coexist (each with a distinct manifest "id"). The active one
+ * is chosen at runtime via NativeSettings_GetGaragePack().
+ * RETAIL (no override) is represented by an empty setting string. */
+int LevelRegistry_GetAdventureGarageCount(void);
+const struct LevelDef *LevelRegistry_GetAdventureGarageByIndex(int index);
+const struct LevelDef *LevelRegistry_GetAdventureGarageByID(const char *id);
+
 #endif

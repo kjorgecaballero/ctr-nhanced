@@ -18,4 +18,12 @@ int  NativeSettings_GetHighMp(void);
 int  NativeSettings_GetAspectRatio(void);
 void NativeSettings_SetAspectRatio(int mode);
 void NativeSettings_SetBotRandomizer(int enabled);
+
+/* Adventure garage pack selector.
+ * Empty string = RETAIL (use the retail garage, no custom override).
+ * Non-empty = manifest "id" of the pack to use.
+ * Persisted in ctr_native.cfg as garage_pack=<id>. */
+const char *NativeSettings_GetGaragePack(void);
+void        NativeSettings_SetGaragePack(const char *id);
+
 #endif

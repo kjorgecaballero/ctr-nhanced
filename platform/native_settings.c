@@ -20,6 +20,7 @@ static int s_character_detail = 1;
 static int s_bot_randomizer   = 0;
 static int s_high_mp          = -1;
 static int s_aspect_ratio     = 0;
+static char s_garage_pack[64]  = "";
 
 void NativeSettings_Load(void);
 
@@ -72,6 +73,7 @@ void NativeSettings_Save(void)
     fprintf(f, "character_detail=%d\n", s_character_detail);
     fprintf(f, "bot_randomizer=%d\n", s_bot_randomizer);
     fprintf(f, "aspect_ratio=%d\n", s_aspect_ratio);
+    fprintf(f, "garage_pack=%s\n", s_garage_pack);
     fclose(f);
 }
 
@@ -99,18 +101,27 @@ void NativeSettings_Load(void)
     }
 
     int sawAspect = 0;
+    int sawGaragePack = 0;
     char line[128];
     while (fgets(line, sizeof(line), f) != NULL)
     {
         char key[64];
         int value;
-        if (sscanf(line, "%63[^=]=%d", key, &value) != 2) continue;
+        char val[64];
+        if (sscanf(line, "%63[^=]=%63s", key, val) != 2) continue;
+        value = atoi(val);
         if      (strcmp(key, "dithering")  == 0) s_dithering  = (value != 0);
         else if (strcmp(key, "resolution") == 0) s_resolution = value;
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
         else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value; /* 0=OFF 1=RETAIL 2=ALL (was squashed to 0/1) */
         else if (strcmp(key, "aspect_ratio")     == 0) s_aspect_ratio     = value, sawAspect = 1;
+        else if (strcmp(key, "garage_pack")      == 0)
+        {
+            strncpy(s_garage_pack, val, sizeof(s_garage_pack) - 1);
+            s_garage_pack[sizeof(s_garage_pack) - 1] = '\0';
+            sawGaragePack = 1;
+        }
     }
     fclose(f);
 
@@ -124,7 +135,10 @@ void NativeSettings_Load(void)
     if (s_aspect_ratio > 3) s_aspect_ratio = 3;
 
     NativeSettings_Apply();
-    if (!sawAspect) NativeSettings_Save(); /* cfg viejo: anadir aspect_ratio */
+    if (!sawAspect || !sawGaragePack) NativeSettings_Save(); /* cfg viejo: anadir claves nuevas */
+
+    if (getenv("CTR_DEBUG_SETTINGS") != NULL)
+        fprintf(stderr, "[Settings] garage_pack='%s'\n", s_garage_pack);
 }
 
 void NativeSettings_SetDithering(int enabled)
@@ -187,5 +201,22 @@ void NativeSettings_SetAspectRatio(int mode)
     if (mode > 3) mode = 3;
     if (s_aspect_ratio == mode) return;
     s_aspect_ratio = mode;
+    NativeSettings_Save();
+}
+
+const char *NativeSettings_GetGaragePack(void)
+{
+    if (!s_loaded) NativeSettings_Load();
+    return s_garage_pack;
+}
+
+void NativeSettings_SetGaragePack(const char *id)
+{
+    if (!s_loaded) NativeSettings_Load();
+    if (id == NULL) id = "";
+    if (strcmp(s_garage_pack, id) == 0) return;      /* no change */
+    if (strlen(id) >= sizeof(s_garage_pack)) return; /* too long */
+    strncpy(s_garage_pack, id, sizeof(s_garage_pack) - 1);
+    s_garage_pack[sizeof(s_garage_pack) - 1] = '\0';
     NativeSettings_Save();
 }

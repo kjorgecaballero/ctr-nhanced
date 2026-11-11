@@ -1252,7 +1252,13 @@ static SDL_EnumerationResult SDLCALL LevelRegistry_Enumerate(void *userdata, con
 
 		for (index = 0; index < s_levelCount; index++)
 		{
-			if (((level.replaceLevelID >= 0) &&
+			/* Garage packs all target ADVENTURE_GARAGE (replaceLevelID
+			 * 40); multiple packs are allowed and selected at runtime
+			 * via NativeSettings_GetGaragePack(). Skip the
+			 * replaceLevelID duplicate check for them. The id check
+			 * still applies (two packs can't share an id). */
+			if ((!level.isAdventureGarage &&
+			     (level.replaceLevelID >= 0) &&
 			     (s_levels[index].replaceLevelID == level.replaceLevelID)) ||
 			    (strcmp(s_levels[index].id, level.id) == 0))
 			{
@@ -1390,6 +1396,45 @@ const struct LevelDef *LevelRegistry_GetAdditionalBattle(int requestedIndex)
 	{
 		if ((s_levels[index].replaceLevelID < 0) && s_levels[index].isBattle &&
 		    (requestedIndex-- == 0))
+			return &s_levels[index];
+	}
+	return NULL;
+}
+
+int LevelRegistry_GetAdventureGarageCount(void)
+{
+	int index;
+	int count = 0;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if (s_levels[index].isAdventureGarage)
+			count++;
+	}
+	return count;
+}
+
+const struct LevelDef *LevelRegistry_GetAdventureGarageByIndex(int requestedIndex)
+{
+	int index;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if (s_levels[index].isAdventureGarage && (requestedIndex-- == 0))
+			return &s_levels[index];
+	}
+	return NULL;
+}
+
+const struct LevelDef *LevelRegistry_GetAdventureGarageByID(const char *id)
+{
+	int index;
+	if (id == NULL || id[0] == '\0')
+		return NULL;
+	LevelRegistry_Load();
+	for (index = 0; index < s_levelCount; index++)
+	{
+		if (s_levels[index].isAdventureGarage && strcmp(s_levels[index].id, id) == 0)
 			return &s_levels[index];
 	}
 	return NULL;
@@ -1638,6 +1683,9 @@ int LevelRegistry_GetAdditionalCount(void) { return 0; }
 const struct LevelDef *LevelRegistry_GetAdditional(int index) { (void)index; return 0; }
 int LevelRegistry_GetAdditionalBattleCount(void) { return 0; }
 const struct LevelDef *LevelRegistry_GetAdditionalBattle(int index) { (void)index; return 0; }
+int LevelRegistry_GetAdventureGarageCount(void) { return 0; }
+const struct LevelDef *LevelRegistry_GetAdventureGarageByIndex(int index) { (void)index; return 0; }
+const struct LevelDef *LevelRegistry_GetAdventureGarageByID(const char *id) { (void)id; return 0; }
 void LevelRegistry_SetActive(const struct LevelDef *level) { (void)level; }
 const struct LevelDef *LevelRegistry_GetActive(void) { return 0; }
 const int *LevelRegistry_GetRacers(int levelID, int *count) { (void)levelID; if (count != 0) *count = 0; return 0; }

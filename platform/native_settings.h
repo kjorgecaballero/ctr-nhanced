@@ -13,4 +13,9 @@ void NativeSettings_SetCharacterDetail(int);
 void NativeSettings_SetBotRandomizer(int);
 void NativeSettings_Load(void);
 void NativeSettings_Save(void);
+
+/* Adventure garage pack selector.
+ * Empty string = RETAIL (use the retail garage, no custom override). */
+const char *NativeSettings_GetGaragePack(void);
+void        NativeSettings_SetGaragePack(const char *id);
 #endif
