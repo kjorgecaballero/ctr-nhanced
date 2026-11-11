@@ -196,6 +196,7 @@ TEXTURE_ROWS = 17
 CLUT_ROWS = 5
 
 SCALE = 2
+K = 64  # Geometry scale: 1 Blender meter = K engine units
 
 CACHE_MIN, CACHE_MAX = 32, 87
 
@@ -242,14 +243,19 @@ def pack_container(data, patches):
 
 
 def apply_matrix_world(mesh):
+    import math
     m = mesh['matrix_world']
+    # Extraer yaw (rot Z en Blender) y deshacerlo
+    yaw = math.atan2(m[1][0], m[0][0])
+    c, s = math.cos(-yaw), math.sin(-yaw)
     def tf(p):
         x, y, z = p[0], p[1], p[2]
-        return [
-            m[0][0]*x + m[0][1]*y + m[0][2]*z + m[0][3],
-            m[1][0]*x + m[1][1]*y + m[1][2]*z + m[1][3],
-            m[2][0]*x + m[2][1]*y + m[2][2]*z + m[2][3],
-        ]
+        # Aplicar matriz SIN traslacion (m[*][3])
+        X = m[0][0]*x + m[0][1]*y + m[0][2]*z
+        Y = m[1][0]*x + m[1][1]*y + m[1][2]*z
+        Z = m[2][0]*x + m[2][1]*y + m[2][2]*z
+        # Deshacer yaw (mantener pitch/roll)
+        return [c*X - s*Y, s*X + c*Y, Z]
     mesh['vertices'] = [tf(v) for v in mesh['vertices']]
     mesh['keys'] = {k: [tf(v) for v in vs] for k, vs in mesh['keys'].items()}
     if mesh.get('clips'):
@@ -592,11 +598,11 @@ def build():
     mesh = apply_matrix_world(mesh)
     _vs = mesh['vertices']
     _xs = [v[0] for v in _vs]; _ys = [v[1] for v in _vs]; _zs = [v[2] for v in _vs]
-    _h = (max(_zs) - min(_zs)) * 64
-    _off = (((max(_xs) + min(_xs)) / 2) ** 2 + ((max(_ys) + min(_ys)) / 2) ** 2) ** 0.5 * 64
+    _h = (max(_zs) - min(_zs)) * K
+    _off = (((max(_xs) + min(_xs)) / 2) ** 2 + ((max(_ys) + min(_ys)) / 2) ** 2) ** 0.5 * K
     print(f"[build_character] size (engine units): height={_h:.0f} "
-          f"width={(max(_xs)-min(_xs))*64:.0f} depth={(max(_ys)-min(_ys))*64:.0f} "
-          f"centerOffset={_off:.0f} zMin={min(_zs)*64:.0f}")
+          f"width={(max(_xs)-min(_xs))*K:.0f} depth={(max(_ys)-min(_ys))*K:.0f} "
+          f"centerOffset={_off:.0f} zMin={min(_zs)*K:.0f}")
     if _off > 300 or _h > 600:
         print("[build_character] WARNING: model is far from the origin or huge "
               "(normal characters: height ~75-140, centerOffset < 20). "
@@ -604,7 +610,7 @@ def build():
     textures = prepare_textures(mesh)
     basis = mesh['keys']['Basis']
 
-    def native(p): return (p[0]*64, p[2]*64, -p[1]*64)
+    def native(p): return (p[0]*K, p[2]*K, -p[1]*K)
 
     # Range must cover Basis, every shape key, AND every baked clip frame.
     # Animated clips deform vertices outside the Basis bounding box (e.g.

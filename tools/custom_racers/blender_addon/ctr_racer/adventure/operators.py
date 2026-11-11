@@ -16,10 +16,8 @@ from bpy.types import Operator
 # Un personaje que mira a -Y en Blender (vista frontal) mira a +Z en el
 # motor con yaw 0, asi que yaw_motor = rotacion Z de Blender.
 # ─────────────────────────────────────────────────────────────────────
-# Unidades de motor por unidad de Blender. OJO: el mesh se exporta a x64
-# (build_character.py) y antes aqui se usaba x100. Se mantiene 100 para no
-# cambiar lo no demostrado; CALIBRAR midiendo un objeto conocido del .lev.
-NFR_ENGINE_SCALE = 100.0
+# Unidades de motor por unidad de Blender. Debe coincidir con K=64 en build_character.py.
+NFR_ENGINE_SCALE = 64.0
 # Si el personaje sale girado en el garaje, sumar 0x800 (180 grados) aqui.
 NFR_SLOT_YAW_OFFSET = 0
 
@@ -405,8 +403,16 @@ class NFR_OT_AdventureBuild(Operator):
                 if not kart_slug:
                     self.report({'WARNING'},
                                 f"Slot {i}: no encontre kart.ctr para {cands} en {racers_dir}")
+            # --- KART POS ---
+            kx = ky = kz = kr = 0
+            if s.kart_object is not None:
+                kmw = s.kart_object.matrix_world
+                kx, ky, kz = _pos_to_engine(kmw.translation)
+                kr = (_ang(kmw.to_euler().z) + NFR_SLOT_YAW_OFFSET) & 0xFFF
+
             slots_json.append({
                 "char": s.char_slug,
+                "kx": kx, "ky": ky, "kz": kz, "krot": kr,
                 "kart": kart_slug,
                 "x": s.pos_x,
                 "y": s.pos_y,

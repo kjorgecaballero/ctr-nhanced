@@ -8,6 +8,9 @@ static int s_packActive = 0;
 static s16 s_cam_pos[3] = {0, 100, 500};
 static s16 s_cam_rot[2] = {0, 0};
 static int s_cam_useRot = 0;
+static int s_slotsFromJson = 0;
+static s16 s_kart_pos[8][4];
+static int s_kartFromJson = 0;
 static s16 s_slot_pos[8][4] = {
     {-700, 0, -200, 0}, {-500, 0, -100, 0}, {-300, 0, -50, 0}, {-100, 0, 0, 0},
     { 100, 0, 0, 0}, { 300, 0, -50, 0}, { 500, 0, -100, 0}, { 700, 0, -200, 0},
@@ -211,47 +214,46 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
     {
         int charID = s_packCharIDs[i];
         if (charID < 0) continue;
-        if (charID < NATIVE_CUSTOM_ID_BASE) continue;  // retail, dejar como esta
+        if (charID < NATIVE_CUSTOM_ID_BASE) continue;
 
         void *raw = NativeCustomRacer_LoadGarageModel(charID);
         if (raw == NULL) {
-            fprintf(stderr, "[AdventurePack] custom slot %d charID=%d FAILED to load\n", i, charID);
             continue;
         }
         struct Model *custom = (struct Model *)raw;
-        custom->id = STATIC_CRASHSELECT + i;  // forzar ID para el PVS bypass
+        custom->id = STATIC_CRASHSELECT + i;
         for (int h = 0; h < custom->numHeaders; h++) {
             custom->headers[h].maxDistanceLOD = (s16)0xFFFF;
         }
         NativeCustomRacer_RegisterGarageModel(i, charID, custom);
-        
+
         const char *slug = NativeCustomRacer_GetFolder(charID);
         if (slug)
         {
             NativeCustomRacer_PreloadGarageSfx(slug);
         }
 
-        // Reemplazar en gGT->modelPtr[]
         sdata->gGT->modelPtr[STATIC_CRASHSELECT + i] = custom;
 
-        // Reemplazar en el InstDef correspondiente
         int replaced = 0;
         int retailID = gGarage.garageCharacterIDs[i];
         for (u32 j = 0; j < lev->numInstances; j++) {
             struct InstDef *def = &lev->ptrInstDefs[j];
             if (def->model != NULL && (def->model->id == STATIC_CRASHSELECT + i || def->model->id == retailID)) {
+                if (s_slotsFromJson) {
+                    def->pos.x = s_slot_pos[i][0];
+                    def->pos.y = s_slot_pos[i][1];
+                    def->pos.z = s_slot_pos[i][2];
+                    def->rot.y = s_slot_pos[i][3];
+                }
                 def->model = custom;
                 replaced = 1;
                 break;
             }
         }
-        fprintf(stderr, "[AdventurePack] custom racer slot %d charID=%d applied (model=%p)\n",
-                i, charID, (void *)custom);
         applied++;
     }
-    /* Optional: custom karts per slot. Empty slug = retail kart.
-     * Each kart replaces the InstDef whose name matches
-     * "selectkart<retailName>" where retailName = slot's retail char. */
+
     {
         const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
         if (pack != NULL && pack->adventureKartCount > 0)
@@ -269,8 +271,6 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                 const char *kartModelName = KartModelNameForRetail(retailName);
                 if (kartModelName == NULL)
                 {
-                    fprintf(stderr, "[AdventurePack] custom kart slot %d: no retail kart for '%s'\n",
-                            i, retailName);
                     continue;
                 }
 
@@ -290,49 +290,33 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                     if (def->model == NULL || def->model->name == NULL)
                         continue;
 
-                    /* Match by MODEL name, not InstDef name: retail InstDefs
-                     * are called "selectkart0/1/2..." but the Models inside
-                     * are "selectkartcoco", "selectkartpolar", etc. The
-                     * PVS bypass in RenderQueueExecute also checks
-                     * model->name, so this is the correct anchor. */
                     if (strcmp(def->model->name, kartModelName) == 0)
                     {
+                        def->scale.x = def->scale.y = def->scale.z = 0x1000;
+                        if (s_kartFromJson) {
+                            def->pos.x = s_kart_pos[i][0];
+                            def->pos.y = s_kart_pos[i][1];
+                            def->pos.z = s_kart_pos[i][2];
+                            def->rot.y = s_kart_pos[i][3];
+                        }
                         def->model = customKart;
                         replaced = 1;
-                        fprintf(stderr, "[AdventurePack] custom kart slot %d: matched InstDef '%s' (model '%s')\n",
-                                i, def->name, kartModelName);
                     }
                 }
-
-                if (!replaced)
-                    fprintf(stderr, "[AdventurePack] custom kart slot %d: model '%s' not found\n",
-                            i, kartModelName);
             }
         }
     }
 
-    /* Silence CSEQ (menu music) ONLY if a custom ambient VAG
-     * was loaded for this garage. If the garage has no ambient,
-     * leave the menu music alone. */
     if (NativeLevelTextures_IsCustomLevelActive()
         && NativeCustomRacer_HasGarageAmbient()) {
         CseqMusic_StopAll();
         sdata->cseqBoolPlay = 0;
         sdata->cseqHighestIndex = -1;
-        fprintf(stderr, "[GarageSfx] CSEQ silenced (custom ambient active)\n");
     }
 
-    /* If this garage has a custom ambient VAG, silence the custom
-     * level OGG music (music.ogg) so the ambient is audible. The
-     * OGG resumes for the next non-garage level because
-     * NativeCustomRacer_ResetGarageAudio clears the ambient flag
-     * and LOAD_TenStages/MainMain restart the OGG normally. */
-    /* Custom garage: NEVER play music.ogg. Garages use ambient.vag
-     * + sfx_N.vag, not race music. Stop unconditionally. */
     {
         extern void NativeCustomMusic_Stop(void);
         NativeCustomMusic_Stop();
-        fprintf(stderr, "[GarageSfx] OGG music stopped (custom garage)\n");
     }
 
     fprintf(stderr, "[AdventurePack] ApplyCustomRacers: %d custom models applied\n", applied);
@@ -414,6 +398,8 @@ void NativeAdventurePack_SpawnCharacters(struct GameTracker *gGT)
 void NativeAdventurePack_LoadCameras(void) {
     if (!s_packActive) return;
     s_cam_useRot = 0;
+    s_slotsFromJson = 0;
+    s_kartFromJson = 0;
     const struct LevelDef *pack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
     if (!pack) return;
 
@@ -422,10 +408,10 @@ void NativeAdventurePack_LoadCameras(void) {
     FILE *f = fopen(path, "r");
     if (!f) return;
 
-    int vals[64]; int n = 0; char buf[512];
-    while (fgets(buf, sizeof(buf), f) && n < 64) {
+    int vals[128]; int n = 0; char buf[4096];
+    while (fgets(buf, sizeof(buf), f) && n < 128) {
         char *p = buf;
-        while (*p) {
+        while (*p && n < 128) {
             if ((*p >= '0' && *p <= '9') || *p == '-') {
                 vals[n++] = atoi(p);
                 while (*p && ((*p >= '0' && *p <= '9') || *p == '-')) p++;
@@ -449,9 +435,18 @@ void NativeAdventurePack_LoadCameras(void) {
             s_slot_pos[i][1] = vals[off+1];
             s_slot_pos[i][2] = vals[off+2];
             s_slot_pos[i][3] = vals[off+3];
+            s_slotsFromJson = 1;
             if (i == 0) fprintf(stderr, "[DIAG-Adv] Slot 0 JSON: X=%d Y=%d Z=%d\n", s_slot_pos[0][0], s_slot_pos[0][1], s_slot_pos[0][2]);
         }
     }
+    if (n >= 5 + 8*4 + 1 + 8*4) {
+        for (int i = 0; i < 8; i++)
+            for (int k = 0; k < 4; k++)
+                s_kart_pos[i][k] = vals[38 + i*4 + k];
+        s_kartFromJson = 1;
+    }
+    fprintf(stderr, "[DIAG-Adv] slotsFromJson=%d kartFromJson=%d useRot=%d\n",
+            s_slotsFromJson, s_kartFromJson, s_cam_useRot);
 }
 
 int NativeAdventurePack_CameraHasRot(void) { return s_packActive && s_cam_useRot; }

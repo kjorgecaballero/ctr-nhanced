@@ -225,8 +225,10 @@ def main():
     # usa el pitch/yaw capturado en Blender (rot_x = pitch, rot_y = yaw, ANG 0x1000).
     captured = 1 if cam.get("captured") else 0
     cameras["use_rot"] = captured
+    cameras["kart_slots"] = [{"x": s.get("kx", 0), "y": s.get("ky", 0),
+                              "z": s.get("kz", 0), "rot_y": s.get("krot", 0)} for s in slots]
     cam_path = os.path.join(dst, "cameras.json")
-    has_slot_pos = any(s.get(k, 0) for s in slots for k in ("x", "y", "z", "rot"))
+    has_slot_pos = any(s.get(k, 0) for s in slots for k in ("x", "y", "z", "rot", "kx", "ky", "kz", "krot"))
     if captured or has_slot_pos:
         with open(cam_path, "w", encoding="utf-8") as f:
             json.dump(cameras, f, separators=(',', ':'))

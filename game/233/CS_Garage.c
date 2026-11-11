@@ -588,7 +588,7 @@ update_garage_camera:
 			/* Camara capturada en Blender: pitch/yaw ya vienen en espacio motor
 			 * (ANG 0x1000 = 360), misma convencion que el look-at de abajo. */
 			camRot.y = (s16)((cam_r[1] + ADV_CAM_YAW_BIAS) & 0xFFF);
-			camRot.x = (s16)((cam_r[0] + ADV_CAM_PITCH_BIAS) & 0xFFF);
+			camRot.x = (s16)((-cam_r[0] + ADV_CAM_PITCH_BIAS) & 0xFFF);
 		} else {
 			/* look-at: objetivo - camara */
 			int dx = char_p[0] - cam_p[0];
