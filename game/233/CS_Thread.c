@@ -114,7 +114,6 @@ CTR_STATIC_ASSERT(OFFSETOF(struct CsOpcodeMeta, frameEnd) == CS_AUDIO_VOLUME_VOI
 static const u32 CS_INTERPOLATE_LINE_DRAW_MODE = 0xe1000a20u;
 
 static int s_prevGarageBoolSelected[8] = {-1,-1,-1,-1,-1,-1,-1,-1};
-static int s_garageSelectLatch[8] = { 0,0,0,0,0,0,0,0};
 /* Raw gGarage.boolSelected transition tracker (for fade on select AND deselect).
  * Separate from s_prevGarageBoolSelected, which tracks the latched
  * effectiveSelected (60-frame delay for the anim-to-idle transition). */
@@ -405,10 +404,6 @@ afterCameraAndSkipChecks:
                         s_prevGarageBoolSelected[slot] = wantSelect;
 
                         if (isCurrentSlot && (currBoolSelected != s_prevGarageRawSelected[slot])) {
-                            const char *dbgF = getenv("CTR_DEBUG_GARAGE_FLASH");
-                            if (dbgF && dbgF[0] == '1')
-                                fprintf(stderr, "[GARAGE-FLASH] fade slot=%d from=%d to=%d\n",
-                                        slot, s_prevGarageRawSelected[slot], currBoolSelected);
                             gGT->pushBuffer[0].fadeFromBlack_currentValue = CS_FADE_FROM_BLACK_CURRENT;
                             gGT->pushBuffer[0].fadeFromBlack_desiredResult = CS_FADE_FROM_BLACK_TARGET;
                             gGT->pushBuffer[0].fade_step = CS_FADE_FROM_BLACK_STEP;
@@ -427,18 +422,6 @@ afterCameraAndSkipChecks:
                                 }
                         }
 
-                        /* CTR_DEBUG_GARAGE_ANIM=1 → dump per-frame state */
-                        {
-                                static int s_diagCtr = 0;
-                                if (s_diagCtr < 90)
-                                {
-                                        const char *dbg = getenv("CTR_DEBUG_GARAGE_ANIM");
-                                        if (dbg && dbg[0] == '1')
-                                                fprintf(stderr, "[GARAGE-ANIM] A n=%d id=%d idle=%d sel=%d hasSel=%d effSel=%d curAnim=%d curF=%d dur=%d\n",
-                                                        s_diagCtr++, (int)gm->id, (int)idleFrames, (int)selFrames, hasSel,
-                                                        effectiveSelected, (int)animIndex, (int)(animFrame32 >> CS_FRAME32_SHIFT), (int)opcodeDuration);
-                                }
-                        }
                         if (idleFrames > 0)
                         {
                                 int newAnim = 0, newStart = 0, newEnd = 0;
@@ -856,11 +839,6 @@ processOpcode:
 		goto finishOpcodeStep;
 
 	case CS_OPCODE_FADE_FROM_BLACK:
-		{
-		    const char *dbgF = getenv("CTR_DEBUG_GARAGE_FLASH");
-		    if (dbgF && dbgF[0] == '1')
-		        fprintf(stderr, "[GARAGE-FLASH] opcode FADE_FROM_BLACK level=%d\n", sdata->gGT->levelID);
-		}
 		gGT->pushBuffer[0].fadeFromBlack_currentValue = CS_FADE_FROM_BLACK_CURRENT;
 		gGT->pushBuffer[0].fadeFromBlack_desiredResult = CS_FADE_FROM_BLACK_TARGET;
 		gGT->pushBuffer[0].fade_step = CS_FADE_FROM_BLACK_STEP;

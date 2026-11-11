@@ -206,13 +206,7 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
     if (lev == NULL || lev->ptrInstDefs == NULL) return;
     NativeCustomRacer_ResetGarageAudio();
     
-    const struct LevelDef *animPack = LevelRegistry_GetReplacement(ADVENTURE_GARAGE);
-    if (animPack != NULL) {
-        NativeCustomRacer_SetGarageAnimData(
-            animPack->garageIdleAnim, animPack->garageIdleStart, animPack->garageIdleEnd, animPack->garageIdleLoop,
-            animPack->garageHasSelectAnim, 
-            animPack->garageSelectAnim, animPack->garageSelectStart, animPack->garageSelectEnd, animPack->garageSelectLoop);
-    }
+    /* GARAGE-ANIMS: animation data lives in the .ctr clips (see CS_Thread.c). */
     int applied = 0;
     for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
     {
