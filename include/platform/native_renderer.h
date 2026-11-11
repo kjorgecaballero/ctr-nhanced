@@ -28,6 +28,10 @@ int NativeRenderer_CaptureVRAMState(void *dst, int dstSize);
 int NativeRenderer_RestoreVRAMState(const void *src, int srcSize);
 TextureID NativeRenderer_GetVRAMTexture(void);
 TextureID NativeRenderer_GetWhiteTexture(void);
+void NativeRenderer_UploadCustomVramLevel(const u16 *vv, int w, int h);
+void NativeRenderer_UploadCustomVramModels(const u16 *vv, int w, int h);
+TextureID NativeRenderer_GetCustomVramLevel(void);
+TextureID NativeRenderer_GetCustomVramModels(void);
 
 // Wumpa HUD FBO conversion target (HIGHMP path). The offscreen FBO of the
 // 3D Wumpa model is converted to this RGBA texture with 0/1 alpha

@@ -408,6 +408,7 @@ int NativeLevelTextures_DecodeVRM(const u8 *buf, int size)
     }
 
     fprintf(stderr, "[NLT] DecodeVRM: %d TIMs, %d covered rects\n", nTim, s_ltCount);
+    NativeRenderer_UploadCustomVramLevel(s_vv, 1024, 512);
     for (int i = 0; i < s_ltCount; i++)
         fprintf(stderr, "[NLT]   [%d] x=%d y=%d w=%d h=%d idx=%d\n",
                 i, s_lt[i].x, s_lt[i].y, s_lt[i].w, s_lt[i].h, s_lt[i].idx == NLT_NOTEX ? -1 : (int)s_lt[i].idx);
@@ -537,6 +538,25 @@ static int NltGetPage(u16 tpage, u16 clut)
     const int mode = (tpage >> 7) & 3;              /* 0=4bpp 1=8bpp 2=16bpp */
     const int cx = (clut & 0x3F) << 4, cy = clut >> 6;
 
+    /* FASE 2: no RGBA page. Reserve idx + mark source, return early.
+     * AddSplit reads s_srcLookup[idx] and binds s_customVramLevel/Models
+     * with the retail gte_shader_4/8/16 (CLUT lookup per-texel). */
+    {
+        int _newidx = NativeCustomRacer_AllocTexIdx();
+        if (_newidx < 0) return -1;
+        NativeGpu_SetSrcLookup((u16)_newidx, (u8)s_src);
+        s_pg[s_pgCount].tpage = key;
+        s_pg[s_pgCount].clut = clut;
+        s_pg[s_pgCount].src = (u8)s_src;
+        s_pg[s_pgCount].idx = (u16)_newidx;
+        s_pg[s_pgCount].layer = 0xFFFF;
+        s_pgCount++;
+        fprintf(stderr, "[NLT] page%s tpage=0x%04X clut=0x%04X src=%d -> idx=%d (VRAM raw)\n",
+                s_src ? "(model)" : "", key, clut, s_src, _newidx);
+        return _newidx;
+    }
+
+    /* (legacy RGBA builder below, unreachable in Fase 2) */
     u8 *page = (u8 *)calloc(256 * 256, 4);
     if (!page) return -1;
     int miss = 0, opaque = 0;
@@ -1005,6 +1025,7 @@ int NativeLevelTextures_DecodeModelVRM(const u8 *buf, int size)
     for (int i = 0; i < 1024 * 512; i++) nz += (s_vv2[i] != 0);
     fprintf(stderr, "[NLT] DecodeModelVRM: %d rects, %d non-zero halfwords%s\n", s_mltCount, nz,
             nz == 0 ? "  <-- EMPTY: model pages will be blank" : "");
+    NativeRenderer_UploadCustomVramModels(s_vv2, 1024, 512);
     return s_mltCount;
 }
 
@@ -1096,6 +1117,19 @@ int NativeLevelTextures_LookupPage(u16 tpage, u16 clut)
     for (int i = 0; i < s_pgCount; i++)
         if (s_pg[i].tpage == key && s_pg[i].clut == clut && s_pg[i].src == 0) return s_pg[i].idx;
     return -1;
+}
+
+/* FASE 2 fix: original clut of a page (before Sentinel patching). The VRAM
+ * raw shader needs the original CLUT position for v_page_clut.zw. The vertex
+ * clut would otherwise carry 0x8000|pg (Sentinel marker) which the shader
+ * interprets as a Y offset of half-VRAM. Returns 0xFFFF for invalid idx. */
+u16 NativeLevelTextures_GetPageClut(u16 idx)
+{
+    /* idx is a GL pool index (256..N), NOT an s_pg[] array position.
+     * Loop linear search on .idx to find the correct entry. */
+    for (int i = 0; i < s_pgCount; i++)
+        if (s_pg[i].idx == idx) return s_pg[i].clut;
+    return 0xFFFF;
 }
 
 void NativeLevelTextures_PatchTL(struct TextureLayout *tl)

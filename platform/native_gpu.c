@@ -135,6 +135,35 @@ typedef struct
 
 global_variable NativeGpuState s_gpu;
 
+/* FASE 2 fix: original clut override for VRAM raw prims. */
+static u16 s_vtxClutOverride = 0;
+static int s_vtxClutOverrideValid = 0;
+
+/* FASE 2: per-idx source (0=level VRAM, 1=models VRAM, 0xFF=RGBA page). */
+static u8 s_srcLookup[NATIVE_GPU_MAX_CUSTOM_TEXTURES];
+static int s_srcLookupInit = 0;
+
+static void EnsureSrcLookupInit_(void)
+{
+	if (!s_srcLookupInit) {
+		memset(s_srcLookup, 0xFF, sizeof(s_srcLookup));
+		s_srcLookupInit = 1;
+	}
+}
+
+void NativeGpu_SetSrcLookup(u16 idx, u8 src)
+{
+	EnsureSrcLookupInit_();
+	if (idx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) s_srcLookup[idx] = src;
+}
+
+u8 NativeGpu_GetSrcLookup(u16 idx)
+{
+	EnsureSrcLookupInit_();
+	if (idx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) return s_srcLookup[idx];
+	return 0xFF;
+}
+
 struct NativeGpuSnapshot
 {
 	u32 magic;
@@ -161,6 +190,7 @@ void NativeGpu_RegisterCustomTexture(u16 idx, TextureID tex, int width, int heig
 
 	s_gpu.customTextures[idx] = tex;
 	s_gpu.customTextureSizes[idx] = ((u32)(width & 0xFFFF)) | ((u32)(height & 0xFFFF) << 16);
+	NativeGpu_SetSrcLookup(idx, 0xFF);
 }
 
 void NativeGpu_FreeCustomTexture(u16 idx)
@@ -175,6 +205,7 @@ void NativeGpu_FreeCustomTexture(u16 idx)
 		s_gpu.customTextures[idx] = 0;
 		s_gpu.customTextureSizes[idx] = 0;
 	}
+	NativeGpu_SetSrcLookup(idx, 0xFF);
 }
 
 void ClearSplits(void)
@@ -423,35 +454,36 @@ void MakeTexcoordQuad(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, u8 *uv3, s16 
 
 	const u8 bright = 2;
 	const short texPage = GetTPageBase(page);
+	s16 vclut = s_vtxClutOverrideValid ? (s16)s_vtxClutOverride : clut;
 
 	vertex[0].u = uv0[0];
 	vertex[0].v = uv0[1];
 	vertex[0].bright = bright;
 	vertex[0].dither = dither;
 	vertex[0].page = texPage;
-	vertex[0].clut = clut;
+	vertex[0].clut = vclut;
 
 	vertex[1].u = uv1[0];
 	vertex[1].v = uv1[1];
 	vertex[1].bright = bright;
 	vertex[1].dither = dither;
 	vertex[1].page = texPage;
-	vertex[1].clut = clut;
+	vertex[1].clut = vclut;
 
 	vertex[2].u = uv2[0];
 	vertex[2].v = uv2[1];
 	vertex[2].bright = bright;
 	vertex[2].dither = dither;
 	vertex[2].page = texPage;
-	vertex[2].clut = clut;
+	vertex[2].clut = vclut;
 
 	vertex[3].u = uv3[0];
 	vertex[3].v = uv3[1];
 	vertex[3].bright = bright;
 	vertex[3].dither = dither;
 	vertex[3].page = texPage;
-	vertex[3].clut = clut;
-		if (s_gpu.currentIsSentinel)
+	vertex[3].clut = vclut;
+		if (s_gpu.currentIsSentinel && !s_vtxClutOverrideValid)
 	{
 		for (int i = 0; i < 4; i++) { vertex[i].tcx = -1; vertex[i].tcy = -1; }
 	}
@@ -465,28 +497,29 @@ void MakeTexcoordTriangle(GrVertex *vertex, u8 *uv0, u8 *uv1, u8 *uv2, s16 page,
 
 	const u8 bright = 2;
 	const short texPage = GetTPageBase(page);
+	s16 vclut = s_vtxClutOverrideValid ? (s16)s_vtxClutOverride : clut;
 
 	vertex[0].u = uv0[0];
 	vertex[0].v = uv0[1];
 	vertex[0].bright = bright;
 	vertex[0].dither = dither;
 	vertex[0].page = texPage;
-	vertex[0].clut = clut;
+	vertex[0].clut = vclut;
 
 	vertex[1].u = uv1[0];
 	vertex[1].v = uv1[1];
 	vertex[1].bright = bright;
 	vertex[1].dither = dither;
 	vertex[1].page = texPage;
-	vertex[1].clut = clut;
+	vertex[1].clut = vclut;
 
 	vertex[2].u = uv2[0];
 	vertex[2].v = uv2[1];
 	vertex[2].bright = bright;
 	vertex[2].dither = dither;
 	vertex[2].page = texPage;
-	vertex[2].clut = clut;
-		if (s_gpu.currentIsSentinel)
+	vertex[2].clut = vclut;
+		if (s_gpu.currentIsSentinel && !s_vtxClutOverrideValid)
 	{
 		for (int i = 0; i < 3; i++) { vertex[i].tcx = -1; vertex[i].tcy = -1; }
 	}
@@ -882,6 +915,7 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 		s_gpu.framebufferFeedbackRunActive = false;
 	}
 
+	s_vtxClutOverrideValid = 0;   /* reset per-prim */
 	GPUDrawSplit *curSplit = &s_gpu.splits[s_gpu.splitIndex];
 
 	BlendMode blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
@@ -953,7 +987,31 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 	{
 		// Sentinel CLUT: sample from a dedicated OpenGL texture instead of VRAM.
 		const u16 sentinelIdx = effClut & 0x7FFF;
-		if ((sentinelIdx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) && (s_gpu.customTextures[sentinelIdx] != 0))
+		u8 sentinelSrc = NativeGpu_GetSrcLookup(sentinelIdx);
+		if (sentinelSrc == 0 || sentinelSrc == 1)
+		{
+			int sp_mode = (tpage >> 7) & 3;
+			texFormat = (sp_mode == 0) ? TF_4_BIT : (sp_mode == 1) ? TF_8_BIT : TF_16_BIT;
+			textureId = (sentinelSrc == 0)
+			            ? NativeRenderer_GetCustomVramLevel()
+			            : NativeRenderer_GetCustomVramModels();
+			overrideW = 1024;
+			overrideH = 512;
+			psxTexturedSemiTrans = semiTrans;
+			blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
+			psxTextureOutputSTP = true;
+			psxKeepTextureAlpha = false;
+			/* FASE 2 fix: pass ORIGINAL clut to vertex, not 0x8000|pg */
+			{
+				extern u16 NativeLevelTextures_GetPageClut(u16 idx);
+				u16 _orig = NativeLevelTextures_GetPageClut(sentinelIdx);
+				if (_orig != 0xFFFF) {
+					s_vtxClutOverride = _orig;
+					s_vtxClutOverrideValid = 1;
+				}
+			}
+		}
+		else if ((sentinelIdx < NATIVE_GPU_MAX_CUSTOM_TEXTURES) && (s_gpu.customTextures[sentinelIdx] != 0))
 		{
 			texFormat = TF_32_BIT_RGBA;
 			textureId = s_gpu.customTextures[sentinelIdx];

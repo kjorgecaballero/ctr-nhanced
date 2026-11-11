@@ -18,6 +18,8 @@ extern int g_GPUDisabledState;
 
 int NativeGpu_HasPendingSplits(void);
 void NativeGpu_RegisterCustomTexture(u16 idx, TextureID tex, int width, int height);
+void NativeGpu_SetSrcLookup(u16 idx, u8 src);
+u8   NativeGpu_GetSrcLookup(u16 idx);
 void NativeGpu_FreeCustomTexture(u16 idx);
 void ClearSplits(void);
 void DrawAllSplits(void);

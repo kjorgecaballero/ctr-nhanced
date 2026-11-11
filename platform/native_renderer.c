@@ -157,6 +157,38 @@ TextureID NativeRenderer_GetWhiteTexture(void)
 	return s_whiteTexture;
 }
 
+/* FASE 2: raw VRAM as GL_RG8 1024x512, sampled by gte_shader_N with CLUT. */
+static TextureID s_customVramLevel = 0;
+static TextureID s_customVramModels = 0;
+
+static void UploadVram_(TextureID *slot, const u16 *vv, int w, int h, const char *label)
+{
+	if (*slot == 0) glGenTextures(1, slot);
+	glBindTexture(GL_TEXTURE_2D, *slot);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, VRAM_INTERNAL_FORMAT, w, h, 0,
+	             VRAM_FORMAT, GL_UNSIGNED_BYTE, vv);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	fprintf(stderr, "[NLT] UploadVram %s: %dx%d (%d KB)\n",
+	        label, w, h, (w * h * 2) / 1024);
+}
+
+void NativeRenderer_UploadCustomVramLevel(const u16 *vv, int w, int h)
+{
+	UploadVram_(&s_customVramLevel, vv, w, h, "level");
+}
+
+void NativeRenderer_UploadCustomVramModels(const u16 *vv, int w, int h)
+{
+	UploadVram_(&s_customVramModels, vv, w, h, "models");
+}
+
+TextureID NativeRenderer_GetCustomVramLevel(void) { return s_customVramLevel; }
+TextureID NativeRenderer_GetCustomVramModels(void) { return s_customVramModels; }
+
 int g_windowWidth = 0;
 int g_windowHeight = 0;
 
