@@ -410,6 +410,9 @@ class NFR_OT_AdventureBuild(Operator):
                 kx, ky, kz = _pos_to_engine(kmw.translation)
                 kr = (_ang(kmw.to_euler().z) + NFR_SLOT_YAW_OFFSET) & 0xFFF
 
+            if s.idle_object is not None:
+                _slot_from_object(s, s.idle_object)
+
             slots_json.append({
                 "char": s.char_slug,
                 "kx": kx, "ky": ky, "kz": kz, "krot": kr,
