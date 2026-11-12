@@ -59,6 +59,11 @@ enum
  * of sliding from the previous garage's slot. See CS_Garage_Init. */
 static int s_garageForceSnap = 0;
 
+/* Deferred ambient start: set by CS_Garage_Init, consumed on
+ * the first MenuProc tick (Audio_SetState_Safe from ZoomOut
+ * would otherwise kill the voices at the next audio tick). */
+static int s_pendingAmbientStart = 0;
+
 
 void CS_Garage_ZoomOut(s16 zoomState)
 {
@@ -93,6 +98,12 @@ void CS_Garage_ZoomOut(s16 zoomState)
 
 void CS_Garage_MenuProc(struct RectMenu *menu)
 {
+	if (s_pendingAmbientStart) {
+	    s_pendingAmbientStart = 0;
+	    { extern void NativeCustomRacer_UpdateGarageAmbients(int);
+	      NativeCustomRacer_UpdateGarageAmbients((int)sdata->advCharSelectIndex_curr); }
+	    fprintf(stderr, "[AmbientDiag] MenuProc: deferred ambient start\n");
+	}
 	(void)menu;
 	s16 garageFrames;
 	s16 *statBarLength;
@@ -469,7 +480,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
                                 int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
                                 if (packID >= 0) newID = packID;
                             }
-                            NativeCustomRacer_SwitchGarageCharacter(newID);
+                            NativeCustomRacer_UpdateGarageAmbients((int)currSelectIndex);
                         }
 		}
 
@@ -764,7 +775,9 @@ void CS_Garage_Init(void)
         sdata->advCharSelectIndex_curr = 0;
         sdata->advCharSelectIndex_prev = 0;
         s_garageForceSnap = 1;
+        s_pendingAmbientStart = 1;   /* defer ambient to first MenuProc tick */
 
         // 0 = just entered garage
 	CS_Garage_ZoomOut(0);
+
 }

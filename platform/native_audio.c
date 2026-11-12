@@ -25,7 +25,7 @@
  * 29   mask music
  * 30-31 engine loop (1P/2P)
  * 32   level music (custom tracks, 1P/2P) */
-#define NATIVE_AUDIO_SPU_VOICE_COUNT         33
+#define NATIVE_AUDIO_SPU_VOICE_COUNT         35
 #define NATIVE_AUDIO_SPU_MEMSIZE             (2048 * 1024)
 // streaming ADPCM decode like the real SPU: 16-byte blocks decoded on the fly
 // per voice, reading SPU RAM live (psx-spx "SPU ADPCM Samples/Pitch") -penta3

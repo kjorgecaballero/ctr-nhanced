@@ -46,7 +46,7 @@ def _racer_garage_dir(slug):
     return os.path.join(REPO_ROOT, "assets", "mods", "racers", slug, "garage")
 
 
-def _install_vag(src, dst):
+def _install_vag(src, dst, max_seconds=0, fade=0.0):
     """Deja un .vag en dst. Devuelve (ok, mensaje).
 
     src puede ser: un .vag (se copia); un .wav con un .vag gemelo (mismo nombre,
@@ -69,7 +69,12 @@ def _install_vag(src, dst):
         # AUTO-FIX: Usar el vag_codec del repositorio por defecto
         vag_codec = os.path.join(REPO_ROOT, "tools", "custom_racers", "vag_codec.py")
         if os.path.exists(vag_codec):
-            tmpl = f'"{sys.executable}" "{vag_codec}" encode --rate 11025 --norm --loop {{wav}} {{out}}'
+            extras = ""
+            if max_seconds > 0:
+                extras += f" --max-seconds {max_seconds}"
+            if fade > 0:
+                extras += f" --fade {fade}"
+            tmpl = f'"{sys.executable}" "{vag_codec}" encode --rate 11025 --norm --loop{extras} {{wav}} {{out}}'
         else:
             return False, ("es un WAV y no hay .vag gemelo ni encoder: define %s "
                            "o deja un .vag con el mismo nombre junto al WAV" % VAG_ENCODER_ENV)
@@ -110,7 +115,8 @@ def _install_audio(slots):
         os.makedirs(gdir, exist_ok=True)
 
         if amb:
-            ok, msg = _install_vag(amb, os.path.join(gdir, "ambient.vag"))
+            ok, msg = _install_vag(amb, os.path.join(gdir, "ambient.vag"),
+                                   max_seconds=10, fade=0.2)
             print("  audio slot %d (%s) ambient.vag: %s" % (i, slug, msg))
             ok_all &= ok
         if sfx:

@@ -197,7 +197,11 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 #define NATIVE_GARAGE_SFX_SPU_END 0x100000u
 
 #define NATIVE_GARAGE_AMBIENT_VOICE 32
+#define NATIVE_GARAGE_AMBIENT_VOICE_LEFT  33
+#define NATIVE_GARAGE_AMBIENT_VOICE_RIGHT 34
 #define NATIVE_GARAGE_AMBIENT_SPU_BASE 0x1C0000u
+#define NATIVE_GARAGE_AMBIENT_SPU_BASE_LEFT  0x1D0000u
+#define NATIVE_GARAGE_AMBIENT_SPU_BASE_RIGHT 0x1E0000u
 #define NATIVE_GARAGE_AMBIENT_SPU_END 0x200000u
 
 void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame);
@@ -205,6 +209,7 @@ void NativeCustomRacer_ResetGarageAudio(void);
 void NativeCustomRacer_SwitchGarageCharacter(int newCharID);
 int  NativeCustomRacer_HasGarageAmbient(void);
 void NativeCustomRacer_PreloadGarageSfx(const char *slug);
+void NativeCustomRacer_UpdateGarageAmbients(int currSlot);
 /* Load <slug>/kart.ctr and rename it to "selectkart<retailName>"
  * (e.g. "selectkartcoco") so the PVS bypass in RenderQueueExecute
  * works. retailName = GET_METADATA(gGarage.garageCharacterIDs[slot])

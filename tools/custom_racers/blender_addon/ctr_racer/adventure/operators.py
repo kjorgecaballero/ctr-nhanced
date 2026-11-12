@@ -254,7 +254,38 @@ class NFR_OT_AdventureExportAssets(Operator):
         cmd = [py_exe, str(build_py), str(json_path), slot.char_slug, str(out_ctr), "--sentinel", "--garage"]
         r = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
         if r.returncode != 0:
-            self.report({'ERROR'}, "Character garage build failed. Check console.")
+            # Print subprocess output to Blender's System Console so the
+            # user actually sees the error. capture_output=True would
+            # otherwise swallow everything and "Check console" is empty.
+            print("=" * 72)
+            print(f"=== build_character.py FAILED (rc={r.returncode}) ===")
+            print(f"slug: {slot.char_slug}   out: {out_ctr}")
+            print(f"cmd: {' '.join(map(str, cmd))}")
+            print(f"cwd: {root}")
+            if r.stdout:
+                print("--- STDOUT ---")
+                print(r.stdout)
+            if r.stderr:
+                print("--- STDERR ---")
+                print(r.stderr)
+            print("=" * 72)
+            # Extract the most actionable line for the popup.
+            stderr_lines = (r.stderr or "").strip().splitlines()
+            rt_error = next(
+                (l for l in reversed(stderr_lines) if l.startswith("RuntimeError:")),
+                None,
+            )
+            if rt_error:
+                popup_msg = rt_error[len("RuntimeError:"):].strip()
+            elif stderr_lines:
+                popup_msg = stderr_lines[-1].strip()
+            elif r.stdout:
+                popup_msg = r.stdout.strip().splitlines()[-1]
+            else:
+                popup_msg = "no output from build_character.py"
+            if len(popup_msg) > 220:
+                popup_msg = popup_msg[:217] + "..."
+            self.report({'ERROR'}, f"Garage export failed: {popup_msg}")
             return {'CANCELLED'}
 
         self.report({'INFO'}, f"S{idx} ({slot.char_slug}): garage model exported.")

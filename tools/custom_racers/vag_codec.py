@@ -355,6 +355,13 @@ def cmd_encode(args):
                 scale = target_rms / rms_before
                 pcm = (f * scale).clip(-32500, 32500).astype(np.int16)
 
+    max_sec = getattr(args, "max_seconds", 0) or 0
+    if max_sec > 0:
+        limit = int(max_sec * sr)
+        if limit > 0 and len(pcm) > limit:
+            print(f"  truncate: {len(pcm)/sr:.2f}s -> {limit/sr:.2f}s (--max-seconds)")
+            pcm = pcm[:limit]
+
     name = Path(args.output).stem[:16]
     vag = encode_vag(pcm, sample_rate=sr, name=name, loop=getattr(args, "loop", False))
     Path(args.output).write_bytes(vag)
@@ -367,6 +374,18 @@ def cmd_encode(args):
         rms_after  = float(np.sqrt(np.mean(f2 * f2)))
         print(f"  normalize: peak {peak_before} -> {peak_after}, "
               f"rms {rms_before:.0f} -> {rms_after:.0f} (-14 dBFS RMS)")
+
+    fade_sec = getattr(args, "fade", 0.0) or 0.0
+    if fade_sec > 0 and len(pcm) > 0:
+        n_fade = min(int(fade_sec * sr), len(pcm) // 2)
+        if n_fade > 0:
+            f = pcm.astype(np.float64)
+            for i in range(n_fade):
+                ramp = i / n_fade
+                f[i] = f[i] * ramp
+                f[len(f) - 1 - i] = f[len(f) - 1 - i] * ramp
+            pcm = f.astype(np.int16)
+            print(f"  fade: {n_fade/sr:.2f}s in/out")
     print(f"  input:  {len(pcm)} samples, {sr} Hz, {pcm.nbytes} bytes")
     print(f"  output: {len(vag)} bytes "
           f"({VAG_HEADER_SIZE} header + {len(vag) - VAG_HEADER_SIZE} data)")
@@ -433,6 +452,11 @@ def main(argv=None):
     p_enc.add_argument("--norm", action="store_true",
                        help="normalize peak to -1 dBFS before encoding "
                             "(recommended for short SFX / loops)")
+    p_enc.add_argument("--max-seconds", type=float, default=0.0,
+                       dest="max_seconds",
+                       help="truncate to N seconds (default: no truncation)")
+    p_enc.add_argument("--fade", type=float, default=0.0,
+                       help="fade-in/out N seconds (default: no fade)")
     p_enc.set_defaults(func=cmd_encode)
 
     p_dec = sub.add_parser("decode", help="decode VAG -> WAV")

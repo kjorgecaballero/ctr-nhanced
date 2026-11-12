@@ -3964,6 +3964,8 @@ void NativeCustomRacer_ResetGarageAudio(void)
 
     NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_LEFT);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_RIGHT);
     memset(s_garageSfxSpuAddr, 0, sizeof(s_garageSfxSpuAddr));
     memset(s_garageSfxPrevFrame, 0xFF, sizeof(s_garageSfxPrevFrame));
     memset(s_garageSfxCooldown, 0, sizeof(s_garageSfxCooldown));
@@ -3974,6 +3976,63 @@ void NativeCustomRacer_ResetGarageAudio(void)
 int NativeCustomRacer_HasGarageAmbient(void)
 {
     return s_garageAmbientAddr != 0;
+}
+
+void NativeCustomRacer_UpdateGarageAmbients(int currSlot)
+{
+    extern int NativeAdventurePack_GetCharacterID(int slot);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_LEFT);
+    NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_RIGHT);
+    s_garageAmbientAddr = 0;
+
+    int slots[3]  = { currSlot & 7, (currSlot - 1) & 7, (currSlot + 1) & 7 };
+    u32 addrs[3]  = { NATIVE_GARAGE_AMBIENT_SPU_BASE,
+                      NATIVE_GARAGE_AMBIENT_SPU_BASE_LEFT,
+                      NATIVE_GARAGE_AMBIENT_SPU_BASE_RIGHT };
+    int voices[3] = { NATIVE_GARAGE_AMBIENT_VOICE,
+                      NATIVE_GARAGE_AMBIENT_VOICE_LEFT,
+                      NATIVE_GARAGE_AMBIENT_VOICE_RIGHT };
+    int volL[3]   = { 0x2000, 0x0A00, 0x0300 };
+    int volR[3]   = { 0x2000, 0x0300, 0x0A00 };
+    const char *roles[3] = { "center", "left", "right" };
+
+    for (int i = 0; i < 3; i++) {
+        int charID = NativeAdventurePack_GetCharacterID(slots[i]);
+        if (charID < NATIVE_CUSTOM_ID_BASE) continue;
+        const char *slug = NativeCustomRacer_GetFolder(charID);
+        if (slug == NULL) continue;
+
+        char path[256];
+        snprintf(path, sizeof(path),
+                 "assets/mods/racers/%s/garage/ambient.vag", slug);
+
+        u8 hdr[20] = {0};
+        FILE *f = fopen(path, "rb");
+        if (!f) continue;
+        size_t got = fread(hdr, 1, sizeof(hdr), f);
+        fseek(f, 0, SEEK_END);
+        long file_size = ftell(f);
+        fclose(f);
+        if (file_size <= 48 || got < 20) continue;
+
+        u32 needed = (u32)(file_size - 48);
+        needed = (needed + 15u) & ~15u;
+        if (needed > 0x10000) continue;
+
+        u32 rate = (u32)hdr[0x10] | ((u32)hdr[0x11] << 8) |
+                   ((u32)hdr[0x12] << 16) | ((u32)hdr[0x13] << 24);
+        u16 pitch = (rate > 0) ? (u16)(((u64)rate * 0x1000u) / 44100u) : 0x1000;
+
+        u32 loaded = NativeVag_Load(path, addrs[i], NULL);
+        if (loaded == 0) continue;
+
+        NativeVag_Play(loaded, voices[i], volL[i], volR[i], pitch, 1);
+        if (i == 0) s_garageAmbientAddr = loaded;
+        fprintf(stderr,
+                "[GarageAmbient] role=%s slot=%d slug=%s voice=%d L=0x%X R=0x%X\n",
+                roles[i], slots[i], slug, voices[i], volL[i], volR[i]);
+    }
 }
 
 void NativeCustomRacer_PreloadGarageSfx(const char *slug)
@@ -4011,27 +4070,8 @@ void NativeCustomRacer_PreloadGarageSfx(const char *slug)
         s_garageSfxCooldownLen = dur_ticks;
     }
 
-    // Preload Ambient Loop
-    char ambientPath[256];
-    snprintf(ambientPath, sizeof(ambientPath), "assets/mods/racers/%s/garage/ambient.vag", slug);
-    FILE *af = fopen(ambientPath, "rb");
-    if (af) {
-        u8 hdr[20] = {0}; size_t got = fread(hdr, 1, sizeof(hdr), af);
-        fseek(af, 0, SEEK_END); long file_size = ftell(af); fclose(af);
-        if (file_size > 48 && got >= 20) {
-            u32 rate = (u32)hdr[0x10] | ((u32)hdr[0x11] << 8) | ((u32)hdr[0x12] << 16) | ((u32)hdr[0x13] << 24);
-            u16 pitch = (rate > 0) ? (u16)(((u64)rate * 0x1000u) / 44100u) : 0x1000;
-            u32 needed = (u32)(file_size - 48); needed = (needed + 15u) & ~15u;
-            if (s_garageAmbientAddr == 0 && NATIVE_GARAGE_AMBIENT_SPU_BASE + needed <= NATIVE_GARAGE_AMBIENT_SPU_END) {
-                u32 loaded = NativeVag_Load(ambientPath, NATIVE_GARAGE_AMBIENT_SPU_BASE, NULL);
-                if (loaded) {
-                    s_garageAmbientAddr = loaded;
-                    NativeVag_Play(s_garageAmbientAddr, NATIVE_GARAGE_AMBIENT_VOICE, 0x2000, 0x2000, pitch, 1);
-                    fprintf(stderr, "[GarageSfx] ambient for %s playing at 0x%X\n", slug, loaded);
-                }
-            }
-        }
-    }
+    // NOTE: Ambient loop is handled by NativeCustomRacer_UpdateGarageAmbients
+    // (3 simultaneous voices: center/left/right).
 }
 
 

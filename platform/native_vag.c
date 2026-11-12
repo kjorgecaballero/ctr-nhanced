@@ -17,7 +17,7 @@
  * NATIVE_AUDIO_SPU_VOICE_COUNT in platform/native_audio.c.
  * 0-23 retail, 24 dance SFX, 25-28 kart SFX, 29 mask music,
  * 30-31 engine loop, 32 level music. */
-#define NATIVE_VAG_MAX_VOICE  33
+#define NATIVE_VAG_MAX_VOICE  35
 
 /* Scratch buffer: 256 KB max VAG (enough for short SFX + short loops). */
 static u8 s_vagScratch[256 * 1024];

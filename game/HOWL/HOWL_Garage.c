@@ -6,7 +6,22 @@ void Garage_Init(void)
 	s32 i;
 
 	// erase backup, keep music, stop all fx
-	howl_StopAudio(1, 0, 1);
+	/* Skip howl_StopAudio for custom garage: it kills the custom
+	 * VAG ambient voices (32/33/34). Custom garage FX suppression
+	 * is handled in Garage_LerpFX(). */
+	{
+		extern int NativeLevelTextures_IsCustomLevelActive(void);
+		if (!(sdata->gGT->levelID == ADVENTURE_GARAGE &&
+		      NativeLevelTextures_IsCustomLevelActive()))
+		{
+			fprintf(stderr, "[AmbientDiag] Garage_Init: skip howl_StopAudio (non-custom)\n");
+			howl_StopAudio(1, 0, 1);
+		}
+		else
+		{
+			fprintf(stderr, "[AmbientDiag] Garage_Init: skip howl_StopAudio (custom)\n");
+		}
+	}
 
 	for (i = 0; i < 8; i++)
 	{
