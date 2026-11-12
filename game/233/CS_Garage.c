@@ -644,11 +644,8 @@ update_garage_camera:
                 /* Detectar cambio de slot. */
                 if (s_camLastSelectIdx == -1) {
                         /* Primera entrada al garaje custom: sin pan. */
-                        s_camCur[0] = camTarget[0];
-                        s_camCur[1] = camTarget[1];
-                        s_camCur[2] = camTarget[2];
-                        s_camRotCur[0] = rotTarget[0];
-                        s_camRotCur[1] = rotTarget[1];
+                        for (int i = 0; i < 3; i++) s_camCur[i] = s_camFrom[i] = s_camTo[i] = camTarget[i];
+                        for (int i = 0; i < 2; i++) s_camRotCur[i] = s_camRotFrom[i] = s_camRotTo[i] = rotTarget[i];
                         s_camLastSelectIdx = currSelectIndex;
                         s_camInterpT = 0x1000;
                 } else if (s_camLastSelectIdx == currSelectIndex
@@ -744,6 +741,12 @@ update_garage_camera:
 
 	gGT->pushBuffer[0].distanceToScreen_CURR = zoom;
 	gGT->pushBuffer[0].distanceToScreen_PREV = zoom;
+
+	// --- FIX: Reconstruir la matriz de vista con la nueva cámara ---
+	{
+		extern void PushBuffer_SetMatrixVP(struct PushBuffer *pb);
+		PushBuffer_SetMatrixVP(&gGT->pushBuffer[0]);
+	}
 }
 
 struct RectMenu *CS_Garage_GetMenuPtr(void)
