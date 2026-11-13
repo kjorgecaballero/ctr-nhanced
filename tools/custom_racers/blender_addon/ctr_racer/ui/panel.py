@@ -1032,7 +1032,10 @@ def _draw_adventure(layout, context):
     slot = st.slots[st.active_slot_idx]
     sub = box.box()
 
-    sub.prop(slot, "char_slug", text="Character Slug")
+    sub.prop(slot, "slot_kind", text="Character")
+    row = sub.row()
+    row.enabled = (slot.slot_kind == 'CUSTOM')
+    row.prop(slot, "char_slug", text="Slug")
     sub.prop(slot, "idle_object", text="Idle/Character Object")
     sub.prop(slot, "kart_object", text="Kart Object (optional)")
     sub.prop(slot, "stats_side", text="Stats Menu Side")

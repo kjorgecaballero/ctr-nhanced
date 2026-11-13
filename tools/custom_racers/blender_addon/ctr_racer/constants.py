@@ -73,3 +73,9 @@ UI_MODE_OF_TAB = {
     for mode, tabs in UI_TABS_BY_MODE.items()
     for tab_id, _label, _desc in tabs
 }
+RETAIL_CHARACTERS = [
+    (0, "Crash", "crash"), (1, "Cortex", "cortex"), (2, "Tiny", "tiny"), (3, "Coco", "coco"),
+    (4, "N. Gin", "n_gin"), (5, "Dingodile", "dingo"), (6, "Polar", "polar"), (7, "Pura", "pura"),
+    (8, "Pinstripe", "pinstripe"), (9, "Papu Papu", "papu"), (10, "Ripper Roo", "roo"), (11, "Komodo Joe", "joe"),
+    (12, "N. Tropy", "ntropy"), (13, "Penta Penguin", "penta"), (14, "Fake Crash", "fake"), (15, "Oxide", "oxide")
+]

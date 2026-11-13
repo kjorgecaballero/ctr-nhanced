@@ -497,6 +497,9 @@ class NFR_OT_AdventureBuild(Operator):
 
         # Write to temp file
         tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8')
+        data["garage_only_slug"] = [s.char_slug if (hasattr(s, 'slot_kind') and s.slot_kind != 'CUSTOM' and s.char_slug) else "" for s in st.slots]
+        data["garage_only_retail"] = [str(s.retail_id) if (hasattr(s, 'slot_kind') and s.slot_kind != 'CUSTOM' and s.char_slug) else "0" for s in st.slots]
+        data["characters"] = [s.char_slug if (hasattr(s, 'slot_kind') and s.slot_kind == 'CUSTOM' and s.char_slug) else "" for s in st.slots]
         json.dump(data, tmp, indent=2)
         tmp.close()
 

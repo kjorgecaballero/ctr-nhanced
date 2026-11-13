@@ -188,7 +188,9 @@ def main():
         "replace": "-1",
         "base": "40",
         "prim_mem": 4194304,
-        "characters":   [s.get("char", "")   for s in slots],
+        "characters": data.get("characters", [s["char"] for s in data["slots"]]),
+        "garage_only_slug": data.get("garage_only_slug", ["" for _ in range(8)]),
+        "garage_only_retail": data.get("garage_only_retail", ["0" for _ in range(8)]),
         "karts":        [s.get("kart", "")   for s in slots],
         # GARAGE-ANIMS: frame ranges live in .ctr clips, not JSON.
     }

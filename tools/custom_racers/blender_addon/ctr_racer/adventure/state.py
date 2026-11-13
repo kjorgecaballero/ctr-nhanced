@@ -16,7 +16,32 @@ class NFR_AdventureSfxEntry(PropertyGroup):
 # NFR_AdventureSlot — per-slot config (8 slots in NFR_AdventureState)
 # Must be defined BEFORE NFR_AdventureState (which references it)
 # ─────────────────────────────────────────────────────────────────────
+def _get_char_items():
+    from ..constants import RETAIL_CHARACTERS
+    items = [('CUSTOM', "Custom", "Custom character")]
+    for cid, name, slug in RETAIL_CHARACTERS:
+        items.append((str(cid), name, f"Retail: {name}"))
+    return items
+
+def _update_slot_kind(self, context):
+    from ..constants import RETAIL_CHARACTERS
+    if self.slot_kind == 'CUSTOM':
+        self.retail_id = 0
+        self.char_slug = ""
+    else:
+        self.retail_id = int(self.slot_kind)
+        for cid, name, slug in RETAIL_CHARACTERS:
+            if cid == self.retail_id:
+                self.char_slug = slug
+                break
+
 class NFR_AdventureSlot(PropertyGroup):
+    slot_kind: EnumProperty(
+        name="Character",
+        items=_get_char_items(),
+        update=_update_slot_kind
+    )
+    retail_id: IntProperty(name="Retail ID", default=0)
     char_slug:    StringProperty(name="Character Slug", default="")
     idle_object:  PointerProperty(name="Idle/Char Object", type=bpy.types.Object)
     kart_object:  PointerProperty(name="Kart Object", type=bpy.types.Object)
