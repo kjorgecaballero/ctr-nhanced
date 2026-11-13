@@ -1,5 +1,5 @@
 import bpy
-from bpy.props import StringProperty, IntProperty, PointerProperty, BoolProperty, CollectionProperty
+from bpy.props import StringProperty, IntProperty, PointerProperty, BoolProperty, CollectionProperty, EnumProperty
 from bpy.types import PropertyGroup
 
 
@@ -34,6 +34,14 @@ class NFR_AdventureSlot(PropertyGroup):
     cam_rot_x: IntProperty(name="Cam Rot X", default=0)
     cam_rot_y: IntProperty(name="Cam Rot Y", default=0)
     cam_captured: BoolProperty(name="Cam Captured", default=False)
+
+    # UI side for this specific slot
+    stats_side: EnumProperty(
+        name="Stats Menu Side",
+        items=[('RIGHT', "Right", "Right side (default)"),
+               ('LEFT', "Left", "Left side (like Tiny/Pura)")],
+        default='RIGHT'
+    )
 
     # Animations
     idle_anim: IntProperty(name="Idle Anim", default=0)

@@ -160,11 +160,10 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 		}
 	}
 
-	if ((nameIndex == LNG_TINY_TIGER) ||
-
-	    (statNamePosX = 383,
-
-	     nameIndex == LNG_PURA_FULL))
+	// Stats side: 0 = Right, 1 = Left
+	// Force left for Tiny/Pura (retail behavior) or if custom slot says so
+	int statsSide = NativeAdventurePack_GetStatsSide(currSelectIndex);
+	if (statsSide == 1 || nameIndex == LNG_TINY_TIGER || nameIndex == LNG_PURA_FULL)
 	{
 		statNamePosX = 129;
 		classNamePosX = 128;
@@ -172,6 +171,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	}
 	else
 	{
+		statNamePosX = 383;
 		classNamePosX = 384;
 		statBarPosX = 393;
 	}

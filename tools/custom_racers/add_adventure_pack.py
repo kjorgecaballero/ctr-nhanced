@@ -236,6 +236,9 @@ def main():
                 cam.get("rot_x", 0), cam.get("rot_y", 0),
             ])
     cameras["per_slot_cameras"] = per_slot_cameras
+    
+    # Stats side: 8 valores al final (0=Der, 1=Izq)
+    cameras["stats_sides"] = [s.get("stats_side", 0) for s in slots]
 
     cam_path = os.path.join(dst, "cameras.json")
     has_slot_pos = any(s.get(k, 0) for s in slots for k in ("x", "y", "z", "rot", "kx", "ky", "kz", "krot"))

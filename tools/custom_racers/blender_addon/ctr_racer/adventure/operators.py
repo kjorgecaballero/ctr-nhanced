@@ -478,6 +478,7 @@ class NFR_OT_AdventureBuild(Operator):
                 "cam_x": s.cam_x, "cam_y": s.cam_y, "cam_z": s.cam_z,
                 "cam_rot_x": s.cam_rot_x, "cam_rot_y": s.cam_rot_y,
                 "cam_captured": 1 if s.cam_captured else 0,
+                "stats_side": 1 if s.stats_side == 'LEFT' else 0,
                 "ambient_wav": _clean_path(s.ambient_wav) if s.ambient_wav else "",
                 "sfx": [
                     {"frame": e.frame, "wav": _clean_path(e.wav_path)}

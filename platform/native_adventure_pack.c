@@ -17,6 +17,7 @@ static int s_kartFromJson = 0;
  * cada slot tiene su propia pos+rot. Si no, fallback a la global. */
 static s16 s_cam_per_slot[8][5];
 static int s_perSlotCameras = 0;
+static int s_stats_side[8] = {0};
 static s16 s_slot_pos[8][4] = {
     {-700, 0, -200, 0}, {-500, 0, -100, 0}, {-300, 0, -50, 0}, {-100, 0, 0, 0},
     { 100, 0, 0, 0}, { 300, 0, -50, 0}, { 500, 0, -100, 0}, { 700, 0, -200, 0},
@@ -480,11 +481,23 @@ void NativeAdventurePack_LoadCameras(void) {
         s_perSlotCameras = 1;
         fprintf(stderr, "[DIAG-Adv] perSlotCameras=1\n");
     }
+    
+    // Stats sides (8 valores)
+    if (n >= 5 + 8*4 + 1 + 8*4 + 8*5 + 8) {
+        for (int i = 0; i < 8; i++)
+            s_stats_side[i] = vals[110 + i];
+        fprintf(stderr, "[DIAG-Adv] stats_sides loaded\n");
+    }
     fprintf(stderr, "[DIAG-Adv] slotsFromJson=%d kartFromJson=%d useRot=%d\n",
             s_slotsFromJson, s_kartFromJson, s_cam_useRot);
 }
 
 int NativeAdventurePack_CameraHasRot(void) { return s_packActive && s_cam_useRot; }
+
+int NativeAdventurePack_GetStatsSide(int slot) {
+    if (slot >= 0 && slot < 8) return s_stats_side[slot];
+    return 0;
+}
 
 void NativeAdventurePack_GetCamera(s16 *pos, s16 *rot) {
     pos[0] = s_cam_pos[0]; pos[1] = s_cam_pos[1]; pos[2] = s_cam_pos[2];

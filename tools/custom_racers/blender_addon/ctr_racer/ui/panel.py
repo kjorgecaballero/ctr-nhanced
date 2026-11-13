@@ -1035,6 +1035,7 @@ def _draw_adventure(layout, context):
     sub.prop(slot, "char_slug", text="Character Slug")
     sub.prop(slot, "idle_object", text="Idle/Character Object")
     sub.prop(slot, "kart_object", text="Kart Object (optional)")
+    sub.prop(slot, "stats_side", text="Stats Menu Side")
 
     sub.separator()
     sub.label(text="Animations", icon='PLAY')

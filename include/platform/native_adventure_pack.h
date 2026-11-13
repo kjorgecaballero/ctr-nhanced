@@ -26,3 +26,4 @@ void NativeAdventurePack_SpawnCharacters(struct GameTracker *gGT);
 void NativeAdventurePack_GetCameraForSlot(int slot, s16 *pos, s16 *rot);
 
 #endif
+int NativeAdventurePack_GetStatsSide(int slot);
