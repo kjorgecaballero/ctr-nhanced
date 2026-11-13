@@ -27,6 +27,14 @@ class NFR_AdventureSlot(PropertyGroup):
     pos_z: IntProperty(name="Z", default=0)
     pos_rot: IntProperty(name="Rot", default=0)
 
+    # Camera (per-slot)
+    cam_x: IntProperty(name="Cam X", default=0)
+    cam_y: IntProperty(name="Cam Y", default=100)
+    cam_z: IntProperty(name="Cam Z", default=500)
+    cam_rot_x: IntProperty(name="Cam Rot X", default=0)
+    cam_rot_y: IntProperty(name="Cam Rot Y", default=0)
+    cam_captured: BoolProperty(name="Cam Captured", default=False)
+
     # Animations
     idle_anim: IntProperty(name="Idle Anim", default=0)
     idle_start: IntProperty(name="Idle Start", default=0)

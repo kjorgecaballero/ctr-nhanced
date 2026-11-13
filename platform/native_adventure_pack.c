@@ -228,7 +228,7 @@ static const char *KartModelNameForRetail(const char *retailName)
     if (strcmp(retailName, "coco")      == 0) return "selectkartcoco";
     if (strcmp(retailName, "ngin")      == 0) return "selectkartngin";
     if (strcmp(retailName, "n_gin")     == 0) return "selectkartngin";
-    if (strcmp(retailName, "dingodile") == 0) return "selectkartdingo";
+    if (strcmp(retailName, "dingo") == 0) return "selectkartdingo";
     if (strcmp(retailName, "polar")     == 0) return "selectkartpolar";
     if (strcmp(retailName, "pura")      == 0) return "selectkartpura";
     return NULL;
@@ -301,9 +301,7 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
 
                 const char *kartModelName = KartModelNameForRetail(retailName);
                 if (kartModelName == NULL)
-                {
                     continue;
-                }
 
                 struct Model *customKart = NativeCustomRacer_LoadGarageKart(
                     pack->adventureKartSlugs[i], kartModelName);

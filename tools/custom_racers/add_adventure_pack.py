@@ -220,6 +220,23 @@ def main():
     cameras["use_rot"] = captured
     cameras["kart_slots"] = [{"x": s.get("kx", 0), "y": s.get("ky", 0),
                               "z": s.get("kz", 0), "rot_y": s.get("krot", 0)} for s in slots]
+
+    # Per-slot cameras: 40 valores (5 por slot) despues de kart_slots.
+    # NativeAdventurePack_LoadCameras los lee como s_cam_per_slot[8][5].
+    per_slot_cameras = []
+    for s in slots:
+        if s.get("cam_captured"):
+            per_slot_cameras.extend([
+                s.get("cam_x", 0), s.get("cam_y", 100), s.get("cam_z", 500),
+                s.get("cam_rot_x", 0), s.get("cam_rot_y", 0),
+            ])
+        else:
+            per_slot_cameras.extend([
+                cam.get("x", 0), cam.get("y", 100), cam.get("z", 500),
+                cam.get("rot_x", 0), cam.get("rot_y", 0),
+            ])
+    cameras["per_slot_cameras"] = per_slot_cameras
+
     cam_path = os.path.join(dst, "cameras.json")
     has_slot_pos = any(s.get(k, 0) for s in slots for k in ("x", "y", "z", "rot", "kx", "ky", "kz", "krot"))
     if captured or has_slot_pos:

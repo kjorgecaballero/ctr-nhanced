@@ -152,6 +152,17 @@ class NFR_OT_AdventureAssignCam(Operator):
          st.cam_rot_x, st.cam_rot_y) = _camera_to_engine(cam)
         # cam_rot_x = pitch (positivo = mira arriba), cam_rot_y = yaw; ANG 0x1000 = 360
         st.cam_captured = True
+
+        # Guardar tambien en el slot activo (camara por slot)
+        idx = st.active_slot_idx
+        if idx < len(st.slots):
+            slot = st.slots[idx]
+            slot.cam_x = st.cam_x
+            slot.cam_y = st.cam_y
+            slot.cam_z = st.cam_z
+            slot.cam_rot_x = st.cam_rot_x
+            slot.cam_rot_y = st.cam_rot_y
+            slot.cam_captured = True
         self.report({'INFO'},
                     f"Camera captured (engine): X:{st.cam_x} Y:{st.cam_y} Z:{st.cam_z} "
                     f"pitch:{st.cam_rot_x} yaw:{st.cam_rot_y}")
@@ -464,6 +475,9 @@ class NFR_OT_AdventureBuild(Operator):
                 "y": s.pos_y,
                 "z": s.pos_z,
                 "rot": s.pos_rot,
+                "cam_x": s.cam_x, "cam_y": s.cam_y, "cam_z": s.cam_z,
+                "cam_rot_x": s.cam_rot_x, "cam_rot_y": s.cam_rot_y,
+                "cam_captured": 1 if s.cam_captured else 0,
                 "ambient_wav": _clean_path(s.ambient_wav) if s.ambient_wav else "",
                 "sfx": [
                     {"frame": e.frame, "wav": _clean_path(e.wav_path)}
