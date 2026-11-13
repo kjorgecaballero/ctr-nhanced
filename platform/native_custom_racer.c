@@ -4187,7 +4187,7 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
  * D-pad. Stops the current garage VAG and preloads the new character's
  * audio (ambient.vag + sfx_N.vag). If the new character has no
  * ambient.vag, the previous one keeps silent (no retail fallback). */
-struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName)
+struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName, int charID)
 {
     if (slug == NULL || slug[0] == '\0' || retailName == NULL || retailName[0] == '\0')
         return NULL;
@@ -4205,7 +4205,7 @@ struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *ret
 
     ApplyContainerPtrMap(buf, sz);
     ExpandModelHeaders(buf, sz);
-    int cid = NativeCustomRacer_GetCharacterIDFromFolder(slug);
+    int cid = charID;
     if (cid >= NATIVE_CUSTOM_ID_BASE) {
         RegisterModelTextures(cid, buf + 4, NATIVE_SENTINEL_KIND_GARAGE_KART, -1);
     }

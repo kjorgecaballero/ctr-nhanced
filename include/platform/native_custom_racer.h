@@ -243,7 +243,7 @@ void NativeCustomRacer_UpdateGarageAmbients(int currSlot);
  * works. retailName = GET_METADATA(gGarage.garageCharacterIDs[slot])
  * ->name_Debug ("crash", "coco", ...). Returns NULL if the file is
  * missing or cannot be loaded. */
-struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName);
+struct Model *NativeCustomRacer_LoadGarageKart(const char *slug, const char *retailName, int charID);
 
 void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame);
 

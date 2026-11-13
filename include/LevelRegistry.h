@@ -33,6 +33,8 @@ struct LevelDef
         int adventureCharCount;
         char adventureCharSlugs[LEVEL_REGISTRY_ADV_CHAR_COUNT][LEVEL_REGISTRY_ADV_CHAR_NAME];
 
+        char garageOnlySlugs[LEVEL_REGISTRY_ADV_CHAR_COUNT][LEVEL_REGISTRY_ADV_CHAR_NAME];
+        int  garageOnlyRetails[LEVEL_REGISTRY_ADV_CHAR_COUNT];
         /* Optional per-slot custom karts. Empty string = use retail kart. */
         int adventureKartCount;
         char adventureKartSlugs[LEVEL_REGISTRY_ADV_CHAR_COUNT][LEVEL_REGISTRY_ADV_CHAR_NAME];

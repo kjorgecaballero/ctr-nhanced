@@ -71,9 +71,16 @@ static void ResolvePack(void)
     s_packActive = 1;
     s_activePack = pack;    /* must be set BEFORE LoadCameras */
     NativeAdventurePack_LoadCameras();
-    for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++)
-        s_packCharIDs[i] = NativeCustomRacer_GetCharacterIDFromFolder(
-                               pack->adventureCharSlugs[i]);
+    for (int i = 0; i < NATIVE_ADVENTURE_PACK_SLOTS; i++) {
+        if (pack->garageOnlySlugs[i][0] != '\0') {
+            int retailID = pack->garageOnlyRetails[i];
+            s_packCharIDs[i] = NativeCustomRacer_RegisterGarageOnly(
+                                   pack->garageOnlySlugs[i], retailID);
+        } else {
+            s_packCharIDs[i] = NativeCustomRacer_GetCharacterIDFromFolder(
+                                   pack->adventureCharSlugs[i]);
+        }
+    }
 
     fprintf(stderr, "[AdventurePack] active: id='%s' name='%s'\n",
             pack->id, pack->name);
@@ -303,11 +310,10 @@ void NativeAdventurePack_ApplyCustomRacers(struct Level *lev)
                     continue;
 
                 const char *kartModelName = KartModelNameForRetail(retailName);
-                if (kartModelName == NULL)
-                    continue;
+                if (kartModelName == NULL) kartModelName = "selectkart";
 
                 struct Model *customKart = NativeCustomRacer_LoadGarageKart(
-                    pack->adventureKartSlugs[i], kartModelName);
+                    pack->adventureKartSlugs[i], kartModelName, s_packCharIDs[i]);
                 if (customKart == NULL)
                     continue;
 

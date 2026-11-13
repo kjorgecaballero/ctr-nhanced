@@ -422,7 +422,12 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 					data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
                 {
                         int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
-                        if (packID >= 0) data.characterIDs[0] = (s16)packID;
+                        if (packID >= 0) {
+                            if (IS_NATIVE_GARAGE_ONLY_ID(packID))
+                                data.characterIDs[0] = NativeCustomRacer_GetGarageOnlyRetailID(packID);
+                            else
+                                data.characterIDs[0] = (s16)packID;
+                        }
                 }
 					sdata->advProgress.characterID = data.characterIDs[0];
 
@@ -523,7 +528,12 @@ update_garage_camera:
 			data.characterIDs[0] = gGarage.garageCharacterIDs[currSelectIndex];
                 {
                         int packID = NativeAdventurePack_GetCharacterID(currSelectIndex);
-                        if (packID >= 0) data.characterIDs[0] = (s16)packID;
+                        if (packID >= 0) {
+                            if (IS_NATIVE_GARAGE_ONLY_ID(packID))
+                                data.characterIDs[0] = NativeCustomRacer_GetGarageOnlyRetailID(packID);
+                            else
+                                data.characterIDs[0] = (s16)packID;
+                        }
                 }
 			sdata->advProgress.characterID = data.characterIDs[0];
 

@@ -767,6 +767,19 @@ static int LevelRegistry_ParseManifest(const char *folder, const u8 *data, int s
                 }
                 level->adventureKartCount = n;
             }
+            else if (strcmp(key, "garage_only_slug") == 0)
+            {
+                LevelJson_ReadStringArray(&json, level->garageOnlySlugs, LEVEL_REGISTRY_ADV_CHAR_COUNT);
+            }
+            else if (strcmp(key, "garage_only_retail") == 0)
+            {
+                char tmp[LEVEL_REGISTRY_ADV_CHAR_COUNT][LEVEL_REGISTRY_ADV_CHAR_NAME];
+                int n = LevelJson_ReadStringArray(&json, tmp, LEVEL_REGISTRY_ADV_CHAR_COUNT);
+                if (n > 0) {
+                    for (int i = 0; i < n && i < LEVEL_REGISTRY_ADV_CHAR_COUNT; i++)
+                        level->garageOnlyRetails[i] = atoi(tmp[i]);
+                }
+            }
             else if (strcmp(key, "idle_anim") == 0) {
                 int v = 0;
                 if (LevelJson_ReadInt(&json, &v)) {
