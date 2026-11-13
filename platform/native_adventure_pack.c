@@ -53,6 +53,8 @@ static const struct LevelDef *ResolvePackFromSetting(void)
 
 static void ResolvePack(void)
 {
+    NativeCustomRacer_ResetGarageOnly();   /* wipe garage-only before re-resolving */
+
     s_packActive = 0;
     s_activePack = NULL;   /* must reset: otherwise RETAIL after a custom pack
                             * leaves a stale pointer that GetOverrideForBigfileEntry

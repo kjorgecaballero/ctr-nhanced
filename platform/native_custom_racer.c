@@ -187,6 +187,85 @@ static struct MetaDataCHAR s_metaBackup[16];
 struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
 
+
+/* --- Garage-only side table -----------------------------------------
+ * Stored outside s_customMeta so it survives ReloadRoster's memset.
+ * ApplyGarageOnlyMeta() re-populates the s_customMeta[] mirror after
+ * every reset. Kept minimal on purpose: name_Debug = folder slug (for
+ * GetFolder -> LoadModel), iconID = -1 (never in char-select).
+ * All identity data comes from GET_METADATA -> data.MetaDataCharacters[retailID]. */
+static struct {
+    int  used;
+    int  retailID;
+    char slug[64];
+} s_garageOnly[NATIVE_GARAGE_ONLY_COUNT];
+
+static void ApplyGarageOnlyMeta(void)
+{
+    for (int i = 0; i < NATIVE_GARAGE_ONLY_COUNT; i++) {
+        if (!s_garageOnly[i].used) continue;
+        int idx = NATIVE_GARAGE_ONLY_BASE - NATIVE_CUSTOM_ID_BASE + i;  /* 200 + i */
+        if (idx < 0 || idx >= NATIVE_CUSTOM_COUNT) continue;
+
+        s_customMeta[idx].name_Debug = s_garageOnly[i].slug;
+        s_customMeta[idx].iconID     = (s16)-1;
+    }
+}
+
+int NativeCustomRacer_RegisterGarageOnly(const char *slug, int retailID)
+{
+    if (!slug || !slug[0] || retailID < 0 || retailID >= 0x10)
+        return -1;
+
+    for (int i = 0; i < NATIVE_GARAGE_ONLY_COUNT; i++) {
+        if (s_garageOnly[i].used &&
+            s_garageOnly[i].retailID == retailID &&
+            strcmp(s_garageOnly[i].slug, slug) == 0)
+            return NATIVE_GARAGE_ONLY_BASE + i;
+    }
+
+    for (int i = 0; i < NATIVE_GARAGE_ONLY_COUNT; i++) {
+        if (!s_garageOnly[i].used) {
+            s_garageOnly[i].used     = 1;
+            s_garageOnly[i].retailID = retailID;
+            strncpy(s_garageOnly[i].slug, slug, sizeof(s_garageOnly[i].slug) - 1);
+            s_garageOnly[i].slug[sizeof(s_garageOnly[i].slug) - 1] = '\0';
+            ApplyGarageOnlyMeta();
+            fprintf(stderr,
+                    "[GarageOnly] '%s' retail=%d -> id=%d\n",
+                    slug, retailID, NATIVE_GARAGE_ONLY_BASE + i);
+            return NATIVE_GARAGE_ONLY_BASE + i;
+        }
+    }
+    fprintf(stderr, "[GarageOnly] FULL (%d): cannot register '%s'\n",
+            NATIVE_GARAGE_ONLY_COUNT, slug);
+    return -1;
+}
+
+void NativeCustomRacer_ResetGarageOnly(void)
+{
+    memset(s_garageOnly, 0, sizeof(s_garageOnly));
+    for (int i = 0; i < NATIVE_GARAGE_ONLY_COUNT; i++) {
+        int idx = NATIVE_GARAGE_ONLY_BASE - NATIVE_CUSTOM_ID_BASE + i;
+        if (idx >= 0 && idx < NATIVE_CUSTOM_COUNT)
+            memset(&s_customMeta[idx], 0, sizeof(s_customMeta[idx]));
+    }
+}
+
+int NativeCustomRacer_GetGarageOnlyRetailID(int id)
+{
+    if (!IS_NATIVE_GARAGE_ONLY_ID(id)) return id;
+    int i = id - NATIVE_GARAGE_ONLY_BASE;
+    return s_garageOnly[i].used ? s_garageOnly[i].retailID : id;
+}
+
+const char *NativeCustomRacer_GetGarageOnlySlug(int id)
+{
+    if (!IS_NATIVE_GARAGE_ONLY_ID(id)) return NULL;
+    int i = id - NATIVE_GARAGE_ONLY_BASE;
+    return s_garageOnly[i].used ? s_garageOnly[i].slug : NULL;
+}
+
 /* Per-custom display name (roster.txt "Display Name" field). Kept in BSS
  * so UI can read it without touching MetaDataCHAR (static_asserts) or
  * name_Debug (used by GetFolder / model lookup). Empty = unset. */
@@ -574,6 +653,7 @@ void NativeCustomRacer_ReloadRoster(void)
     s_rosterLoaded = 1;
 
     memset(s_customMeta, 0, sizeof(s_customMeta));
+    ApplyGarageOnlyMeta();   /* re-populate garage-only entries after memset */
     memset(s_customHasColor, 0, sizeof(s_customHasColor));
     memset(s_customMaskIsGoodGuy, 1, sizeof(s_customMaskIsGoodGuy));  /* 1 = good */
     memset(s_customMaskIsCustom, 0, sizeof(s_customMaskIsCustom));

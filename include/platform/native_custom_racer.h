@@ -19,7 +19,33 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
  *   IDs 16+   -> s_customMeta.
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
-#define NATIVE_CUSTOM_COUNT   200   /* 128 (pages 1-8, slots 0-15)
+
+/* ---------------------------------------------------------------------
+ * Garage-only: retail chars with a custom HD garage model, NOT in roster.
+ * Live INSIDE the custom namespace (216..255) so every per-custom array
+ * (s_customMeta, sentinel maps, s_customRot, garage anims, ...) works
+ * unchanged.
+ *
+ *   s_customMeta[idx].name_Debug = folder slug  -> GetFolder(216+) returns
+ *       "ntropy" -> LoadModel loads racers/ntropy/garage/model.ctr
+ *   s_customMeta[idx].iconID    = -1            -> never in char-select
+ *   GET_METADATA(216+)          -> data.MetaDataCharacters[retailID]
+ *       (name, stats, engine, color, voice come from the retail char)
+ *
+ * Registered by NativeAdventurePack_ResolvePack from level.json.
+ * Cleared on NativeAdventurePack_OnGarageReset.
+ * --------------------------------------------------------------------- */
+#define NATIVE_GARAGE_ONLY_BASE   (NATIVE_CUSTOM_ID_BASE + 200)  /* 216 */
+#define NATIVE_GARAGE_ONLY_COUNT  40
+#define IS_NATIVE_GARAGE_ONLY_ID(id)                                     \
+    ((id) >= NATIVE_GARAGE_ONLY_BASE &&                                  \
+     (id) <  (NATIVE_GARAGE_ONLY_BASE + NATIVE_GARAGE_ONLY_COUNT))
+
+int  NativeCustomRacer_RegisterGarageOnly(const char *slug, int retailID);
+void NativeCustomRacer_ResetGarageOnly(void);
+int  NativeCustomRacer_GetGarageOnlyRetailID(int id);    /* no-op si no garage-only */
+const char *NativeCustomRacer_GetGarageOnlySlug(int id); /* NULL si no garage-only */
+#define NATIVE_CUSTOM_COUNT   240   /* 128 (pages 1-8, slots 0-15)
                                      * + 8 (page 0, slots 16-23)
                                      * + 64 (pages 1-8, slots 16-23) */
 
@@ -37,11 +63,13 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
 extern struct MetaDataCHAR s_customMeta[NATIVE_CUSTOM_COUNT];
 extern s16                 s_customMenuID[NATIVE_CUSTOM_COUNT];
 
-#define GET_METADATA(id)                                                      \
-    ((((id) >= NATIVE_CUSTOM_ID_BASE) &&                                      \
-      ((id) <  (NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)))                \
-        ? &s_customMeta[(id) - NATIVE_CUSTOM_ID_BASE]                         \
-        : &data.MetaDataCharacters[(id)])
+#define GET_METADATA(id)                                                         \
+    (IS_NATIVE_GARAGE_ONLY_ID(id)                                                \
+        ? &data.MetaDataCharacters[NativeCustomRacer_GetGarageOnlyRetailID(id)]  \
+        : (((id) >= NATIVE_CUSTOM_ID_BASE &&                                     \
+            (id) <  NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)                 \
+             ? &s_customMeta[(id) - NATIVE_CUSTOM_ID_BASE]                       \
+             : &data.MetaDataCharacters[(id)]))
 
 /* Grid slot (0..15) -> enum Characters. Must match the permutation in
  * game/230/D230.c characterSelectMeta1P2P, which is how the game maps
