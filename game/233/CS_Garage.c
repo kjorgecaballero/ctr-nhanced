@@ -65,6 +65,10 @@ static int s_garageForceSnap = 0;
 static int s_pendingAmbientStart = 0;
 static int s_garagePackTimer = 0;
 static char s_garagePackName[64] = "";
+static int s_packSelectOpen = 0;
+static int s_packSelectCur = 0;
+static int s_packSelectScroll = 0;
+
 extern const char *NativeSettings_GetGaragePack(void);
 extern void NativeSettings_SetGaragePack(const char *id);
 extern int LevelRegistry_GetAdventureGarageCount(void);
@@ -127,6 +131,85 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
         s_dbg_lastTap = sdata->AnyPlayerTap;
     }
 u32 currSelectIndex = sdata->advCharSelectIndex_curr;
+
+    if (sdata->AnyPlayerTap & BTN_START) {
+        s_packSelectOpen = !s_packSelectOpen;
+        fprintf(stderr, "[MENU-TOGGLE] open=%d\n", s_packSelectOpen);
+        s_packSelectCur = 0;
+    }
+
+        if (s_packSelectOpen) {
+            fprintf(stderr, "[MENU-DRAW] open=%d total=%d\n", s_packSelectOpen, LevelRegistry_GetAdventureGarageCount()+1);
+            
+            struct GameTracker *gGT = sdata->gGT;
+            u32 *ot = gGT->backBuffer->otMem.uiOT;
+            int total = LevelRegistry_GetAdventureGarageCount() + 1;
+            
+            // Title
+            DecalFont_DrawLine("SELECT GARAGE", 256, 26, FONT_BIG, JUSTIFY_CENTER | ORANGE);
+            
+            // List of packs
+            int max_visible = 6;
+            // Ajustar scroll
+            if (s_packSelectCur < s_packSelectScroll) s_packSelectScroll = s_packSelectCur;
+            if (s_packSelectCur >= s_packSelectScroll + max_visible) s_packSelectScroll = s_packSelectCur - max_visible + 1;
+            
+            int start_r = s_packSelectScroll;
+            int end_r = start_r + max_visible;
+            if (end_r > total) end_r = total;
+
+            for (int r = start_r; r < end_r; r++) {
+                int y = 58 + (r - start_r) * 18;
+                const char *name = (r < total - 1) ? LevelRegistry_GetAdventureGarageByIndex(r)->name : "RETAIL";
+                DecalFont_DrawLine(name, Widescreen_ScaleAboutX(76, 256), y, FONT_SMALL, ORANGE);
+            }
+            
+            // Indicadores de scroll
+            if (s_packSelectScroll > 0) {
+                DecalFont_DrawLine("^", 46, 58, FONT_SMALL, ORANGE);
+            }
+            if (s_packSelectScroll + max_visible < total) {
+                DecalFont_DrawLine("v", 46, 58 + (max_visible-1)*18, FONT_SMALL, ORANGE);
+            }
+            
+            // Highlight
+            int origW_cur = 364;
+            int compW_cur = CTR_WIDESCREEN_SCALE_X(origW_cur);
+            int real_y = 58 + (s_packSelectCur - s_packSelectScroll) * 18;
+            RECT cur = {74 + (origW_cur - compW_cur) / 2, real_y - 3, compW_cur, 14};
+            CTR_Box_DrawClearBox(&cur, &sdata->menuRowHighlight_Normal, TRANS_50_DECAL, ot);
+            
+            // Separator
+            int origW_sep = 380;
+            int compW_sep = CTR_WIDESCREEN_SCALE_X(origW_sep);
+            RECT sep = {66 + (origW_sep - compW_sep) / 2, 43, compW_sep, 2};
+            Color c;
+            ColorCode_SetPacked(&c, sdata->battleSetup_Color_UI_1);
+            RECTMENU_DrawOuterRect_Edge(&sep, c, 0x20, ot);
+            
+            // Background box
+            int origW_bg = 400;
+            int compW_bg = CTR_WIDESCREEN_SCALE_X(origW_bg);
+            int bgHeight = 20 + (total > 6 ? 6 : total) * 18 + 20;
+            RECT bg = {56 + (origW_bg - compW_bg) / 2, 20, compW_bg, bgHeight};
+            RECTMENU_DrawInnerRect(&bg, 4, ot);
+        }
+    if (s_packSelectOpen) {
+            fprintf(stderr, "[MENU-INPUT] open=%d\n", s_packSelectOpen);
+        int total = LevelRegistry_GetAdventureGarageCount() + 1;
+        if (sdata->AnyPlayerTap & BTN_DOWN) { s_packSelectCur++; if (s_packSelectCur >= total) s_packSelectCur = 0; }
+        if (sdata->AnyPlayerTap & BTN_UP)   { s_packSelectCur--; if (s_packSelectCur < 0) s_packSelectCur = total - 1; }
+        if (sdata->AnyPlayerTap & BTN_TRIANGLE) { s_packSelectOpen = 0; }
+        if (sdata->AnyPlayerTap & BTN_CROSS) {
+            if (s_packSelectCur == total - 1) NativeSettings_SetGaragePack("");
+            else NativeSettings_SetGaragePack(LevelRegistry_GetAdventureGarageByIndex(s_packSelectCur)->id);
+            extern void NativeAdventurePack_ActivateForLoad(void);
+            NativeAdventurePack_ActivateForLoad();
+            MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
+            s_packSelectOpen = 0;
+        }
+        return;
+    }
 
     if ((sdata->AnyPlayerTap & BTN_L1) || (sdata->AnyPlayerTap & BTN_R1))
     {
@@ -242,6 +325,7 @@ u32 currSelectIndex = sdata->advCharSelectIndex_curr;
         }
 	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_ACCEL_Y, FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
 	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_TURN_Y, FONT_BIG, JUSTIFY_RIGHT | BLUE);
+
 
 	int engineID = MDC->engineID;
 
