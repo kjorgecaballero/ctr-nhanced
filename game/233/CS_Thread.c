@@ -1,4 +1,8 @@
 #include <common.h>
+
+extern int NativeGarage_IsTransitioning(void);
+extern int NativeGarage_WasCustom(void);
+extern int NativeGarage_IsCustom(void);
 #include <platform/native_custom_racer.h>
 
 struct CSThreadParentFrameScratch
@@ -693,8 +697,10 @@ processOpcode:
 		if (instance != 0)
 		{
 			/* Bloqueo total en garaje custom: no queremos yoyos, cajas, ni nada retail. */
-			if (sdata->gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive()) {
-				break;
+			if (sdata->gGT->levelID == ADVENTURE_GARAGE && instance != NULL) {
+				extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+				if (NativeCustomRacer_IsGarageModel(instance->model))
+					break;
 			}
 
 			/* Custom podium dance: suppress retail FX spawns. The
@@ -1498,9 +1504,10 @@ void CS_Thread_Particles(struct Thread *t)
 	}
 
 	/* Bloqueo total de partículas retail en garaje custom. */
-	if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
-	    NativeLevelTextures_IsCustomLevelActive()) {
-		return;
+	if (sdata->gGT->levelID == ADVENTURE_GARAGE && t->inst != NULL) {
+		extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+		if (NativeCustomRacer_IsGarageModel(t->inst->model))
+			return;
 	}
 
 	particleID = cs->particleID;
@@ -1569,8 +1576,10 @@ void CS_Thread_InterpolateFramesMS(struct Thread *t)
 
 	/* Garaje custom: bloquear el "hilo" del yoyo de Crash (linea 2D
 	 * semi-transparente que el script retail dibuja entre dos huesos). */
-	if (sdata->gGT->levelID == ADVENTURE_GARAGE && NativeLevelTextures_IsCustomLevelActive()) {
-		return;
+	if (sdata->gGT->levelID == ADVENTURE_GARAGE && t->inst != NULL) {
+		extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+		if (NativeCustomRacer_IsGarageModel(t->inst->model))
+			return;
 	}
 	struct Instance *inst = t->inst;
 	struct PrimMem *primMem;

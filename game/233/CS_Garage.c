@@ -58,7 +58,11 @@ static int s_garagePackTimer = 0;
 static char s_garagePackName[64] = "";
 static int s_targetGarageSlot = -1;
 static int s_garageTransition = 0;
+static int s_garageWasCustom = 0;
+static int s_garageIsCustom = 0;
 int NativeGarage_IsTransitioning(void) { return s_garageTransition; }
+int NativeGarage_WasCustom(void) { return s_garageWasCustom; }
+int NativeGarage_IsCustom(void) { return s_garageIsCustom; }
 
 extern const char *NativeSettings_GetGaragePack(void);
 extern void NativeSettings_SetGaragePack(const char *id);
@@ -237,6 +241,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
         if (sdata->AnyPlayerTap & (BTN_TRIANGLE | BTN_SQUARE_one)) { s_menu_open = 0; }
 
         if (sdata->AnyPlayerTap & BTN_CROSS) {
+            s_garageWasCustom = (NativeSettings_GetGaragePack()[0] != '\0') ? 1 : 0;
             if (s_menu_sel_row == count) {
                 NativeSettings_SetGaragePack("");
                 s_targetGarageSlot = (s_menu_sel_col == 0) ? -1 : s_menu_sel_col - 1;
@@ -285,6 +290,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
         if (idx < 0) idx = total - 1;
         if (idx >= total) idx = 0;
 
+        s_garageWasCustom = (NativeSettings_GetGaragePack()[0] != '\0') ? 1 : 0;
         if (idx == count) {
             fprintf(stderr, "[L1R1] Cambiando a: RETAIL\n");
             NativeSettings_SetGaragePack("");
@@ -870,6 +876,7 @@ void CS_Garage_Init(void)
     s_pendingAmbientStart = 1;
     s_pendingRetailAudioStart = 1;
     s_garageTransition = 0;
+    s_garageIsCustom = (NativeSettings_GetGaragePack()[0] != '\0') ? 1 : 0;
 
 	CS_Garage_ZoomOut(0);
 }
