@@ -63,6 +63,13 @@ static int s_garageForceSnap = 0;
  * the first MenuProc tick (Audio_SetState_Safe from ZoomOut
  * would otherwise kill the voices at the next audio tick). */
 static int s_pendingAmbientStart = 0;
+static int s_garagePackTimer = 0;
+static char s_garagePackName[64] = "";
+extern const char *NativeSettings_GetGaragePack(void);
+extern void NativeSettings_SetGaragePack(const char *id);
+extern int LevelRegistry_GetAdventureGarageCount(void);
+extern const struct LevelDef *LevelRegistry_GetAdventureGarageByIndex(int index);
+extern void MainRaceTrack_RequestLoad(int levelID);
 
 
 void CS_Garage_ZoomOut(s16 zoomState)
@@ -111,7 +118,59 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	u32 statNamePosX;
 	u32 statBarPosX;
 
-	u32 currSelectIndex = sdata->advCharSelectIndex_curr;
+	
+    static u32 s_dbg_lastTap = 0;
+    if (sdata->AnyPlayerTap != s_dbg_lastTap) {
+        fprintf(stderr, "[BTN] tap=0x%08X hold=0x%08X", sdata->AnyPlayerTap, sdata->AnyPlayerHold);
+        fprintf(stderr, " L1=0x%X R1=0x%X", BTN_L1, BTN_R1);
+        fprintf(stderr, "\n");
+        s_dbg_lastTap = sdata->AnyPlayerTap;
+    }
+u32 currSelectIndex = sdata->advCharSelectIndex_curr;
+
+    if ((sdata->AnyPlayerTap & BTN_L1) || (sdata->AnyPlayerTap & BTN_R1))
+    {
+        fprintf(stderr, "[L1R1] Detectado!\n");
+        int count = LevelRegistry_GetAdventureGarageCount();
+        int total = count + 1; // +1 para Retail
+        const char *curr = NativeSettings_GetGaragePack();
+        int idx = -1;
+
+        if (curr[0] == '\0') {
+            idx = count; // Estamos en Retail
+        } else {
+            for (int i = 0; i < count; i++) {
+                if (strcmp(LevelRegistry_GetAdventureGarageByIndex(i)->id, curr) == 0) {
+                    idx = i;
+                    break;
+                }
+            }
+        }
+
+        if (idx == -1) idx = 0; // Fallback
+
+        if (sdata->AnyPlayerTap & BTN_R1) idx++; else idx--;
+        if (idx < 0) idx = total - 1;
+        if (idx >= total) idx = 0;
+
+        if (idx == count) {
+            fprintf(stderr, "[L1R1] Cambiando a: RETAIL\n");
+            NativeSettings_SetGaragePack("");
+            strncpy(s_garagePackName, "RETAIL", 63);
+        } else {
+            const struct LevelDef *n = LevelRegistry_GetAdventureGarageByIndex(idx);
+            fprintf(stderr, "[L1R1] Cambiando a: %s\n", n->name);
+            NativeSettings_SetGaragePack(n->id);
+            strncpy(s_garagePackName, n->name, 63);
+        }
+
+        s_garagePackTimer = 120;
+        extern void NativeAdventurePack_ActivateForLoad(void);
+        NativeAdventurePack_ActivateForLoad(); // Crucial: avisa al LevelRegistry
+        MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
+        return;
+    }
+
 	struct GameTracker *gGT = sdata->gGT;
 	struct PrimMem *primMem = &gGT->backBuffer->primMem;
 	s16 currCharacterID = gGarage.garageCharacterIDs[currSelectIndex];
@@ -177,6 +236,10 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	}
 
 	DecalFont_DrawLine(sdata->lngStrings[LNG_SPEED], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_SPEED_Y, FONT_BIG, JUSTIFY_RIGHT | ORANGE_RED);
+        if (s_garagePackTimer > 0) {
+            s_garagePackTimer--;
+            DecalFont_DrawLine(s_garagePackName, 256, 160, FONT_BIG, JUSTIFY_CENTER | WHITE);
+        }
 	DecalFont_DrawLine(sdata->lngStrings[LNG_ACCEL], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_ACCEL_Y, FONT_BIG, JUSTIFY_RIGHT | LIME_GREEN);
 	DecalFont_DrawLine(sdata->lngStrings[LNG_TURN], Widescreen_ScaleAboutX(statNamePosX, 256), GARAGE_STAT_NAME_TURN_Y, FONT_BIG, JUSTIFY_RIGHT | BLUE);
 
