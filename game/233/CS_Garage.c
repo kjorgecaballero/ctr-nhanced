@@ -53,9 +53,12 @@ enum
 
 static int s_garageForceSnap = 0;
 static int s_pendingAmbientStart = 0;
+static int s_pendingRetailAudioStart = 0;
 static int s_garagePackTimer = 0;
 static char s_garagePackName[64] = "";
 static int s_targetGarageSlot = -1;
+static int s_garageTransition = 0;
+int NativeGarage_IsTransitioning(void) { return s_garageTransition; }
 
 extern const char *NativeSettings_GetGaragePack(void);
 extern void NativeSettings_SetGaragePack(const char *id);
@@ -87,7 +90,7 @@ void CS_Garage_ZoomOut(s16 zoomState)
 	{
 		Garage_Init();
 		Garage_Enter(sdata->advCharSelectIndex_curr);
-		Audio_SetState_Safe(AUDIO_GARAGE);
+		s_pendingRetailAudioStart = 1;
 	}
 }
 
@@ -99,6 +102,11 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 	      NativeCustomRacer_UpdateGarageAmbients((int)sdata->advCharSelectIndex_curr); }
 	    fprintf(stderr, "[AmbientDiag] MenuProc: deferred ambient start\n");
 	}
+    	if (s_pendingRetailAudioStart) {
+    	    s_pendingRetailAudioStart = 0;
+    	    Audio_SetState_Safe(AUDIO_GARAGE);
+    	    fprintf(stderr, "[AudioDiag] MenuProc: deferred retail audio start\n");
+    	}
 	(void)menu;
 	s16 garageFrames;
 	s16 *statBarLength;
@@ -238,6 +246,13 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
             }
             extern void NativeAdventurePack_ActivateForLoad(void);
             NativeAdventurePack_ActivateForLoad();
+            extern void NativeCustomRacer_ResetGarageAudio(void);
+            NativeCustomRacer_FreeGarageVRAM();
+            extern void Music_Adjust(u32, int, void*, u32);
+
+            Music_Adjust(0, 0, 0, 0);
+
+            s_garageTransition = 1;
             MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
             s_menu_open = 0;
         }
@@ -283,7 +298,14 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 
         s_garagePackTimer = 120;
         extern void NativeAdventurePack_ActivateForLoad(void);
-        NativeAdventurePack_ActivateForLoad(); // Crucial: avisa al LevelRegistry
+        NativeAdventurePack_ActivateForLoad();
+        extern void NativeCustomRacer_ResetGarageAudio(void);
+        NativeCustomRacer_FreeGarageVRAM();
+        extern void Music_Adjust(u32, int, void*, u32);
+
+        Music_Adjust(0, 0, 0, 0);
+
+        s_garageTransition = 1;
         MainRaceTrack_RequestLoad(ADVENTURE_GARAGE);
         return;
     }
@@ -846,6 +868,8 @@ void CS_Garage_Init(void)
     sdata->advCharSelectIndex_prev = 0;
     s_garageForceSnap = 1;
     s_pendingAmbientStart = 1;
+    s_pendingRetailAudioStart = 1;
+    s_garageTransition = 0;
 
 	CS_Garage_ZoomOut(0);
 }

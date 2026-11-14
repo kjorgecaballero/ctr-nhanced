@@ -4023,7 +4023,7 @@ static void LoadGarageSfxSidecar(int idx, const char *folder)
     s_garageSfxCount[idx] = (u8)count;
 }
 
-void NativeCustomRacer_ResetGarageAudio(void)
+void NativeCustomRacer_FreeGarageVRAM(void)
 {
     // --- FIX VRAM LEAK: Liberar texturas del garaje y kart al salir ---
     for (int i = 0; i < NATIVE_CUSTOM_COUNT; i++) {
@@ -4040,16 +4040,16 @@ void NativeCustomRacer_ResetGarageAudio(void)
     }
     memset(s_garageSentinelTexMap, 0xFF, sizeof(s_garageSentinelTexMap));
     memset(s_garageKartSentinelTexMap, 0xFF, sizeof(s_garageKartSentinelTexMap));
-    // -------------------------------------------------------------------
+}
+
+void NativeCustomRacer_ResetGarageAudio(void)
+{
+    NativeCustomRacer_FreeGarageVRAM();  // idempotente, no-op si ya se libero
 
     NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_LEFT);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_RIGHT);
-    memset(s_garageSfxSpuAddr, 0, sizeof(s_garageSfxSpuAddr));
-    memset(s_garageSfxPrevFrame, 0xFF, sizeof(s_garageSfxPrevFrame));
-    memset(s_garageSfxCooldown, 0, sizeof(s_garageSfxCooldown));
-    s_garageSfxSpuNext = NATIVE_GARAGE_SFX_SPU_BASE;
     s_garageAmbientAddr = 0;
 }
 

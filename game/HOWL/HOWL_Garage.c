@@ -11,6 +11,8 @@ void Garage_Init(void)
 	 * is handled in Garage_LerpFX(). */
 	{
 		extern int NativeLevelTextures_IsCustomLevelActive(void);
+		extern int NativeGarage_IsTransitioning(void);
+		if (NativeGarage_IsTransitioning()) return;
 		if (!(sdata->gGT->levelID == ADVENTURE_GARAGE &&
 		      NativeLevelTextures_IsCustomLevelActive()))
 		{
@@ -137,6 +139,8 @@ void Garage_LerpFX(void)
      * a 3D positional SFX that doesn't exist in the custom LEV). The
      * custom ambient VAG (if any) is managed by PreloadGarageSfx. */
     extern int NativeLevelTextures_IsCustomLevelActive(void);
+    extern int NativeGarage_IsTransitioning(void);
+    if (NativeGarage_IsTransitioning()) return;
     if (sdata->gGT->levelID == ADVENTURE_GARAGE &&
         NativeLevelTextures_IsCustomLevelActive())
         return;
