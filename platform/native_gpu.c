@@ -988,7 +988,30 @@ internal void AddSplit(bool semiTrans, bool textured, bool framebufferFeedback)
 		// Sentinel CLUT: sample from a dedicated OpenGL texture instead of VRAM.
 		const u16 sentinelIdx = effClut & 0x7FFF;
 		u8 sentinelSrc = NativeGpu_GetSrcLookup(sentinelIdx);
-		if (sentinelSrc == 0 || sentinelSrc == 1)
+		extern TextureID NativeRenderer_GetCharVramTex(u32 slot, int sub);
+		extern TextureID NativeRenderer_GetCustomVramLevel(void);
+		if (sentinelSrc >= 2 && sentinelSrc < 2 + 16 * 5)
+		{
+			/* Per-character raw VRAM (Fase 2+): src = 2 + slot*5 + sub */
+			u32 _pack = sentinelSrc - 2;
+			u32 _slot = _pack / 5;
+			int _sub  = _pack % 5;
+			textureId = NativeRenderer_GetCharVramTex(_slot, _sub);
+			if (textureId == 0) {
+				/* src >= 2 but no texture: fallback to level so nothing renders garbage */
+				textureId = NativeRenderer_GetCustomVramLevel();
+			}
+			int sp_mode = (tpage >> 7) & 3;
+			texFormat = (sp_mode == 0) ? TF_4_BIT : (sp_mode == 1) ? TF_8_BIT : TF_16_BIT;
+			overrideW = 1024;
+			overrideH = 512;
+			psxTexturedSemiTrans = semiTrans;
+			blendMode = semiTrans ? GET_TPAGE_BLEND(tpage) : BM_NONE;
+			psxTextureOutputSTP = true;
+			psxKeepTextureAlpha = false;
+			/* TODO Fase 2: per-char clut lookup */
+		}
+		else if (sentinelSrc == 0 || sentinelSrc == 1)
 		{
 			int sp_mode = (tpage >> 7) & 3;
 			texFormat = (sp_mode == 0) ? TF_4_BIT : (sp_mode == 1) ? TF_8_BIT : TF_16_BIT;

@@ -189,6 +189,70 @@ void NativeRenderer_UploadCustomVramModels(const u16 *vv, int w, int h)
 TextureID NativeRenderer_GetCustomVramLevel(void) { return s_customVramLevel; }
 TextureID NativeRenderer_GetCustomVramModels(void) { return s_customVramModels; }
 
+/* ====================================================================
+ * Raw VRAM per-character pool (Fase 1: INERT, gated by CTR_RAW_CHARS=1)
+ * 16 LRU slots x 5 sub-slots (body0, body1_overflow, kart, items, dance+mask)
+ * ==================================================================== */
+#define RAWCHAR_POOL_SLOTS   16
+#define RAWCHAR_SUBSLOTS     5
+
+static TextureID s_charVramTex[RAWCHAR_POOL_SLOTS][RAWCHAR_SUBSLOTS];
+static int       s_charVramCharID[RAWCHAR_POOL_SLOTS];
+static u32       s_charVramLastUse[RAWCHAR_POOL_SLOTS];
+static int       s_charVramInit = 0;
+
+static void EnsureCharVramInit_(void) {
+    if (!s_charVramInit) {
+        for (int i = 0; i < RAWCHAR_POOL_SLOTS; i++) s_charVramCharID[i] = -1;
+        s_charVramInit = 1;
+    }
+}
+
+int NativeRenderer_IsRawCharsEnabled(void) {
+    static int s_enabled = -1;
+    if (s_enabled < 0) {
+        const char *e = getenv("CTR_RAW_CHARS");
+        s_enabled = (e && e[0] == '1') ? 1 : 0;
+    }
+    return s_enabled;
+}
+
+void NativeRenderer_ReleaseCharVram(u32 slot);
+
+u32 NativeRenderer_AcquireCharVram(int charID) {
+    EnsureCharVramInit_();
+    for (u32 i = 0; i < RAWCHAR_POOL_SLOTS; i++)
+        if (s_charVramCharID[i] == charID) { s_charVramLastUse[i] = s_dbgFrame; return i; }
+    for (u32 i = 0; i < RAWCHAR_POOL_SLOTS; i++)
+        if (s_charVramCharID[i] == -1) {
+            s_charVramCharID[i] = charID; s_charVramLastUse[i] = s_dbgFrame; return i;
+        }
+    u32 oldest = 0;
+    for (u32 i = 1; i < RAWCHAR_POOL_SLOTS; i++)
+        if (s_charVramLastUse[i] < s_charVramLastUse[oldest]) oldest = i;
+    NativeRenderer_ReleaseCharVram(oldest);
+    s_charVramCharID[oldest] = charID; s_charVramLastUse[oldest] = s_dbgFrame;
+    return oldest;
+}
+
+TextureID NativeRenderer_GetCharVramTex(u32 slot, int sub) {
+    if (slot >= RAWCHAR_POOL_SLOTS || sub < 0 || sub >= RAWCHAR_SUBSLOTS) return 0;
+    return s_charVramTex[slot][sub];
+}
+
+void NativeRenderer_UploadCharVram(u32 slot, int sub, const u16 *vv, int w, int h) {
+    if (slot >= RAWCHAR_POOL_SLOTS || sub < 0 || sub >= RAWCHAR_SUBSLOTS) return;
+    UploadVram_(&s_charVramTex[slot][sub], vv, w, h, "char");
+}
+
+void NativeRenderer_ReleaseCharVram(u32 slot) {
+    if (slot >= RAWCHAR_POOL_SLOTS) return;
+    for (int s = 0; s < RAWCHAR_SUBSLOTS; s++) {
+        if (s_charVramTex[slot][s]) { glDeleteTextures(1, &s_charVramTex[slot][s]); s_charVramTex[slot][s] = 0; }
+    }
+    s_charVramCharID[slot] = -1;
+}
+
 int g_windowWidth = 0;
 int g_windowHeight = 0;
 
