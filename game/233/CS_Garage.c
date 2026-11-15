@@ -136,6 +136,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
 
     if (!s_menu_open && (sdata->AnyPlayerTap & BTN_START)) {
         s_menu_open = 1;
+        OtherFX_Play(1, 1);
         s_menu_sel_row = 0;
         s_menu_sel_col = 0;
         s_menu_scroll = 0;
@@ -232,15 +233,16 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
             max_col = 8;
         }
 
-        if (sdata->AnyPlayerTap & BTN_DOWN) { s_menu_sel_row++; if (s_menu_sel_row >= total) s_menu_sel_row = 0; s_menu_sel_col = 0; }
-        if (sdata->AnyPlayerTap & BTN_UP)   { s_menu_sel_row--; if (s_menu_sel_row < 0) s_menu_sel_row = total - 1; s_menu_sel_col = 0; }
+        if (sdata->AnyPlayerTap & BTN_DOWN) { s_menu_sel_row++; if (s_menu_sel_row >= total) s_menu_sel_row = 0; s_menu_sel_col = 0; OtherFX_Play(0, 1); }
+        if (sdata->AnyPlayerTap & BTN_UP)   { s_menu_sel_row--; if (s_menu_sel_row < 0) s_menu_sel_row = total - 1; s_menu_sel_col = 0; OtherFX_Play(0, 1); }
 
-        if (sdata->AnyPlayerTap & BTN_RIGHT) { s_menu_sel_col++; if (s_menu_sel_col > max_col) s_menu_sel_col = 0; }
-        if (sdata->AnyPlayerTap & BTN_LEFT)  { s_menu_sel_col--; if (s_menu_sel_col < 0) s_menu_sel_col = max_col; }
+        if (sdata->AnyPlayerTap & BTN_RIGHT) { s_menu_sel_col++; if (s_menu_sel_col > max_col) s_menu_sel_col = 0; OtherFX_Play(0, 1); }
+        if (sdata->AnyPlayerTap & BTN_LEFT)  { s_menu_sel_col--; if (s_menu_sel_col < 0) s_menu_sel_col = max_col; OtherFX_Play(0, 1); }
 
-        if (sdata->AnyPlayerTap & (BTN_TRIANGLE | BTN_SQUARE_one)) { s_menu_open = 0; }
+        if (sdata->AnyPlayerTap & (BTN_TRIANGLE | BTN_SQUARE_one)) { s_menu_open = 0; OtherFX_Play(2, 1); }
 
         if (sdata->AnyPlayerTap & BTN_CROSS) {
+            OtherFX_Play(1, 1);
             s_garageWasCustom = (NativeSettings_GetGaragePack()[0] != '\0') ? 1 : 0;
             if (s_menu_sel_row == count) {
                 NativeSettings_SetGaragePack("");
@@ -268,6 +270,7 @@ void CS_Garage_MenuProc(struct RectMenu *menu)
     if ((sdata->AnyPlayerTap & BTN_L1) || (sdata->AnyPlayerTap & BTN_R1))
     {
         fprintf(stderr, "[L1R1] Detectado!\n");
+        OtherFX_Play(0, 1);
         int count = LevelRegistry_GetAdventureGarageCount();
         int total = count + 1; // +1 para Retail
         const char *curr = NativeSettings_GetGaragePack();
