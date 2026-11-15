@@ -242,6 +242,16 @@ int NativeCustomRacer_RegisterGarageOnly(const char *slug, int retailID)
     return -1;
 }
 
+int NativeCustomRacer_GetGarageOnlyIDFromSlug(const char *slug)
+{
+    if (!slug || !slug[0]) return -1;
+    for (int i = 0; i < NATIVE_GARAGE_ONLY_COUNT; i++) {
+        if (s_garageOnly[i].used && strcmp(s_garageOnly[i].slug, slug) == 0)
+            return NATIVE_GARAGE_ONLY_BASE + i;
+    }
+    return -1;
+}
+
 void NativeCustomRacer_ResetGarageOnly(void)
 {
     memset(s_garageOnly, 0, sizeof(s_garageOnly));
@@ -4051,6 +4061,14 @@ void NativeCustomRacer_ResetGarageAudio(void)
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_LEFT);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_RIGHT);
     s_garageAmbientAddr = 0;
+
+    /* Reset the SPU allocator cursor for garage SFX. Without this,
+     * the first VAG loads at SPU addr 0 (NativeVag_Load returns 0)
+     * and is skipped by the `if (loaded == 0) continue` guard. */
+    s_garageSfxSpuNext = NATIVE_GARAGE_SFX_SPU_BASE;
+    memset(s_garageSfxSpuAddr, 0, sizeof(s_garageSfxSpuAddr));
+    memset(s_garageSfxCooldown, 0, sizeof(s_garageSfxCooldown));
+    memset(s_garageSfxPrevFrame, 0, sizeof(s_garageSfxPrevFrame));
 }
 
 int NativeCustomRacer_HasGarageAmbient(void)
@@ -4117,9 +4135,25 @@ void NativeCustomRacer_UpdateGarageAmbients(int currSlot)
 
 void NativeCustomRacer_PreloadGarageSfx(const char *slug)
 {
+    if (!slug || !slug[0]) return;
     int charID = NativeCustomRacer_GetCharacterIDFromFolder(slug);
+    if (charID < NATIVE_CUSTOM_ID_BASE) {
+        charID = NativeCustomRacer_GetGarageOnlyIDFromSlug(slug);
+    }
     if (charID < NATIVE_CUSTOM_ID_BASE) return;
     int idx = charID - NATIVE_CUSTOM_ID_BASE;
+
+    /* Lazy-load the sidecar for garage-only IDs (their LoadGarageSfxSidecar
+     * is not called from the roster loop because they are not in roster.txt). */
+    if (s_garageSfxCount[idx] == 0) {
+        LoadGarageSfxSidecar(idx, slug);
+    }
+
+    /* Defensive: if ResetGarageAudio was not called (or spuNext got
+     * clobbered), ensure the allocator cursor starts at the base. */
+    if (s_garageSfxSpuNext == 0) {
+        s_garageSfxSpuNext = NATIVE_GARAGE_SFX_SPU_BASE;
+    }
 
     // Preload per-frame SFX
     u8 count = s_garageSfxCount[idx];
@@ -4158,14 +4192,44 @@ void NativeCustomRacer_PreloadGarageSfx(const char *slug)
 void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
 {
     if (model == NULL) return;
+
+    /* Resolve slot (for distance/role) and charID (for SFX tables). */
+    int slot = -1;
     int charID = -1;
     for (int i = 0; i < GARAGE_CUSTOM_SLOTS; i++) {
-        if (s_garageCustomModels[i] == model) { charID = s_garageCustomCharID[i]; break; }
+        if (s_garageCustomModels[i] == model) {
+            slot = i;
+            charID = s_garageCustomCharID[i];
+            break;
+        }
     }
-    if (charID < NATIVE_CUSTOM_ID_BASE) return;
+    if (slot < 0 || charID < NATIVE_CUSTOM_ID_BASE) return;
+
+    /* Positional role: center = 100%, left/right neighbor = ~40/12%
+     * paneado, resto silencio. Mismos valores que UpdateGarageAmbients()
+     * para que SFX y ambient sigan la misma logica espacial (retail
+     * Garage_PlayFX + garageSoundPool[slot].LR/volume). */
+    int currSlot = (int)sdata->advCharSelectIndex_curr & 7;
+    int dist = (slot - currSlot + 8) & 7;
+    int voice;
+    int volL, volR;
+    if (dist == 0) {
+        voice = NATIVE_GARAGE_SFX_SPU_VOICE;      /* center, 100/100 */
+        volL = 0x2000; volR = 0x2000;
+    } else if (dist == 1) {
+        voice = NATIVE_GARAGE_SFX_SPU_VOICE + 2;  /* right, 12/40 */
+        volL = 0x0300; volR = 0x0A00;
+    } else if (dist == 7) {
+        voice = NATIVE_GARAGE_SFX_SPU_VOICE + 1;  /* left, 40/12 */
+        volL = 0x0A00; volR = 0x0300;
+    } else {
+        return;
+    }
+
     int idx = charID - NATIVE_CUSTOM_ID_BASE;
     u8 count = s_garageSfxCount[idx];
     if (count == 0) return;
+
     s16 prev = s_garageSfxPrevFrame[idx];
     s_garageSfxPrevFrame[idx] = (s16)frame;
     for (int i = 0; i < (int)NATIVE_GARAGE_SFX_MAX; i++) {
@@ -4177,8 +4241,11 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
         if (prev >= (s16)frame) continue;
         u32 spu_addr = s_garageSfxSpuAddr[idx][i];
         if (spu_addr == 0) continue;
-        s_garageSfxCooldown[idx][i] = (u8)s_garageSfxCooldownLen;
-        NativeVag_Play(spu_addr, NATIVE_GARAGE_SFX_SPU_VOICE, 0x2000, 0x2000, s_garageSfxSpuPitch[idx][i], 0);
+        /* Cooldown corto (4 frames): solo anti-double-fire del mismo
+         * transition. NO usar s_garageSfxCooldownLen (duracion VAG,
+         * ~76 ticks) porque bloquea ~2 loops del idle. */
+        s_garageSfxCooldown[idx][i] = 4;
+        NativeVag_Play(spu_addr, voice, volL, volR, s_garageSfxSpuPitch[idx][i], 0);
     }
 }
 

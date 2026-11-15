@@ -42,6 +42,7 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
      (id) <  (NATIVE_GARAGE_ONLY_BASE + NATIVE_GARAGE_ONLY_COUNT))
 
 int  NativeCustomRacer_RegisterGarageOnly(const char *slug, int retailID);
+int  NativeCustomRacer_GetGarageOnlyIDFromSlug(const char *slug);
 void NativeCustomRacer_ResetGarageOnly(void);
 int  NativeCustomRacer_GetGarageOnlyRetailID(int id);    /* no-op si no garage-only */
 const char *NativeCustomRacer_GetGarageOnlySlug(int id); /* NULL si no garage-only */
