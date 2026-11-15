@@ -495,7 +495,7 @@ afterCameraAndSkipChecks:
 			 * for frames that are not a target. Fires on frame
 			 * transitions only (see NativeCustomRacer_TickDanceSfx). */
 			NativeCustomRacer_TickDanceSfx(instance->model, (int)animFrame);
-			NativeCustomRacer_TickGarageSfx(instance->model, (int)animFrame);
+			NativeCustomRacer_TickGarageSfx(instance->model, (int)animIndex, (int)animFrame);
 		}
 		if (cs->frameOverrideRoot != 0)
 		{

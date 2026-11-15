@@ -4189,7 +4189,7 @@ void NativeCustomRacer_PreloadGarageSfx(const char *slug)
 }
 
 
-void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
+void NativeCustomRacer_TickGarageSfx(struct Model *model, int animIndex, int frame)
 {
     if (model == NULL) return;
 
@@ -4236,7 +4236,11 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame)
         if (s_garageSfxCooldown[idx][i] > 0) s_garageSfxCooldown[idx][i]--;
     }
     for (int i = 0; i < (int)count; i++) {
-        if ((int)s_garageSfxFrames[idx][i] != frame) continue;
+        u32 entry = s_garageSfxFrames[idx][i];
+        int target = (int)((entry >> 24) & 0xFF);
+        int target_frame = (int)(entry & 0xFFFFFF);
+        if (target_frame != frame) continue;
+        if (target != animIndex) continue;
         if (s_garageSfxCooldown[idx][i] > 0) continue;
         if (prev >= (s16)frame) continue;
         u32 spu_addr = s_garageSfxSpuAddr[idx][i];

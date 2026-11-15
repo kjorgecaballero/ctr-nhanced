@@ -233,7 +233,7 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
 #define NATIVE_GARAGE_AMBIENT_SPU_BASE_RIGHT 0x1E0000u
 #define NATIVE_GARAGE_AMBIENT_SPU_END 0x200000u
 
-void NativeCustomRacer_TickGarageSfx(struct Model *model, int frame);
+void NativeCustomRacer_TickGarageSfx(struct Model *model, int animIndex, int frame);
 void NativeCustomRacer_FreeGarageVRAM(void);
 void NativeCustomRacer_ResetGarageAudio(void);
 void NativeCustomRacer_SwitchGarageCharacter(int newCharID);
