@@ -481,6 +481,18 @@ afterCameraAndSkipChecks:
 			ConvertRotToMatrix(&instance->matrix, &cs->rot);
 		}
 		int checkedAnimFrame = CS_Instance_SafeCheckAnimFrame(instance, animIndex, lodIndexState, animFrame);
+                /* Custom garage: forzar loop de 138 en Idle y 78 en Select */
+                extern int NativeCustomRacer_IsGarageModel(struct Model *m);
+                if (sdata->gGT->levelID == ADVENTURE_GARAGE && instance != NULL && NativeCustomRacer_IsGarageModel(instance->model)) {
+                        struct Model *m = instance->model;
+                        if (m && m->headers && m->headers[0].ptrAnimations && m->headers[0].ptrAnimations[animIndex]) {
+                                u32 numFrames = m->headers[0].ptrAnimations[animIndex]->numFrames;
+                                if (numFrames > 0) {
+                                        checkedAnimFrame = animFrame % numFrames;
+                                        animFrame = checkedAnimFrame;
+                                }
+                        }
+                }
 		if (animFrame != checkedAnimFrame)
 		{
 			animIndex &= ~CS_ANIM_INDEX_LOW_BYTE_MASK;

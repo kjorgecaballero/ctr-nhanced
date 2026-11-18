@@ -385,10 +385,107 @@ class NFR_OT_AdventureBuildAudio(Operator):
     bl_label = "Build Audio for Slot"
 
     def execute(self, context):
+        import struct
+        IDLE_FRAMES = 138  # .blend idle clip = frames 1..138; select starts at 139
+        st = context.scene.nfr_adventure
+        try:
+            root = _root(context)
+        except Exception as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
+
+        slot_idx = st.active_slot_idx
+        if slot_idx < 0 or slot_idx >= len(st.slots):
+            self.report({'ERROR'}, "Invalid active slot")
+            return {'CANCELLED'}
+        s = st.slots[slot_idx]
+        slug = s.char_slug
+        if not slug:
+            self.report({'ERROR'}, "Slot has no character slug")
+            return {'CANCELLED'}
+
+        entries = []
+        for e in s.sfx_entries:
+            wav = _clean_path(e.wav_path) if e.wav_path else ""
+            if not wav or not os.path.isfile(wav):
+                continue
+            fb = int(e.frame)
+            i0, i1 = int(s.idle_start), int(s.idle_end)
+            s0, s1 = int(s.select_start), int(s.select_end)
+            if i0 <= fb <= i1:
+                target = 0
+                local = fb - i0
+            elif s0 <= fb <= s1:
+                target = 1
+                local = fb - s0
+            else:
+                self.report({'WARNING'},
+                            f"SFX frame {fb}: outside idle [{i0}-{i1}] and select [{s0}-{s1}], skipped")
+                continue
+            entries.append((target, local, wav))
+
+        if not entries:
+            self.report({'WARNING'}, "No valid SFX entries (empty or missing WAV)")
+            return {'CANCELLED'}
+        if len(entries) > 16:
+            self.report({'WARNING'},
+                        f"{len(entries)} entries, truncating to NATIVE_GARAGE_SFX_MAX=16")
+            entries = entries[:16]
+        entries.sort(key=lambda x: (x[0], x[1]))
+
+        vag_codec = os.path.join(root, "tools", "custom_racers", "vag_codec.py")
+        if not os.path.isfile(vag_codec):
+            self.report({'ERROR'}, f"vag_codec.py not found: {vag_codec}")
+            return {'CANCELLED'}
+
+        garage_dir = os.path.join(root, "assets", "mods", "racers", slug, "garage")
+        os.makedirs(garage_dir, exist_ok=True)
+
+        py_exe = _clean_path(get_python_exe())
+        encoded = []
+        for i, (target, local, wav_path) in enumerate(entries):
+            out_vag = os.path.join(garage_dir, f"sfx_{i}.vag")
+            cmd = [py_exe, vag_codec, "encode", "--rate", "11025", "--norm",
+                   wav_path, out_vag]
+            print(f"[BuildAudio] {' '.join(cmd)}")
+            try:
+                p = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
+            except Exception as ex:
+                self.report({'ERROR'}, f"vag_codec failed: {ex}")
+                return {'CANCELLED'}
+            if p.returncode != 0:
+                self.report({'ERROR'},
+                            f"vag_codec exit {p.returncode}: {p.stderr[:300]}")
+                return {'CANCELLED'}
+
+            # Patch VAG to force one-shot (disable looping)
+            try:
+                with open(out_vag, "r+b") as vf:
+                    vf.seek(0, 2)
+                    size = vf.tell()
+                    if size > 48:
+                        vf.seek(0x31)
+                        vf.write(b'\x00')
+                        vf.seek(size - 15)
+                        vf.write(b'\x01')
+            except Exception as ex:
+                print(f"[BuildAudio] Warning: could not patch VAG: {ex}")
+
+            encoded.append((target << 24) | local)
+
+        bin_path = os.path.join(garage_dir, "sfx.bin")
+        idle_len = int(s.idle_end) - int(s.idle_start) + 1
+        select_len = int(s.select_end) - int(s.select_start) + 1
+        with open(bin_path, "wb") as f:
+            f.write(b"GSFX")
+            f.write(struct.pack("<I", len(encoded)))
+            f.write(struct.pack("<I", idle_len))
+            f.write(struct.pack("<I", select_len))
+            for entry in encoded:
+                f.write(struct.pack("<I", entry))
+
         self.report({'INFO'},
-                    "Audio pipeline for garage slots is a separate feature "
-                    "(see docs/CUSTOM_GARAGE_CONTEXT.md §8). "
-                    "For now, no audio is generated.")
+                    f"Built {len(entries)} SFX for S{slot_idx} ({slug}) -> {bin_path}")
         return {'FINISHED'}
 
 
