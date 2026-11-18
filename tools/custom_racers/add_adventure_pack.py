@@ -144,6 +144,10 @@ def main():
     ap.add_argument("--lev", required=True, help="Path to the LEV file exported from CTR Editor")
     ap.add_argument("--vrm", required=True, help="Path to the VRM file exported from CTR Editor")
     ap.add_argument("--data-json", required=True, help="Path to JSON with slots + camera (written by Blender operator)")
+    ap.add_argument("--skip-sfx", action="store_true",
+                    help="Don't touch garage/sfx.bin or garage/sfx_*.vag. Use 'Build Audio for Slot' "
+                         "in Blender instead. Recommended: this legacy path writes the OLD sfx.bin format "
+                         "(incompatible with native_custom_racer.c) and encodes VAGs with --loop.")
     args = ap.parse_args()
 
     if not os.path.isfile(args.lev):
@@ -163,6 +167,13 @@ def main():
     while len(slots) < 8:
         slots.append(_empty_slots()[len(slots)])
     slots = slots[:8]
+
+    if args.skip_sfx:
+        # Preserve ambient, skip per-frame SFX (managed by 'Build Audio for Slot').
+        # sfx.bin and sfx_*.vag on disk stay untouched.
+        for s in slots:
+            s["sfx"] = []
+        print("  --skip-sfx: garage/sfx.bin and sfx_*.vag left untouched")
 
     cam = data.get("camera", {})
 

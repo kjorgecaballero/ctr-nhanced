@@ -608,6 +608,7 @@ class NFR_OT_AdventureBuild(Operator):
             "--lev", lev_path,
             "--vrm", vrm_path,
             "--data-json", tmp.name,
+            "--skip-sfx",
         ]
 
         print(f"Executing: {cmd}")
@@ -627,6 +628,27 @@ class NFR_OT_AdventureBuild(Operator):
                 os.unlink(tmp.name)
             except Exception:
                 pass
+
+        # Warn if a slot has SFX entries but never ran 'Build Audio for Slot'
+        for i in range(8):
+            s = st.slots[i]
+            if not s.char_slug or not s.sfx_entries:
+                continue
+            has_wav = any(
+                _clean_path(e.wav_path) and os.path.isfile(_clean_path(e.wav_path))
+                for e in s.sfx_entries
+            )
+            if not has_wav:
+                continue
+            bin_path = os.path.join(
+                root, "assets", "mods", "racers", s.char_slug, "garage", "sfx.bin"
+            )
+            if not os.path.isfile(bin_path):
+                self.report(
+                    {'WARNING'},
+                    f"Slot {i} ({s.char_slug}): SFX entries set but sfx.bin missing. "
+                    f"Press 'Build Audio for Slot' before 'Build Garage Pack'."
+                )
 
         self.report({'INFO'}, "Garage Pack built successfully")
         return {'FINISHED'}
