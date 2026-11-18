@@ -68,17 +68,37 @@ def _auto_detect_wavs(source_dir):
 
     The caller is responsible for checking source_dir exists.
     """
+    # Pre-list once; up to 18 events * 2 candidates otherwise.
+    try:
+        wavs = sorted(p.name for p in source_dir.iterdir()
+                      if p.is_file() and p.suffix.lower() == ".wav")
+    except OSError:
+        wavs = []
+
+    def _find(name):
+        # Exact match (Windows FS is case-insensitive; on Linux we do it
+        # ourselves below, so check both spellings).
+        direct = source_dir / name
+        if direct.is_file():
+            return direct
+        # Prefix match: '<prefix>_<name>' with underscore separator.
+        needle = "_" + name.lower()
+        for fname in wavs:
+            if fname.lower().endswith(needle):
+                return source_dir / fname
+        return None
+
     out = {}
     for event, _label, _desc in VOICE_EVENTS:
-        cand = source_dir / f"{event}.wav"
-        if cand.is_file():
-            out[event] = cand
+        hit = _find(f"{event}.wav")
+        if hit is not None:
+            out[event] = hit
             continue
         legacy = LEGACY_FALLBACKS.get(event)
         if legacy is not None:
-            alt = source_dir / f"{legacy}.wav"
-            if alt.is_file():
-                out[event] = alt
+            hit = _find(f"{legacy}.wav")
+            if hit is not None:
+                out[event] = hit
                 continue
         out[event] = None
     return out
