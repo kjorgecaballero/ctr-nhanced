@@ -6,7 +6,8 @@
 /* Voices 24+ are outside the range HOWL_Channel.c iterates
  * (NUM_SFX_CHANNELS = 24). Custom VAG features use those voices
  * without any reservation hack. Each feature picks its own; dance
- * SFX uses 24 (NATIVE_DANCE_SFX_SPU_VOICE in native_custom_racer.h). */
+ * SFX uses 24-26 (NATIVE_DANCE_SFX_SPU_VOICE + rank) and garage SFX
+ * uses 24-26 (NATIVE_GARAGE_SFX_SPU_VOICE + dist) in native_custom_racer.h. */
 
 /* Load a VAG file into SPU RAM at a fixed address.
  * Skips the 48-byte VAG header; writes only the raw ADPCM to SPU.

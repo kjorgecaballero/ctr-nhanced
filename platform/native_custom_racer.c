@@ -1807,9 +1807,12 @@ void NativeCustomRacer_ResetPodiumDance(void)
     memset(s_podiumDanceByChar, 0, sizeof(s_podiumDanceByChar));
 
     /* Kill the dance SFX VAG so it doesn't bleed into the next race.
-     * No reservation machinery needed: voice 24 is not touched by
-     * CSEQ (HOWL_Channel.c iterates only NUM_SFX_CHANNELS = 24). */
+     * No reservation machinery needed: voices 24-26 are not touched by
+     * CSEQ (HOWL_Channel.c iterates only NUM_SFX_CHANNELS = 24).
+     * Three voices: rank 0/1/2 -> 24/25/26 (see TickDanceSfx). */
     NativeVag_Stop(NATIVE_DANCE_SFX_SPU_VOICE);
+    NativeVag_Stop(NATIVE_DANCE_SFX_SPU_VOICE + 1);
+    NativeVag_Stop(NATIVE_DANCE_SFX_SPU_VOICE + 2);
 }
 
 
@@ -2536,23 +2539,25 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame)
     /* Locate the charIdx only among the 3 active podium ranks. The
      * s_podiumDanceByChar table is sparse (0-3 non-NULL entries),
      * so this is at most 3 pointer comparisons per tick. */
-    int idx = -1;
-    for (int rank = 0; rank < 3; rank++)
+    int idx  = -1;
+    int rank = -1;   /* 0/1/2 = podium position -> voice 24/25/26 */
+    for (int r = 0; r < 3; r++)
     {
-        if (!s_podiumRankHasCharID[rank])
+        if (!s_podiumRankHasCharID[r])
             continue;
-        int cid = (int)s_podiumRankCharID[rank];
+        int cid = (int)s_podiumRankCharID[r];
         if (cid <  NATIVE_CUSTOM_ID_BASE ||
             cid >= NATIVE_CUSTOM_ID_BASE + NATIVE_CUSTOM_COUNT)
             continue;
         int i = cid - NATIVE_CUSTOM_ID_BASE;
         if (s_podiumDanceByChar[i].model == model)
         {
-            idx = i;
+            idx  = i;
+            rank = r;
             break;
         }
     }
-    if (idx < 0)
+    if (idx < 0 || rank < 0)
         return;
 
     u8 count = s_danceSfxCount[idx];
@@ -2597,7 +2602,7 @@ void NativeCustomRacer_TickDanceSfx(struct Model *model, int frame)
                 s_danceSfxSpuPitch[idx][i]);
 #endif
 
-        NativeVag_Play(spu_addr, NATIVE_DANCE_SFX_SPU_VOICE,
+        NativeVag_Play(spu_addr, NATIVE_DANCE_SFX_SPU_VOICE + rank,
                        0x2000, 0x2000,  /* ~50% volume */
                        s_danceSfxSpuPitch[idx][i],
                        0);              /* one-shot */
@@ -4064,6 +4069,8 @@ void NativeCustomRacer_ResetGarageAudio(void)
     NativeCustomRacer_FreeGarageVRAM();  // idempotente, no-op si ya se libero
 
     NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
+    NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE + 1);
+    NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE + 2);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_LEFT);
     NativeVag_Stop(NATIVE_GARAGE_AMBIENT_VOICE_RIGHT);
@@ -4214,11 +4221,17 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int animIndex, int fra
     if (slot < 0 || charID < NATIVE_CUSTOM_ID_BASE) return;
 
     int currSlot = (int)sdata->advCharSelectIndex_curr & 7;
+    /* Voice isolation: each visible slot gets its own SPU voice so
+     * adjacent slots can fire SFX in the same frame without cutting
+     * each other. curr=24, next=25, prev=26 (matches NATIVE_GARAGE_
+     * SFX_SPU_VOICE + 0/1/2). Safe because garage and race are
+     * mutually exclusive states -- 25/26 are kart SFX during a race,
+     * but the race is not running while we are in the garage. */
     int dist = (slot - currSlot + 8) & 7;
-    int volL, volR;
-    if (dist == 0) { volL = 0x2000; volR = 0x2000; }
-    else if (dist == 1) { volL = 0x0300; volR = 0x0A00; }
-    else if (dist == 7) { volL = 0x0A00; volR = 0x0300; }
+    int volL, volR, sfxVoice;
+    if (dist == 0)      { volL = 0x2000; volR = 0x2000; sfxVoice = NATIVE_GARAGE_SFX_SPU_VOICE;     }
+    else if (dist == 1) { volL = 0x0300; volR = 0x0A00; sfxVoice = NATIVE_GARAGE_SFX_SPU_VOICE + 1; }
+    else if (dist == 7) { volL = 0x0A00; volR = 0x0300; sfxVoice = NATIVE_GARAGE_SFX_SPU_VOICE + 2; }
     else { return; }
 
     int idx = charID - NATIVE_CUSTOM_ID_BASE;
@@ -4238,7 +4251,12 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int animIndex, int fra
 
     if (s_garageSfxLastAnim[idx] != (s8)animIndex) {
         s_garageSfxLastAnim[idx] = (s8)animIndex;
+        /* Stop all 3 garage SFX voices: after a selection change the
+         * same char may be on a different voice (curr<->next<->prev),
+         * so we cannot know which one to stop without tracking it. */
         NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE);
+        NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE + 1);
+        NativeVag_Stop(NATIVE_GARAGE_SFX_SPU_VOICE + 2);
         s_garageSfxPrevFrame[idx] = -1;
     }
 
@@ -4273,7 +4291,7 @@ void NativeCustomRacer_TickGarageSfx(struct Model *model, int animIndex, int fra
         /* Anti doble-disparo del mismo cruce. NO usar la duracion del VAG
          * (s_garageSfxCooldownLen ~248): bloquea decenas de loops del idle. */
         s_garageSfxCooldown[idx][i] = 4;
-        NativeVag_Play(spu_addr, NATIVE_GARAGE_SFX_SPU_VOICE, volL, volR, s_garageSfxSpuPitch[idx][i], 0);
+        NativeVag_Play(spu_addr, sfxVoice, volL, volR, s_garageSfxSpuPitch[idx][i], 0);
     }
 }
 

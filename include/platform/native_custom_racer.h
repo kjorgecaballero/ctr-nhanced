@@ -218,8 +218,17 @@ u16 NativeCustomRacer_GetPodiumDanceFramesForModel(struct Model *model);
  * Dance SFX uses 24; future features (kart SFX, mask music) will
  * take 25, 26, etc. */
 #define NATIVE_DANCE_SFX_SPU_VOICE  24
+/* Voice layout (isolated per podium rank so 3 dancers can fire in the
+ * same frame without cutting each other):
+ *   rank 0 -> 24, rank 1 -> 25, rank 2 -> 26
+ * Voices 25-28 are also used by kart SFX in-game, but a race and the
+ * podium are mutually exclusive states, so reusing them is safe. */
 
-/* === Custom garage SFX (per-frame + ambient) === */
+/* === Custom garage SFX (per-frame + ambient) ===
+ * Voice layout (isolated per slot-distance from current selection):
+ *   curr -> 24, next -> 25, prev -> 26
+ * Same reasoning as dance: garage and race are exclusive, so 25/26
+ * are safe to reuse while the garage is open. */
 #define NATIVE_GARAGE_SFX_MAX 16
 #define NATIVE_GARAGE_SFX_SPU_VOICE 24
 #define NATIVE_GARAGE_SFX_SPU_BASE 0x80000u
