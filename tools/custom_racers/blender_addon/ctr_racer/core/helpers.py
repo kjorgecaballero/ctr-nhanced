@@ -57,6 +57,58 @@ def _resolve_blender_path(p):
         return None
     return Path(p)
 
+
+def get_repo_root(context):
+    """Find the repo root (folder containing tools/custom_racers/).
+
+    Port of the robust _root() from adventure/operators.py so
+    every module can locate the tools tree without depending on
+    DEFAULT_REPO being filled in.
+
+    Fallback chain:
+      1. prefs.repo_root / repo / repo_path (user-set)
+      2. DEFAULT_REPO (constants.py)
+      3. Walk up from this file (works when running from source)
+    Raises RuntimeError with an actionable message if all fail.
+    """
+    import os
+    from ..constants import DEFAULT_REPO
+    try:
+        from ..prefs import _get_prefs
+    except Exception:
+        _get_prefs = None
+
+    prefs = _get_prefs(context) if _get_prefs is not None else None
+
+    # 1. Preferences (multiple possible attr names)
+    if prefs is not None:
+        for attr in ("repo_root", "repo", "repo_path"):
+            v = getattr(prefs, attr, "")
+            if v:
+                p = os.path.abspath(bpy.path.abspath(v))
+                if os.path.isdir(os.path.join(p, "tools", "custom_racers")):
+                    return p
+
+    # 2. DEFAULT_REPO
+    if DEFAULT_REPO:
+        p = os.path.abspath(bpy.path.abspath(DEFAULT_REPO))
+        if os.path.isdir(os.path.join(p, "tools", "custom_racers")):
+            return p
+
+    # 3. Walk up from __file__ (dev install)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(10):
+        here = os.path.dirname(here)
+        if os.path.isdir(os.path.join(here, "tools", "custom_racers")):
+            return here
+
+    raise RuntimeError(
+        "NFR: cannot find repo root. Configure 'Repo root' in "
+        "Edit -> Preferences -> Add-ons -> CTR Racer. It must point to "
+        "a folder containing 'tools/custom_racers/'."
+    )
+
+
 def get_python_exe():
     """Find the internal Python executable shipped with Blender."""
     import bpy

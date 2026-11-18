@@ -11,7 +11,7 @@ from bpy.types import Operator
 
 from ..constants import DEFAULT_REPO
 from ..prefs import _get_prefs
-from ..core.helpers import get_python_exe
+from ..core.helpers import get_python_exe, get_repo_root
 from .state import VOICE_EVENTS, _auto_detect_wavs
 
 
@@ -76,7 +76,11 @@ class NFR_OT_VoicesBuild(Operator):
                         "(or run Auto-detect from folder).")
             return {'CANCELLED'}
 
-        repo = Path(DEFAULT_REPO)
+        try:
+            repo = Path(get_repo_root(context))
+        except RuntimeError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
         pipeline = (repo / "tools" / "custom_racers"
                     / "build_voice_pipeline.py")
         if not pipeline.is_file():
