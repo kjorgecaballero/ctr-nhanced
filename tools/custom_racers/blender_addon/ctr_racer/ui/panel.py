@@ -914,8 +914,11 @@ class NFR_PT_Racer(Panel):
             # Robust loop that doesn't break if VOICE_EVENTS changes format
             for i, item in enumerate(VOICE_EVENTS):
                 if i >= MENU_SPLIT_INDEX: break
-                event = item[0] if isinstance(item, tuple) else item
-                box.prop(st, event, text="")
+                if isinstance(item, tuple):
+                    event, label = item[0], item[1]
+                else:
+                    event, label = item, item
+                box.prop(st, event, text=label)
 
         # --- MENU EVENTS ---
         layout.separator()
@@ -928,8 +931,11 @@ class NFR_PT_Racer(Panel):
             # Robust loop
             for i, item in enumerate(VOICE_EVENTS):
                 if i < MENU_SPLIT_INDEX: continue
-                event = item[0] if isinstance(item, tuple) else item
-                box.prop(st, event, text="")
+                if isinstance(item, tuple):
+                    event, label = item[0], item[1]
+                else:
+                    event, label = item, item
+                box.prop(st, event, text=label)
 
         # --- BUILD BUTTON ---
         layout.separator()
