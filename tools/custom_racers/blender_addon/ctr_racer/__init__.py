@@ -76,7 +76,8 @@ def register_empty_slots_props():
         items=[
             ('0', "Retail", "Show retail character"),
             ('1', "Blank", "Show empty box"),
-            ('2', "Custom", "Show custom icon")
+            ('2', "Custom", "Show custom icon"),
+            ('3', "Hidden", "Do not draw empty slots at all")
         ],
         default='0'
     )

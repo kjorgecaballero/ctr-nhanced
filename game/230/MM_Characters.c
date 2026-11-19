@@ -118,6 +118,11 @@ int MM_Characters_GetNextDriver(s16 direction, s16 characterID)
 	if (D230.activeCharacterSelectMeta[(s32)newDriver].characterID < 0)
 		newDriver = characterID;
 
+	/* Hidden mode: skip empty slots entirely */
+	if (NativeSettings_GetEmptySlotMode() == 3 &&
+	    NativeCustomRacer_IsEmptyCustomSlot(nextIcon, D230.activeCharacterSelectMeta[(s32)nextIcon].characterID))
+		newDriver = characterID;
+
 	if (
 	    (unlocked != MM_CHARACTER_UNLOCK_ALWAYS) &&
 	    !CHECK_ADV_BIT(sdata->gameProgress.unlocks, unlocked))
@@ -161,6 +166,11 @@ b32 MM_Characters_boolIsInvalid(s16 *unused, s16 candidateIcon, s16 player)
 	(void)unused;
 	s16 candidateCharID = D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID;
 	if (candidateCharID < 0) return 1;
+
+	/* Hidden mode: treat empty slots as invalid for navigation */
+	if (NativeSettings_GetEmptySlotMode() == 3 &&
+	    NativeCustomRacer_IsEmptyCustomSlot(candidateIcon, candidateCharID))
+		return 1;
 
 	return MM_Characters_CharIDInUse(candidateCharID, player);
 }
@@ -1089,7 +1099,7 @@ dontDrawSelectCharacter:
 		b32 isEmptySlot = 0;
 		int emptyMode = NativeSettings_GetEmptySlotMode();
 		if (emptyMode > 0 && NativeCustomRacer_IsEmptyCustomSlot(iconIndex, drawCharID)) {
-		    if (emptyMode == 1) {
+		    if (emptyMode == 1 || emptyMode == 3) {
 		        iconDrawMeta++;
 		        continue;
 		    }
@@ -1241,6 +1251,11 @@ dontDrawSelectCharacter:
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
 		if (activeCharacterSelectMeta[iconIndex].characterID < 0) continue;
+
+		/* Hidden mode: skip frame for empty slots */
+		if (NativeSettings_GetEmptySlotMode() == 3 &&
+		    NativeCustomRacer_IsEmptyCustomSlot(iconIndex, activeCharacterSelectMeta[iconIndex].characterID))
+			continue;
 
 		s16 unlockRequirement = activeCharacterSelectMeta[iconIndex].unlockFlags;
 

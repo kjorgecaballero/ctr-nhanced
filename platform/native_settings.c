@@ -22,7 +22,7 @@ static int s_bot_randomizer   = 0;
 static int s_high_mp          = -1;
 static int s_aspect_ratio     = 0;
 static char s_garage_pack[64]  = "";
-static int s_emptySlotMode = 0; // 0=Retail, 1=Blank, 2=Custom
+static int s_emptySlotMode = 0; // 0=Retail, 1=Blank, 2=Custom, 3=Hidden
 
 
 void NativeSettings_Load(void);
@@ -119,7 +119,7 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
         else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value;
-        else if (strcmp(key, "empty_slot_mode")  == 0) s_emptySlotMode    = value; /* 0=Retail 1=Blank 2=Custom */
+        else if (strcmp(key, "empty_slot_mode")  == 0) s_emptySlotMode    = value; /* 0=Retail 1=Blank 2=Custom 3=Hidden */
         else if (strcmp(key, "aspect_ratio")     == 0) s_aspect_ratio     = value, sawAspect = 1;
         else if (strcmp(key, "garage_pack")      == 0)
         {
