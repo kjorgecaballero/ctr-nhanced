@@ -161,6 +161,7 @@ b32 MM_Characters_boolIsInvalid(s16 *unused, s16 candidateIcon, s16 player)
 	(void)unused;
 	s16 candidateCharID = D230.activeCharacterSelectMeta[(s32)candidateIcon].characterID;
 	if (candidateCharID < 0) return 1;
+
 	return MM_Characters_CharIDInUse(candidateCharID, player);
 }
 
@@ -324,6 +325,16 @@ void MM_Characters_DrawWindows(b32 boolShowDrivers)
 				model = MM_Characters_GetModelByName(GET_METADATA(FAKE_CRASH)->name_Debug);
 		}
 
+		if (NativeSettings_GetEmptySlotMode() > 0) {
+			int iconIdx = -1;
+			if (_cid >= NATIVE_CUSTOM_ID_BASE) iconIdx = s_customMenuID[_cid - NATIVE_CUSTOM_ID_BASE];
+			else if (_cid >= 0 && _cid < 0x10) iconIdx = D230.characterMenuID[_cid];
+			
+			if (iconIdx >= 0 && NativeCustomRacer_IsEmptyCustomSlot(iconIdx, _cid)) {
+				model = NULL; // Don't draw the kart/character
+				driverInst->flags |= HIDE_MODEL; // Hide instance to prevent ghost wheels
+			}
+		}
 		driverInst->model = model;
 
                 /* NITROS_OXIDE base scale capture.
@@ -615,11 +626,15 @@ void MM_Characters_RestoreIDs(void)
 void MM_Characters_HideDrivers(void)
 {
 	struct GameTracker *gGT = sdata->gGT;
+	
+	/* Clear wheels flag so they don't render in the main menu */
+	gGT->renderFlags &= ~RENDER_FLAG_TIRES;
 
 	for (s32 playerIndex = 0; playerIndex < MM_CHARACTER_SELECT_MAX_PLAYERS; playerIndex++)
 	{
 		PushBuffer_Init(&gGT->pushBuffer[playerIndex], 0, 1);
 		gGT->drivers[playerIndex]->instSelf->flags |= HIDE_MODEL;
+		gGT->drivers[playerIndex]->wheelSize = 0; /* Reset wheel size */
 	}
 
 	return;
@@ -814,7 +829,6 @@ void MM_Characters_MenuProc(struct RectMenu *unused)
 
 dontDrawSelectCharacter:
 
-
 	for (s32 playerIndex = 0; playerIndex < gGT->numPlyrNextGame; playerIndex++)
 	{
 		/* === §8.1 Fix B+ (Option 1 refined): off-page handling ===
@@ -996,6 +1010,10 @@ dontDrawSelectCharacter:
 
 				if (((sdata->buttonTapPerPlayer)[playerIndex] & MM_CHARACTER_SELECT_INPUT_CONFIRM) != 0)
 				{
+					if (NativeSettings_GetEmptySlotMode() > 0 && NativeCustomRacer_IsEmptyCustomSlot(currentIcon, D230.activeCharacterSelectMeta[currentIcon].characterID)) {
+						OtherFX_Play(2, 1); // "Cannot select" / Back sound
+						continue; // Skip the rest of the confirmation block
+					}
 					sdata->characterSelectFlags = sdata->characterSelectFlags | (u16)(1 << playerIndex);
 
 					u8 numPlyrNextGame = gGT->numPlyrNextGame;
@@ -1066,10 +1084,24 @@ dontDrawSelectCharacter:
 
 	for (s32 iconIndex = 0; iconIndex < MM_CHARACTER_SELECT_ICON_COUNT; iconIndex++)
 	{
-		if (iconDrawMeta->characterID < 0) { iconDrawMeta++; continue; }
+		/* === CTR_NATIVE: Empty Slot Fallback Modes === */
+		s16 drawCharID = iconDrawMeta->characterID;
+		b32 isEmptySlot = 0;
+		int emptyMode = NativeSettings_GetEmptySlotMode();
+		if (emptyMode > 0 && NativeCustomRacer_IsEmptyCustomSlot(iconIndex, drawCharID)) {
+		    if (emptyMode == 1) {
+		        iconDrawMeta++;
+		        continue;
+		    }
+		    isEmptySlot = 1;
+		}
+		/* ============================================== */
+
+		if (drawCharID < 0) { iconDrawMeta++; continue; }
 
 		s16 unlockRequirement = iconDrawMeta->unlockFlags;
 		if (
+		    isEmptySlot ||
 		    (unlockRequirement == MM_CHARACTER_UNLOCK_ALWAYS) ||
 		    CHECK_ADV_BIT(sdata->gameProgress.unlocks, unlockRequirement))
 		{
@@ -1086,14 +1118,21 @@ dontDrawSelectCharacter:
 
 			struct TransitionMeta *iconTransition = &D230.characterSelectTransitionMeta[iconIndex];
 
-			RECTMENU_DrawPolyGT4(NativeCustomRacer_GetIconPtr(iconDrawMeta->characterID),
-			                     iconTransition->currX + iconDrawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X,
-			                     iconTransition->currY + iconDrawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y,
+						struct Icon *drawIcon = isEmptySlot
+			    ? NativeCustomRacer_GetEmptyIconPtr()
+			    : NativeCustomRacer_GetIconPtr(drawCharID);
 
-			                     &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
+			if (drawIcon != NULL)
+			{
+			    RECTMENU_DrawPolyGT4(drawIcon,
+			    iconTransition->currX + iconDrawMeta->posX + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_X,
+			    iconTransition->currY + iconDrawMeta->posY + MM_CHARACTER_SELECT_ICON_DECAL_OFFSET_Y,
 
-			                     ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor),
-			                     ColorCode_GetPacked(&iconColor), TRANS_50_DECAL, FP(1.0));
+			    &gGT->backBuffer->primMem, gGT->pushBuffer_UI.ptrOT,
+
+			    ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor), ColorCode_GetPacked(&iconColor),
+			    ColorCode_GetPacked(&iconColor), TRANS_50_DECAL, FP(1.0));
+			}
 		}
 
 		iconDrawMeta++;
@@ -1186,7 +1225,8 @@ dontDrawSelectCharacter:
 				if (nameLNG >= 0)
 					nameToDraw = sdata->lngStrings[nameLNG];
 			}
-			if (nameToDraw != NULL)
+			if (nameToDraw != NULL && 
+                !(NativeSettings_GetEmptySlotMode() > 0 && NativeCustomRacer_IsEmptyCustomSlot(playerIcon, activeCharacterSelectMeta->characterID)))
 			{
 				DecalFont_DrawLine(nameToDraw,
 				                   (int)driverWindowTransition->currX + windowPos->x + (int)((u32)D230.characterSelectWindowWidth >> 1), (int)nameY, fontType,

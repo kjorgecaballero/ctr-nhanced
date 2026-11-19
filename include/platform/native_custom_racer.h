@@ -20,6 +20,10 @@ struct MatrixND* NativeCustom_GetMatrixEntry(int characterID, int index);
  * ========================================================================= */
 #define NATIVE_CUSTOM_ID_BASE 16
 
+
+int NativeCustomRacer_IsEmptyCustomSlot(int iconIndex, int characterID);
+struct Icon *NativeCustomRacer_GetEmptyIconPtr(void);
+
 /* ---------------------------------------------------------------------
  * Garage-only: retail chars with a custom HD garage model, NOT in roster.
  * Live INSIDE the custom namespace (216..255) so every per-custom array

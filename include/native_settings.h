@@ -26,4 +26,6 @@ void NativeSettings_SetBotRandomizer(int enabled);
 const char *NativeSettings_GetGaragePack(void);
 void        NativeSettings_SetGaragePack(const char *id);
 
+int NativeSettings_GetEmptySlotMode(void);
+
 #endif

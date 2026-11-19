@@ -300,6 +300,13 @@ class NFR_PT_Racer(Panel):
                               and not is_original_sel)
         assign_row.operator("nfr.slot_assign_here",
                             text="Assign Here", icon="ADD")
+        layout.separator()
+        layout.label(text="Empty Slot Fallback")
+        layout.prop(context.scene, "empty_slot_mode", text="")
+        if context.scene.empty_slot_mode == '2':
+            layout.prop(context.scene, "empty_slot_icon_path", text="")
+        layout.operator("ctr.save_empty_icon", icon='EXPORT')
+
 
         entries = _read_roster(prefs)
         pages = _group_by_page(entries)

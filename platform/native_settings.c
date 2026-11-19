@@ -1,4 +1,5 @@
 #include <common.h>
+
 #include "native_settings.h"
 #include <platform/native_assets.h>
 #include <stdio.h>
@@ -21,6 +22,8 @@ static int s_bot_randomizer   = 0;
 static int s_high_mp          = -1;
 static int s_aspect_ratio     = 0;
 static char s_garage_pack[64]  = "";
+static int s_emptySlotMode = 0; // 0=Retail, 1=Blank, 2=Custom
+
 
 void NativeSettings_Load(void);
 
@@ -72,6 +75,7 @@ void NativeSettings_Save(void)
     fprintf(f, "bilinear=%d\n",   s_bilinear);
     fprintf(f, "character_detail=%d\n", s_character_detail);
     fprintf(f, "bot_randomizer=%d\n", s_bot_randomizer);
+        fprintf(f, "empty_slot_mode=%d\n", s_emptySlotMode);
     fprintf(f, "aspect_ratio=%d\n", s_aspect_ratio);
     fprintf(f, "garage_pack=%s\n", s_garage_pack);
     fclose(f);
@@ -114,7 +118,8 @@ void NativeSettings_Load(void)
         else if (strcmp(key, "resolution") == 0) s_resolution = value;
         else if (strcmp(key, "bilinear")   == 0) s_bilinear   = (value != 0);
         else if (strcmp(key, "character_detail") == 0) s_character_detail = value;
-        else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value; /* 0=OFF 1=RETAIL 2=ALL (was squashed to 0/1) */
+        else if (strcmp(key, "bot_randomizer")   == 0) s_bot_randomizer   = value;
+        else if (strcmp(key, "empty_slot_mode")  == 0) s_emptySlotMode    = value; /* 0=Retail 1=Blank 2=Custom */
         else if (strcmp(key, "aspect_ratio")     == 0) s_aspect_ratio     = value, sawAspect = 1;
         else if (strcmp(key, "garage_pack")      == 0)
         {
@@ -219,4 +224,11 @@ void NativeSettings_SetGaragePack(const char *id)
     strncpy(s_garage_pack, id, sizeof(s_garage_pack) - 1);
     s_garage_pack[sizeof(s_garage_pack) - 1] = '\0';
     NativeSettings_Save();
+}
+
+
+
+int NativeSettings_GetEmptySlotMode(void) {
+    if (!s_loaded) NativeSettings_Load();
+    return s_emptySlotMode;
 }

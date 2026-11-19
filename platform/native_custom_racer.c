@@ -3920,6 +3920,40 @@ static void RegisterCustomIconTexture(int idx, int charID)
         charID, page, slot, (unsigned)tex);
 }
 
+
+static GLuint s_emptyIconTex = 0;
+static struct Icon s_emptyIcon = {0};
+static int s_emptyIconAttempted = 0;
+
+/* Icons use 0..NATIVE_CUSTOM_COUNT-1; model pool starts at 256.
+ * NATIVE_CUSTOM_COUNT = 240, so 240..255 are free. */
+#define NATIVE_EMPTY_ICON_TEX_IDX  NATIVE_CUSTOM_COUNT
+
+static void RegisterEmptyIconTexture(void) {
+    if (s_emptyIconAttempted) return;
+    s_emptyIconAttempted = 1;
+    int w, h;
+    s_emptyIconTex = LoadSentinelBin("assets/mods/racers/empty_slot/icon.bin", &w, &h);
+    if (s_emptyIconTex == 0) {
+        Log("[CustomRacer] empty slot icon.bin missing or invalid\n");
+        return;
+    }
+    NativeGpu_RegisterCustomTexture((u16)NATIVE_EMPTY_ICON_TEX_IDX,
+                                    (TextureID)s_emptyIconTex, w, h);
+    memset(&s_emptyIcon, 0, sizeof(s_emptyIcon));
+    s_emptyIcon.texLayout.u0=0;   s_emptyIcon.texLayout.v0=0;
+    s_emptyIcon.texLayout.u1=w;   s_emptyIcon.texLayout.v1=0;
+    s_emptyIcon.texLayout.u2=0;   s_emptyIcon.texLayout.v2=h;
+    s_emptyIcon.texLayout.u3=w;   s_emptyIcon.texLayout.v3=h;
+    s_emptyIcon.texLayout.clut  = (u16)(0x8000 | NATIVE_EMPTY_ICON_TEX_IDX);
+    s_emptyIcon.texLayout.tpage = 0;
+}
+
+struct Icon *NativeCustomRacer_GetEmptyIconPtr(void) {
+    RegisterEmptyIconTexture();
+    return s_emptyIconTex ? &s_emptyIcon : NULL;
+}
+
 struct Icon *NativeCustomRacer_GetIconPtr(int characterID)
 {
     if (characterID >= NATIVE_CUSTOM_ID_BASE &&
@@ -4375,4 +4409,26 @@ void NativeCustomRacer_SwitchGarageCharacter(int newCharID)
     const char *slug = NativeCustomRacer_GetFolder(newCharID);
     if (slug != NULL)
         NativeCustomRacer_PreloadGarageSfx(slug);
+}
+
+
+/* Returns 1 if it's a custom page and the slot is empty */
+int NativeCustomRacer_IsEmptyCustomSlot(int iconIndex, int characterID) {
+    (void)characterID; // Not used, rely on s_pageEntries
+    int currentPage = NativeCustomRacer_GetCurrentPage();
+
+    // On Page 0, the first 16 slots are retail. Do not empty them.
+    if (currentPage == 0 && iconIndex < NATIVE_PAGE_SIZE) {
+        return 0;
+    }
+
+    // Check if a custom is assigned to this slot on this page
+    for (int i = 0; i < s_pageEntryCount; i++) {
+        if (s_pageEntries[i].page == currentPage && s_pageEntries[i].slot == iconIndex) {
+            return 0; // Custom exists, NOT empty
+        }
+    }
+
+    // If nothing is found, the slot is empty
+    return 1;
 }
